@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   LIGHT MODE — melhorias de contraste e definição
+   ============================================================ */
+
+/* Task cards: borda mais visível + sombra com profundidade */
+.task-card {
+  border-color: #C7C7CC !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+}
+.task-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.05);
+  border-color: #AEAEB2 !important;
+}
+
+/* Sidebar: fundo levemente diferente do body para hierarquia */
+aside.bg-sidebar { background-color: #EFEFEF; }
+
+/* Transição suave nos elementos estruturais */
+body, aside, main,
+.task-card, .sidebar-item,
+[class*="bg-card"], [class*="bg-sidebar"],
+[class*="border-border"] {
+  transition: background-color 200ms ease, border-color 200ms ease, color 150ms ease;
+}
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   html.dark (especificidade 0,2,1) > Tailwind (0,1,0)
+   ============================================================ */
+
+html.dark,
+html.dark body {
+  background-color: #1C1C1E;
+  color: #F2F2F7;
+}
+
+/* --- Backgrounds --- */
+html.dark .bg-bg      { background-color: #1C1C1E; }
+html.dark .bg-card    { background-color: #2C2C2E; }
+html.dark .bg-sidebar { background-color: #111112; }
+html.dark .bg-border  { background-color: #38383A; }
+
+/* --- Borders --- */
+html.dark .border-border { border-color: #38383A; }
+html.dark .divide-border > * + * { border-color: #38383A; }
+
+/* --- Text --- */
+html.dark .text-text-main      { color: #F2F2F7; }
+html.dark .text-text-secondary { color: #8E8E93; }
+
+/* --- Task card inputs: fundo transparente (herda o card) --- */
+html.dark .task-card input:not([type="checkbox"]):not([type="radio"]):not([type="date"]):not([type="time"]),
+html.dark .task-card textarea {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* --- Meta chip (data/hora expandida) --- */
+.meta-chip-filled {
+  background-color: #EBEBF0;
+}
+html.dark .meta-chip-filled {
+  background-color: #3A3A3C;
+}
+
+/* --- Tarefa urgente: borda esquerda vermelha --- */
+.task-card.is-urgent {
+  border-left: 3px solid #FF3B30 !important;
+}
+html.dark .task-card.is-urgent {
+  border-left: 3px solid #FF3B30 !important;
+}
+
+/* --- Task cards dark --- */
+html.dark .task-card {
+  background-color: #2C2C2E;
+  border-color: #3A3A3C !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+html.dark .task-card:hover {
+  background-color: #323235;
+  border-color: #48484A !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+
+/* --- Sidebar dark --- */
+html.dark aside.bg-sidebar { background-color: #111112; }
+html.dark .sidebar-item        { color: #8E8E93; }
+html.dark .sidebar-item:hover  { background-color: #2C2C2E; color: #F2F2F7; }
+html.dark .sidebar-item.active { background-color: rgba(79,142,247,0.18); color: #4F8EF7; }
+
+/* --- Inputs dark --- */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #1C1C1E;
+  color: #F2F2F7;
+  border-color: #38383A;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: #636366; }
+
+html.dark input.bg-card,
+html.dark select.bg-card,
+html.dark textarea.bg-card { background-color: #2C2C2E; }
+
+/* --- Dropdowns dark --- */
+html.dark .shadow-md.bg-card,
+html.dark .shadow-xl.bg-card,
+html.dark .shadow-2xl.bg-card {
+  background-color: #2C2C2E;
+  border-color: #3A3A3C;
+}
+
+/* --- Overlays dark --- */
+html.dark .bg-black\/20 { background-color: rgba(0,0,0,0.4); }
+html.dark .bg-black\/30 { background-color: rgba(0,0,0,0.55); }
+
+/* --- Badges dark --- */
+html.dark .sidebar-item span[class*="rounded-full"] {
+  background-color: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.65);
+}
+
+/* --- Seleção dark --- */
+html.dark .bg-primary\/5  { background-color: rgba(79,142,247,0.1); }
+
+/* ============================================================
+   MENU CONTEXTUAL — fora do sistema de opacidade do Tailwind
+   ============================================================ */
+.menu-item      { color: #1C1C1E !important; }
+html.dark .menu-item { color: #F2F2F7 !important; }
+.menu-item:hover { background-color: #EBEBF0 !important; }
+html.dark .menu-item:hover { background-color: #3A3A3C !important; }
+
+/* ============================================================
+   BASE
+   ============================================================ */
+@layer base {
+  * { box-sizing: border-box; }
+
+  body {
+    @apply bg-bg font-sans text-text-main m-0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root { @apply h-screen; }
+
+  html.dark * { scrollbar-color: #48484A #1C1C1E; }
+  html.dark *::-webkit-scrollbar       { width: 6px; height: 6px; }
+  html.dark *::-webkit-scrollbar-track { background: #1C1C1E; }
+  html.dark *::-webkit-scrollbar-thumb { background: #48484A; border-radius: 3px; }
+}
+
+/* ============================================================
+   COMPONENTS
+   ============================================================ */
+@layer components {
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-text-secondary
+           cursor-pointer transition-all hover:bg-card hover:text-text-main select-none;
+  }
+  .sidebar-item.active {
+    @apply bg-primary/10 text-primary font-medium;
+  }
+  .task-card {
+    @apply bg-card rounded-card border border-border cursor-pointer;
+  }
+  .task-card-row {
+    @apply flex items-start gap-3 px-4 py-2;
+  }
+}
