@@ -6,11 +6,11 @@ export function Login() {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center">
       <div className="bg-card rounded-2xl shadow-md border border-border p-10 w-80 flex flex-col items-center gap-6">
-        <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center">
-          <span className="text-white text-2xl font-bold">LC</span>
-        </div>
+        <img src="/lc-logo.png" alt="LC" className="w-16 h-16 object-contain" />
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-text-main">LCTarefas</h1>
+          <h1 className="text-xl font-semibold text-text-main">
+            <span className="text-[#2563EB] font-bold">LC</span>Tarefas
+          </h1>
           <p className="text-sm text-text-secondary mt-1">Gestão de tarefas pessoais</p>
         </div>
         <button

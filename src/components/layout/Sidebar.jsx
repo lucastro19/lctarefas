@@ -58,11 +58,12 @@ export function Sidebar() {
     <aside className="w-56 bg-sidebar border-r border-border flex flex-col shrink-0 h-full">
       {/* Logo */}
       <div className="px-4 py-4 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-white text-xs font-bold">LC</span>
+        <div className="flex items-center gap-2.5">
+          <img src="/lc-logo.png" alt="LC" className="w-8 h-8 shrink-0 object-contain" />
+          <div className="flex items-baseline gap-1 leading-none">
+            <span className="font-bold text-sm text-[#2563EB]">LC</span>
+            <span className="font-semibold text-sm text-text-main">Tarefas</span>
           </div>
-          <span className="font-semibold text-sm text-text-main">LCTarefas</span>
         </div>
       </div>
 
