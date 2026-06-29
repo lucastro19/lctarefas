@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTaskStore } from "../store/taskStore";
 
 const dateStr = (d) => d.toISOString().split("T")[0];
@@ -73,7 +74,8 @@ function WeekChart({ days, groups }) {
 }
 
 export function Logbook() {
-  const { getAllCompleted } = useTaskStore();
+  const { getAllCompleted, deleteTask, permanentDeleteTask } = useTaskStore();
+  const [confirmClear, setConfirmClear] = useState(false);
   const tasks = getAllCompleted();
 
   const groups = tasks.reduce((acc, task) => {
@@ -94,7 +96,38 @@ export function Logbook() {
 
   return (
     <div className="px-4 py-6 md:px-8 md:py-8 max-w-2xl">
-      <h1 className="text-2xl font-semibold text-text-main mb-1">Histórico</h1>
+      <div className="flex items-start justify-between mb-1 gap-4">
+        <h1 className="text-2xl font-semibold text-text-main">Histórico</h1>
+        {tasks.length > 0 && (
+          confirmClear ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-text-secondary">Limpar tudo?</span>
+              <button
+                onClick={async () => {
+                  await Promise.all(tasks.map((t) => permanentDeleteTask(t.id)));
+                  setConfirmClear(false);
+                }}
+                className="text-xs text-danger font-medium hover:underline"
+              >
+                Confirmar
+              </button>
+              <button
+                onClick={() => setConfirmClear(false)}
+                className="text-xs text-text-secondary hover:underline"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClear(true)}
+              className="text-xs text-text-secondary hover:text-danger transition-colors shrink-0 mt-1"
+            >
+              Limpar tudo
+            </button>
+          )
+        )}
+      </div>
       <p className="text-sm text-text-secondary mb-6">
         {tasks.length === 0 ? "Nenhuma tarefa concluída ainda." : `${tasks.length} tarefa${tasks.length !== 1 ? "s" : ""} concluída${tasks.length !== 1 ? "s" : ""} no total`}
       </p>
@@ -118,12 +151,19 @@ export function Logbook() {
           </p>
           <div className="space-y-1">
             {groups[day].map((task) => (
-              <div key={task.id} className="flex items-center gap-3 bg-card border border-border rounded-card px-4 py-2.5">
+              <div key={task.id} className="flex items-center gap-3 bg-card border border-border rounded-card px-4 py-2.5 group">
                 <span className="text-success text-base shrink-0">✓</span>
                 <p className="text-sm text-text-secondary line-through flex-1 truncate">{task.title}</p>
                 <span className="text-xs text-text-secondary shrink-0">
                   {new Date(task.completed_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                 </span>
+                <button
+                  onClick={() => permanentDeleteTask(task.id)}
+                  className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-danger transition-all text-xs shrink-0"
+                  title="Remover do histórico"
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
