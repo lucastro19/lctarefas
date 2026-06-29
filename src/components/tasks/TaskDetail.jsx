@@ -1,8 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAreaStore } from "../../store/areaStore";
 import { DURATION_PRESETS, durationLabel } from "../../store/settingsStore";
+
+function localDateStr(d = new Date()) {
+  return (
+    d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
+
+function addDays(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return localDateStr(d);
+}
+
+function nextMonday() {
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun, 1=Mon, ...
+  const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7 || 7;
+  d.setDate(d.getDate() + daysUntilMonday);
+  return localDateStr(d);
+}
 
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
 
@@ -26,6 +48,8 @@ export function TaskDetail({ task, onClose }) {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#4F8EF7");
   const [saving, setSaving] = useState(false);
+  const [showContextPicker, setShowContextPicker] = useState(false);
+  const contextPickerRef = useRef(null);
 
   const taskSubtasks = subtasks[task.id] ?? [];
   const taskTagList = taskTags[task.id] ?? [];
@@ -35,6 +59,20 @@ export function TaskDetail({ task, onClose }) {
     fetchTaskTags(task.id);
     fetchTags();
   }, [task.id]);
+
+  // Close context picker on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (contextPickerRef.current && !contextPickerRef.current.contains(e.target))
+        setShowContextPicker(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, []);
 
   const save = async (extra = {}) => {
     setSaving(true);
@@ -121,24 +159,65 @@ export function TaskDetail({ task, onClose }) {
           className="w-full font-semibold text-base text-text-main outline-none bg-transparent border-b border-transparent focus:border-border pb-1"
         />
 
-        {/* Context (projeto / área) */}
-        <div>
+        {/* Context (projeto / área) — visual picker */}
+        <div ref={contextPickerRef} className="relative">
           <label className="text-xs text-text-secondary font-medium block mb-1">📂 Contexto</label>
-          <select
-            defaultValue={currentContextValue}
-            onChange={handleContextChange}
-            className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+          <button
+            onClick={() => setShowContextPicker((v) => !v)}
+            className="w-full flex items-center gap-2 text-xs bg-bg border border-border rounded-lg px-3 py-2 outline-none text-left hover:border-primary/50 transition-colors"
           >
-            <option value="">Sem contexto (Inbox)</option>
-            {areas.map((area) => (
-              <optgroup key={area.id} label={area.name}>
-                <option value={`area:${area.id}`}>{area.name}</option>
-                {projects.filter((p) => p.area_id === area.id).map((p) => (
-                  <option key={p.id} value={`project:${p.id}`}>↳ {p.name}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            {task.project_id ? (
+              <>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: projects.find((p) => p.id === task.project_id)?.color ?? "#8E8E93" }} />
+                <span className="flex-1 text-text-main truncate">{projects.find((p) => p.id === task.project_id)?.name ?? "Projeto"}</span>
+              </>
+            ) : task.area_id ? (
+              <>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: areas.find((a) => a.id === task.area_id)?.color ?? "#8E8E93" }} />
+                <span className="flex-1 text-text-main truncate">{areas.find((a) => a.id === task.area_id)?.name ?? "Área"}</span>
+              </>
+            ) : (
+              <span className="flex-1 text-text-secondary">Inbox (sem contexto)</span>
+            )}
+            <span className="text-text-secondary text-[10px]">▾</span>
+          </button>
+
+          {showContextPicker && (
+            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 max-h-64 overflow-y-auto">
+              <button
+                onClick={() => { handleContextChange({ target: { value: "" } }); setShowContextPicker(false); }}
+                className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg", !task.project_id && !task.area_id ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#8E8E93] shrink-0" />
+                Inbox (sem contexto)
+              </button>
+              {areas.length > 0 && <div className="h-px bg-border mx-2 my-1" />}
+              {areas.map((area) => {
+                const areaProjects = projects.filter((p) => p.area_id === area.id);
+                return (
+                  <div key={area.id}>
+                    <button
+                      onClick={() => { handleContextChange({ target: { value: `area:${area.id}` } }); setShowContextPicker(false); }}
+                      className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg font-medium", task.area_id === area.id && !task.project_id ? "text-primary" : "text-text-main"].join(" ")}
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
+                      {area.name}
+                    </button>
+                    {areaProjects.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => { handleContextChange({ target: { value: `project:${p.id}` } }); setShowContextPicker(false); }}
+                        className={["w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-xs text-left transition-colors hover:bg-bg", task.project_id === p.id ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Notes */}
@@ -156,15 +235,34 @@ export function TaskDetail({ task, onClose }) {
 
         {/* Dates */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <div className="col-span-2">
             <label className="text-xs text-text-secondary font-medium block mb-1">📅 Execução</label>
             <input
               type="date"
               value={scheduledDate}
-              onChange={(e) => setScheduledDate(e.target.value)}
-              onBlur={(e) => updateTask(task.id, { scheduled_date: e.target.value || null })}
+              onChange={(e) => { setScheduledDate(e.target.value); updateTask(task.id, { scheduled_date: e.target.value || null }); }}
               className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary"
             />
+            <div className="flex gap-1.5 mt-2">
+              {[
+                { label: "Hoje", date: () => localDateStr() },
+                { label: "Amanhã", date: () => addDays(1) },
+                { label: "Próx. semana", date: () => nextMonday() },
+              ].map(({ label, date }) => (
+                <button
+                  key={label}
+                  onClick={() => { const d = date(); setScheduledDate(d); updateTask(task.id, { scheduled_date: d }); }}
+                  className={[
+                    "flex-1 text-[11px] py-1 rounded-lg border transition-colors",
+                    scheduledDate === date()
+                      ? "border-primary bg-primary/10 text-primary font-medium"
+                      : "border-border text-text-secondary hover:border-primary/50 hover:text-text-main",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <label className="text-xs text-text-secondary font-medium block mb-1">🕐 Horário</label>

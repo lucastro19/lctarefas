@@ -232,6 +232,29 @@ export const useTaskStore = create((set, get) => ({
     );
   },
 
+  // --- Duplicate ---
+  duplicateTask: async (id) => {
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data } = await supabase.from("tasks").insert([{
+      title: task.title + " (cópia)",
+      notes: task.notes,
+      area_id: task.area_id,
+      project_id: task.project_id,
+      scheduled_date: task.scheduled_date,
+      scheduled_time: task.scheduled_time,
+      duration_minutes: task.duration_minutes,
+      recurrence: task.recurrence,
+      someday: task.someday,
+      is_urgent: task.is_urgent,
+      position: (task.position ?? 0) + 1,
+      user_id: user.id,
+    }]).select().single();
+    if (data) set((s) => ({ tasks: [data, ...s.tasks] }));
+    useUiStore.getState().showToast({ message: "Tarefa duplicada" });
+  },
+
   // --- Soft delete ---
   deleteTask: async (id) => {
     const task = get().tasks.find((t) => t.id === id);

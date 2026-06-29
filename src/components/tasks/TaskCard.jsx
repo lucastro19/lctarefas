@@ -275,7 +275,7 @@ function UrgencyButton({ task, updateTask }) {
 
 /* ── Menu contextual ── */
 function TaskMenu({ task, onClose }) {
-  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday } = useTaskStore();
+  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
   const ref = useRef(null);
 
   useEffect(() => {
@@ -283,10 +283,20 @@ function TaskMenu({ task, onClose }) {
       if (ref.current && !ref.current.contains(e.target)) onClose();
     };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, [onClose]);
 
-  const run = (fn) => async () => { await fn(); onClose(); };
+  const tomorrow = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  };
+
+  const run = (fn) => async (e) => { e?.stopPropagation(); await fn(); onClose(); };
   const isToday = task.scheduled_date === todayStr();
   const isSomeday = task.someday;
   const isArchived = !!task.archived_at;
@@ -295,29 +305,36 @@ function TaskMenu({ task, onClose }) {
     <div
       ref={ref}
       onClick={(e) => e.stopPropagation()}
-      className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-md z-50 py-1 min-w-[170px]"
+      className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[185px]"
     >
       {!isToday && (
-        <button onClick={run(() => moveToToday(task.id))} className="menu-item w-full text-left px-3 py-2 text-xs transition-colors">
+        <button onClick={run(() => moveToToday(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
           ☀️ Mover para Hoje
         </button>
       )}
+      <button onClick={run(() => updateTask(task.id, { scheduled_date: tomorrow(), someday: false }))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
+        📅 Adiar para Amanhã
+      </button>
       {!isSomeday && (
-        <button onClick={run(() => moveToSomeday(task.id))} className="menu-item w-full text-left px-3 py-2 text-xs transition-colors">
+        <button onClick={run(() => moveToSomeday(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
           🔮 Mover para Depois
         </button>
       )}
+      <div className="h-px bg-border mx-2 my-1" />
+      <button onClick={run(() => duplicateTask(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
+        📋 Duplicar tarefa
+      </button>
       {isArchived ? (
-        <button onClick={run(() => unarchiveTask(task.id))} className="menu-item w-full text-left px-3 py-2 text-xs transition-colors">
+        <button onClick={run(() => unarchiveTask(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
           📤 Desarquivar
         </button>
       ) : (
-        <button onClick={run(() => archiveTask(task.id))} className="menu-item w-full text-left px-3 py-2 text-xs transition-colors">
+        <button onClick={run(() => archiveTask(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
           📦 Arquivar
         </button>
       )}
       <div className="h-px bg-border mx-2 my-1" />
-      <button onClick={run(() => deleteTask(task.id))} className="menu-item w-full text-left px-3 py-2 text-xs !text-danger transition-colors">
+      <button onClick={run(() => deleteTask(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm !text-danger transition-colors">
         🗑️ Mover para lixeira
       </button>
     </div>
@@ -333,6 +350,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
   const [completing, setCompleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
   const [focusField, setFocusField] = useState("title");
   const [titleDraft, setTitleDraft] = useState(task.title);
   const [notesDraft, setNotesDraft] = useState(task.notes ?? "");
@@ -537,11 +555,20 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     }, 80);
   };
 
-  const handleCheck = async (checked) => {
+  const doComplete = async (checked) => {
     setCompleting(true);
+    setConfirmComplete(false);
     if (checked) await completeTask(task.id);
     else await uncompleteTask(task.id);
     setCompleting(false);
+  };
+
+  const handleCheck = async (checked) => {
+    if (checked && subtaskTotal > 0 && subtaskDone < subtaskTotal) {
+      setConfirmComplete(true);
+      return;
+    }
+    await doComplete(checked);
   };
 
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
@@ -577,8 +604,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     } else if (swipeX > THRESHOLD && task.completed_at) {
       handleCheck(false);
     } else if (swipeX < -THRESHOLD) {
-      const { deleteTask } = useTaskStore.getState();
-      deleteTask(task.id);
+      setShowMenu(true); // Abre menu de ações em vez de deletar direto
     }
     setSwipeX(0);
     swipeStartRef.current = null;
@@ -767,7 +793,9 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (anySelected) { toggle(task.id); return; }
-                  if (!task.completed_at) expandTask("title");
+                  if (!task.completed_at) {
+                    if (window.innerWidth < 768) { onClick?.(); } else { expandTask("title"); }
+                  }
                 }}
                 onDoubleClick={(e) => e.stopPropagation()}
                 className={[
@@ -785,7 +813,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
-                    expandTask("notes");
+                    if (window.innerWidth < 768) { onClick?.(); } else { expandTask("notes"); }
                   }}
                   onDoubleClick={(e) => e.stopPropagation()}
                   className="text-xs text-text-secondary mt-0.5 leading-relaxed whitespace-pre-wrap break-words cursor-text"
@@ -800,7 +828,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
-                    expandTask("title");
+                    if (window.innerWidth < 768) { onClick?.(); } else { expandTask("title"); }
                   }}
                   onDoubleClick={(e) => e.stopPropagation()}
                 >
@@ -849,13 +877,37 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         <div className="relative shrink-0" onDoubleClick={(e) => e.stopPropagation()}>
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
-            className="text-[#8E8E93] hover:text-[#1C1C1E] dark:text-white/50 dark:hover:text-white/90 px-1 py-0.5 rounded text-sm transition-all"
+            className="text-[#8E8E93] hover:text-[#1C1C1E] dark:text-white/50 dark:hover:text-white/90 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:bg-bg"
           >
             ···
           </button>
           {showMenu && <TaskMenu task={task} onClose={() => setShowMenu(false)} />}
         </div>
       </div>
+
+      {/* Confirmação: tarefas com subtarefas incompletas */}
+      {confirmComplete && (
+        <div
+          className="px-3 pb-3 pt-1 flex items-center gap-2 flex-wrap animate-toast-in"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="text-xs text-text-secondary flex-1">
+            {subtaskDone}/{subtaskTotal} subtarefas concluídas. Concluir mesmo assim?
+          </span>
+          <button
+            onClick={() => setConfirmComplete(false)}
+            className="text-xs text-text-secondary hover:text-text-main px-2 py-1 rounded-lg hover:bg-bg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => doComplete(true)}
+            className="text-xs text-white bg-primary hover:bg-primary/90 px-3 py-1 rounded-lg transition-colors font-medium"
+          >
+            Concluir
+          </button>
+        </div>
+      )}
     </div>
     </div>
   );
