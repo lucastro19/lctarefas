@@ -91,7 +91,7 @@ export function Layout({ children }) {
             onClick={toggleFocusMode}
             title={focusMode ? "Sair do modo foco (⌘⇧F)" : "Modo foco (⌘⇧F)"}
             className={[
-              "absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+              "hidden md:flex absolute top-4 right-4 z-10 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
               focusMode
                 ? "bg-primary text-white shadow-md hover:bg-primary/90"
                 : "bg-card border border-[#C7C7CC] text-text-secondary hover:text-primary hover:border-primary shadow-sm dark:border-[#48484A]",

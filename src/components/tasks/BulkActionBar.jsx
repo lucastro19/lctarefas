@@ -44,7 +44,7 @@ export function BulkActionBar() {
   ];
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+    <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
       <div className="pointer-events-auto flex items-center gap-1 bg-card border border-border rounded-2xl shadow-xl px-3 py-2">
         <span className="text-xs font-medium text-text-secondary mr-2 pl-1">
           {count} selecionada{count !== 1 ? "s" : ""}
