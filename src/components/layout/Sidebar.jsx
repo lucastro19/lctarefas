@@ -96,6 +96,7 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
               <NavLink
                 key={tag.id}
                 to={`/tag/${tag.id}`}
+                onClick={closeDrawer}
                 className={({ isActive }) => ["sidebar-item", isActive ? "active" : ""].join(" ")}
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
