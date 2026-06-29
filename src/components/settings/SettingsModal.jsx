@@ -32,18 +32,26 @@ export function SettingsModal({ onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/20" />
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
       <div
-        className="relative bg-card border border-border rounded-2xl shadow-xl w-80 p-6 z-10"
+        className="relative bg-card border border-border md:rounded-2xl rounded-t-2xl shadow-xl w-full md:w-80 z-10 flex flex-col"
+        style={{
+          maxHeight: "calc(100dvh - env(safe-area-inset-top) - 16px)",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-5">
+        {/* Header fixo */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 shrink-0 border-b border-border">
           <h2 className="font-semibold text-base text-text-main">Configurações</h2>
           <button onClick={onClose} className="text-text-secondary hover:text-text-main text-lg leading-none">×</button>
         </div>
 
-        <div className="space-y-5">
+        {/* Conteúdo rolável */}
+        <div
+          className="overflow-y-auto flex-1 px-6 py-5 space-y-5"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
+        >
           <div>
             <label className="text-xs font-medium text-text-secondary block mb-1.5">🎨 Aparência</label>
             <div className="grid grid-cols-3 gap-1.5">
