@@ -21,7 +21,7 @@ export function TagPage() {
 
   if (!tag) return null;
   if (taskIds === null) return (
-    <div className="px-8 py-8">
+    <div className="px-4 py-6 md:px-8 md:py-8">
       <div className="flex items-center gap-2 mb-6">
         <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
         <h1 className="text-2xl font-semibold text-text-main">{tag.name}</h1>
@@ -39,7 +39,7 @@ export function TagPage() {
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
-      <div className="flex-1 px-8 py-8">
+      <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
         <div className="flex items-center gap-2.5 mb-1">
           <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
           <h1 className="text-2xl font-semibold text-text-main">{tag.name}</h1>

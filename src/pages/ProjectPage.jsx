@@ -23,7 +23,7 @@ export function ProjectPage() {
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
-      <div className="flex-1 px-8 py-8">
+      <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
         {/* Header */}
         <div className="mb-6">
           {area && (

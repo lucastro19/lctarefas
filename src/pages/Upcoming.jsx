@@ -44,7 +44,7 @@ export function Upcoming() {
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
-      <div className="flex-1 px-8 py-8">
+      <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-2xl font-semibold text-text-main mb-1">Em Breve</h1>
         <p className="text-sm text-text-secondary mb-6">Próximos 7 dias</p>
 

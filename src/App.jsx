@@ -33,8 +33,7 @@ function AppRoutes() {
   const location = useLocation();
 
   const [showSearch, setShowSearch] = useState(false);
-  const [showQuickEntry, setShowQuickEntry] = useState(false);
-  const { toggleFocusMode } = useUiStore();
+  const { toggleFocusMode, showQuickEntry, openQuickEntry, closeQuickEntry, toggleQuickEntry } = useUiStore();
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => { clearAll(); }, [location.pathname]);
@@ -59,9 +58,9 @@ function AppRoutes() {
     const handler = (e) => {
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key === "k") { e.preventDefault(); setShowSearch((v) => !v); }
-      if (meta && e.key === "n") { e.preventDefault(); setShowQuickEntry((v) => !v); }
+      if (meta && e.key === "n") { e.preventDefault(); toggleQuickEntry(); }
       if (meta && e.shiftKey && e.key === "F") { e.preventDefault(); toggleFocusMode(); }
-      if (e.key === "Escape") { setShowSearch(false); setShowQuickEntry(false); }
+      if (e.key === "Escape") { setShowSearch(false); closeQuickEntry(); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -96,7 +95,7 @@ function AppRoutes() {
       </Layout>
 
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
-      {showQuickEntry && <QuickEntry onClose={() => setShowQuickEntry(false)} />}
+      {showQuickEntry && <QuickEntry onClose={closeQuickEntry} />}
     </>
   );
 }

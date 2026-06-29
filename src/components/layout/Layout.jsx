@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { Sidebar } from "./Sidebar";
+import { MobileTabBar } from "./MobileTabBar";
 import { useTaskStore } from "../../store/taskStore";
 import { useSettingsStore, minutesToTime } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
@@ -81,7 +82,7 @@ export function Layout({ children }) {
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex h-screen overflow-hidden bg-bg">
         {!focusMode && <Sidebar />}
-        <main className="flex-1 overflow-y-auto relative">
+        <main className="flex-1 overflow-y-auto relative pb-16 md:pb-0">
           <button
             onClick={toggleFocusMode}
             title={focusMode ? "Sair do modo foco (⌘⇧F)" : "Modo foco (⌘⇧F)"}
@@ -103,6 +104,7 @@ export function Layout({ children }) {
           </div>
         )}
       </div>
+      <MobileTabBar />
 
       <DragOverlay dropAnimation={null}>
         {activeTask ? (

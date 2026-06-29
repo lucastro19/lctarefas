@@ -25,7 +25,7 @@ export function AreaPage() {
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
-      <div className="flex-1 px-8 py-8">
+      <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
         {/* Area header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: area.color }} />

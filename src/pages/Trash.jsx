@@ -129,7 +129,7 @@ export function Trash() {
   };
 
   return (
-    <div className="px-8 py-8">
+    <div className="px-4 py-6 md:px-8 md:py-8">
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-text-main mb-1">Lixeira</h1>

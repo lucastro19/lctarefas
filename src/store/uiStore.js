@@ -10,4 +10,9 @@ export const useUiStore = create((set) => ({
 
   expandedTaskId: null,
   setExpandedTaskId: (id) => set({ expandedTaskId: id }),
+
+  showQuickEntry: false,
+  openQuickEntry: () => set({ showQuickEntry: true }),
+  closeQuickEntry: () => set({ showQuickEntry: false }),
+  toggleQuickEntry: () => set((s) => ({ showQuickEntry: !s.showQuickEntry })),
 }));

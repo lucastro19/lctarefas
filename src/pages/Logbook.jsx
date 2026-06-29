@@ -93,7 +93,7 @@ export function Logbook() {
   const sortedDays = Object.keys(groups).sort((a, b) => b.localeCompare(a));
 
   return (
-    <div className="px-8 py-8 max-w-2xl">
+    <div className="px-4 py-6 md:px-8 md:py-8 max-w-2xl">
       <h1 className="text-2xl font-semibold text-text-main mb-1">Histórico</h1>
       <p className="text-sm text-text-secondary mb-6">
         {tasks.length === 0 ? "Nenhuma tarefa concluída ainda." : `${tasks.length} tarefa${tasks.length !== 1 ? "s" : ""} concluída${tasks.length !== 1 ? "s" : ""} no total`}
