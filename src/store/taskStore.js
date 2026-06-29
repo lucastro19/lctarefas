@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { useSettingsStore, minutesToTime } from "./settingsStore";
+import { useUiStore } from "./uiStore";
 
 const today = () => new Date().toISOString().split("T")[0];
 const inDays = (n) => {
@@ -118,6 +119,11 @@ export const useTaskStore = create((set, get) => ({
   completeTask: async (id) => {
     const task = get().tasks.find((t) => t.id === id);
     await get().updateTask(id, { completed_at: new Date().toISOString() });
+    useUiStore.getState().showToast({
+      message: "Tarefa concluída",
+      action: "Desfazer",
+      onAction: () => get().uncompleteTask(id),
+    });
     if (task?.recurrence) {
       const next = nextRecurrenceDate(task.recurrence, task.scheduled_date);
       if (next) {
@@ -227,7 +233,15 @@ export const useTaskStore = create((set, get) => ({
   },
 
   // --- Soft delete ---
-  deleteTask: async (id) => get().updateTask(id, { deleted_at: new Date().toISOString() }),
+  deleteTask: async (id) => {
+    const task = get().tasks.find((t) => t.id === id);
+    await get().updateTask(id, { deleted_at: new Date().toISOString() });
+    useUiStore.getState().showToast({
+      message: `"${task?.title ?? "Tarefa"}" na lixeira`,
+      action: "Desfazer",
+      onAction: () => get().restoreTask(id),
+    });
+  },
   restoreTask: async (id) => get().updateTask(id, { deleted_at: null }),
   permanentDeleteTask: async (id) => {
     await supabase.from("tasks").delete().eq("id", id);

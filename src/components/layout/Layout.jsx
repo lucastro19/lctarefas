@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { Sidebar } from "./Sidebar";
@@ -14,9 +14,33 @@ const todayStr = () => new Date().toISOString().split("T")[0];
 
 export function Layout({ children }) {
   const [activeTask, setActiveTask] = useState(null);
-  const { tasks, updateTask, reorderTasks } = useTaskStore();
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartRef = useRef(null);
+  const mainRef = useRef(null);
+  const { tasks, updateTask, reorderTasks, fetchTasks } = useTaskStore();
   const { calcTimes } = useSettingsStore();
   const { pendingTask, clearPendingTask, focusMode, toggleFocusMode } = useUiStore();
+
+  const onPullStart = (e) => {
+    if (mainRef.current?.scrollTop === 0) {
+      pullStartRef.current = e.touches[0].clientY;
+    }
+  };
+  const onPullMove = (e) => {
+    if (!pullStartRef.current) return;
+    const dy = e.touches[0].clientY - pullStartRef.current;
+    if (dy > 0) setPullY(Math.min(dy * 0.45, 64));
+  };
+  const onPullEnd = async () => {
+    if (pullY >= 52) {
+      setRefreshing(true);
+      await fetchTasks();
+      setRefreshing(false);
+    }
+    setPullY(0);
+    pullStartRef.current = null;
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -86,7 +110,22 @@ export function Layout({ children }) {
         <MobileHeader />
         <div className="flex flex-1 overflow-hidden">
         {!focusMode && <Sidebar />}
-        <main className="flex-1 overflow-y-auto relative pb-16 md:pb-0">
+        <main
+          ref={mainRef}
+          className="flex-1 overflow-y-auto relative pb-16 md:pb-0"
+          onTouchStart={onPullStart}
+          onTouchMove={onPullMove}
+          onTouchEnd={onPullEnd}
+        >
+          {/* Pull-to-refresh indicator */}
+          {(pullY > 0 || refreshing) && (
+            <div
+              className="flex items-center justify-center overflow-hidden transition-all duration-150"
+              style={{ height: refreshing ? 48 : pullY }}
+            >
+              <div className={["w-6 h-6 rounded-full border-2 border-primary border-t-transparent", refreshing ? "animate-pull-spin" : ""].join(" ")} />
+            </div>
+          )}
           <button
             onClick={toggleFocusMode}
             title={focusMode ? "Sair do modo foco (⌘⇧F)" : "Modo foco (⌘⇧F)"}

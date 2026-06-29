@@ -340,6 +340,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [time, setTime] = useState(task.scheduled_time ?? "");
   const [duration, setDuration] = useState(task.duration_minutes ?? "");
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
 
   const titleInputRef = useRef(null);
   const notesRef = useRef(null);
@@ -347,6 +348,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const collapseRef = useRef(null);
   const pendingCursorRef = useRef(null);
   const longPressRef = useRef(null);
+  const swipeStartRef = useRef(null);
 
   const expanded = expandedTaskId === task.id;
   const selected = isSelected(task.id);
@@ -528,6 +530,11 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const expandTask = (field = "title") => {
     setFocusField(field);
     setExpandedTaskId(task.id);
+    // Scroll card into view after expansion (helps on mobile with keyboard)
+    setTimeout(() => {
+      const ref = field === "notes" ? notesRef.current : titleInputRef.current;
+      ref?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
   };
 
   const handleCheck = async (checked) => {
@@ -540,7 +547,8 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent;
 
-  const handleTouchStart = () => {
+  const handleTouchStart = (e) => {
+    swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     if (anySelected) return;
     longPressRef.current = setTimeout(() => {
       toggle(task.id);
@@ -548,13 +556,56 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     }, 700);
   };
 
-  const handleTouchEnd = () => clearTimeout(longPressRef.current);
-  const handleTouchMove = () => clearTimeout(longPressRef.current);
+  const handleTouchMove = (e) => {
+    if (!swipeStartRef.current) return;
+    const dx = e.touches[0].clientX - swipeStartRef.current.x;
+    const dy = e.touches[0].clientY - swipeStartRef.current.y;
+    // Cancel long press if moved
+    clearTimeout(longPressRef.current);
+    // Only handle horizontal swipe (ignore if mostly vertical)
+    if (Math.abs(dy) > Math.abs(dx) * 1.5) return;
+    if (expanded || anySelected) return;
+    const clamped = Math.max(-100, Math.min(100, dx));
+    setSwipeX(clamped);
+  };
+
+  const handleTouchEnd = () => {
+    clearTimeout(longPressRef.current);
+    const THRESHOLD = 72;
+    if (swipeX > THRESHOLD && !task.completed_at) {
+      handleCheck(true);
+    } else if (swipeX > THRESHOLD && task.completed_at) {
+      handleCheck(false);
+    } else if (swipeX < -THRESHOLD) {
+      const { deleteTask } = useTaskStore.getState();
+      deleteTask(task.id);
+    }
+    setSwipeX(0);
+    swipeStartRef.current = null;
+  };
+
+  const swipeActive = Math.abs(swipeX) > 8;
+  const swipeRight = swipeX > 0;
 
   return (
+    <div className="relative overflow-hidden rounded-card">
+      {/* Swipe reveal backgrounds */}
+      {swipeActive && (
+        <div className={[
+          "absolute inset-0 flex items-center px-5 rounded-card transition-opacity",
+          swipeRight ? "justify-start bg-success/15" : "justify-end bg-danger/15",
+        ].join(" ")}>
+          <span className="text-xl">{swipeRight ? (task.completed_at ? "↩️" : "✅") : "🗑️"}</span>
+        </div>
+      )}
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{
+        transform: swipeX !== 0
+          ? `translateX(${swipeX}px)`
+          : CSS.Transform.toString(transform),
+        transition: swipeX !== 0 ? "none" : transition,
+      }}
       onDoubleClick={() => onClick?.()}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -691,6 +742,22 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
                 </select>
+                <select
+                  defaultValue={task.recurrence ?? ""}
+                  onChange={(e) => updateTask(task.id, { recurrence: e.target.value || null })}
+                  className={[
+                    "text-xs rounded-full px-2 py-0.5 outline-none cursor-pointer",
+                    task.recurrence
+                      ? "meta-chip-filled text-text-secondary"
+                      : "bg-transparent text-[#AEAEB2] dark:text-[#636366]",
+                  ].join(" ")}
+                >
+                  <option value="">↺ Repetir</option>
+                  <option value="daily">Diariamente</option>
+                  <option value="weekdays">Dias úteis</option>
+                  <option value="weekly">Semanalmente</option>
+                  <option value="monthly">Mensalmente</option>
+                </select>
               </div>
             </>
           ) : (
@@ -789,6 +856,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
           {showMenu && <TaskMenu task={task} onClose={() => setShowMenu(false)} />}
         </div>
       </div>
+    </div>
     </div>
   );
 }

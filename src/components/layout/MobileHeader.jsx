@@ -6,6 +6,7 @@ const PAGE_TITLES = {
   "/today":    "Hoje",
   "/upcoming": "Em Breve",
   "/someday":  "Depois",
+  "/calendar": "Calendário",
   "/logbook":  "Histórico",
   "/trash":    "Lixeira",
   "/archive":  "Arquivo",

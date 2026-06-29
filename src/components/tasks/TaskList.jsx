@@ -6,7 +6,7 @@ import { BulkActionBar } from "./BulkActionBar";
 import { useTaskStore } from "../../store/taskStore";
 import { useSelectionStore } from "../../store/selectionStore";
 
-export function TaskList({ tasks, completedTasks = [], defaultFields = {}, onTaskClick, emptyMessage = "Nenhuma tarefa aqui." }) {
+export function TaskList({ tasks, completedTasks = [], defaultFields = {}, onTaskClick, emptyMessage = "Nenhuma tarefa aqui.", emptyIcon = "✅" }) {
   const { subtasks, fetchSubtasks } = useTaskStore();
   const { selectedIds, selectAll, clearAll } = useSelectionStore();
   const [showCompleted, setShowCompleted] = useState(false);
@@ -35,7 +35,10 @@ export function TaskList({ tasks, completedTasks = [], defaultFields = {}, onTas
       )}
 
       {tasks.length === 0 && completedTasks.length === 0 && (
-        <p className="text-sm text-text-secondary text-center py-8">{emptyMessage}</p>
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-2 select-none">
+          <span className="text-5xl opacity-30 mb-1">{emptyIcon}</span>
+          <p className="text-sm text-text-secondary max-w-xs">{emptyMessage}</p>
+        </div>
       )}
 
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>

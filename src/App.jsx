@@ -19,8 +19,10 @@ import { ProjectPage } from "./pages/ProjectPage";
 import { Archive } from "./pages/Archive";
 import { Logbook } from "./pages/Logbook";
 import { TagPage } from "./pages/TagPage";
+import { Calendar } from "./pages/Calendar";
 import { SearchModal } from "./components/search/SearchModal";
 import { QuickEntry } from "./components/quickentry/QuickEntry";
+import { ToastContainer } from "./components/ui/ToastContainer";
 import { requestNotificationPermission, scheduleTaskNotifications } from "./services/notifications";
 
 function AppRoutes() {
@@ -90,11 +92,13 @@ function AppRoutes() {
           <Route path="/archive" element={<Archive />} />
           <Route path="/logbook" element={<Logbook />} />
           <Route path="/tag/:id" element={<TagPage />} />
+          <Route path="/calendar" element={<Calendar />} />
         </Routes>
       </Layout>
 
       {showSearch && <SearchModal onClose={closeSearch} />}
       {showQuickEntry && <QuickEntry onClose={closeQuickEntry} />}
+      <ToastContainer />
     </>
   );
 }

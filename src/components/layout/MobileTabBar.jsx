@@ -9,6 +9,7 @@ const ROUTE_TABS = {
   today:    { to: "/today",    icon: "☀️", label: "Hoje" },
   upcoming: { to: "/upcoming", icon: "⏰", label: "Em Breve" },
   someday:  { to: "/someday",  icon: "🔮", label: "Depois" },
+  calendar: { to: "/calendar", icon: "📅", label: "Calendário" },
   logbook:  { to: "/logbook",  icon: "📋", label: "Histórico" },
   trash:    { to: "/trash",    icon: "🗑️", label: "Lixeira" },
   archive:  { to: "/archive",  icon: "📦", label: "Arquivo" },

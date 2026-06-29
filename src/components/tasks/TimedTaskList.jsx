@@ -128,9 +128,10 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
         )}
 
         {tasks.length === 0 && overdueTasks.length === 0 && completedTasks.length === 0 && (
-          <p className="text-sm text-text-secondary text-center py-8">
-            Nenhuma tarefa para hoje. Aproveite o dia! ☀️
-          </p>
+          <div className="flex flex-col items-center justify-center py-16 text-center gap-2 select-none">
+            <span className="text-5xl opacity-30 mb-1">☀️</span>
+            <p className="text-sm text-text-secondary">Nenhuma tarefa para hoje. Aproveite o dia!</p>
+          </div>
         )}
 
         <SortableContext items={sorted.map((t) => t.id)} strategy={verticalListSortingStrategy}>

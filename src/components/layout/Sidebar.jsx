@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: "/today", icon: "☀️", label: "Hoje", dropId: "today" },
   { to: "/upcoming", icon: "⏰", label: "Em Breve" },
   { to: "/someday", icon: "🔮", label: "Depois", dropId: "someday" },
+  { to: "/calendar", icon: "📅", label: "Calendário" },
   { to: "/logbook", icon: "📋", label: "Histórico" },
   { to: "/trash", icon: "🗑️", label: "Lixeira" },
   { to: "/archive", icon: "📦", label: "Arquivo" },
@@ -320,6 +321,11 @@ function ProjectItem({ project, navigate }) {
   const [showMenu, setShowMenu] = useState(false);
   const { archiveProject, deleteProject } = useAreaStore();
   const { setNodeRef: projectDropRef, isOver: isOverProject } = useDroppable({ id: `project-${project.id}` });
+  const { getByProject, getCompletedByProject } = useTaskStore();
+  const active = getByProject(project.id).length;
+  const done = getCompletedByProject(project.id).length;
+  const total = active + done;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
     <div ref={projectDropRef} className={["relative flex items-center group rounded-lg transition-colors", isOverProject ? "ring-2 ring-primary bg-primary/5" : ""].join(" ")}>
@@ -330,7 +336,17 @@ function ProjectItem({ project, navigate }) {
         }
       >
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
-        <span className="flex-1 truncate">{project.name}</span>
+        <span className="flex-1 truncate min-w-0">
+          <span className="block truncate">{project.name}</span>
+          {total > 0 && (
+            <span className="block mt-0.5 h-0.5 rounded-full bg-border overflow-hidden">
+              <span
+                className="block h-full rounded-full bg-success transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </span>
+          )}
+        </span>
       </NavLink>
 
       <button

@@ -13,7 +13,12 @@ export function Checkbox({ checked, onChange, deadline }) {
       aria-label={checked ? "Desmarcar" : "Concluir"}
     >
       {checked && (
-        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12">
+        <svg
+          key="check"
+          className="w-3 h-3 text-white animate-check-pop"
+          fill="none"
+          viewBox="0 0 12 12"
+        >
           <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}

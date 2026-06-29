@@ -91,9 +91,20 @@ export function TaskDetail({ task, onClose }) {
   const availableTags = tags.filter((t) => !taskTagList.find((tt) => tt.id === t.id));
 
   return (
-    <aside className="fixed inset-0 z-50 md:static md:inset-auto md:z-auto w-full md:w-96 border-l border-border bg-card h-full overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <>
+      {/* Mobile backdrop */}
+      <div className="md:hidden fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+    <aside
+      className="fixed bottom-0 left-0 right-0 z-50 md:static md:inset-auto md:z-auto md:w-96 md:border-l border-border bg-card md:h-full overflow-y-auto flex flex-col rounded-t-2xl md:rounded-none animate-slide-up md:[animation:none]"
+      style={{ maxHeight: "92dvh" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Drag handle (mobile only) */}
+      <div className="md:hidden flex justify-center pt-3 pb-1 shrink-0">
+        <div className="w-10 h-1 rounded-full bg-border" />
+      </div>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
         <button onClick={onClose} className="md:hidden flex items-center gap-1 text-primary text-sm font-medium">
           ← Voltar
         </button>
@@ -398,6 +409,9 @@ export function TaskDetail({ task, onClose }) {
         </div>
         {saving && <span className="text-xs text-text-secondary">Salvando…</span>}
       </div>
+      {/* Safe area spacer on mobile */}
+      <div className="md:hidden shrink-0" style={{ height: "env(safe-area-inset-bottom)" }} />
     </aside>
+    </>
   );
 }

@@ -1,26 +1,29 @@
 import { useState } from "react";
 import { TaskList } from "../components/tasks/TaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
+import { SortBar, useSortedTasks } from "../components/tasks/SortBar";
 import { useTaskStore } from "../store/taskStore";
 
 export function Inbox() {
   const { getInbox, getCompletedInbox } = useTaskStore();
   const [selectedTask, setSelectedTask] = useState(null);
-  const tasks = getInbox();
+  const { sorted: tasks, sort, setSort } = useSortedTasks(getInbox());
   const completed = getCompletedInbox();
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
       <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
         <h1 className="text-2xl font-semibold text-text-main mb-1">Inbox</h1>
-        <p className="text-sm text-text-secondary mb-6">
+        <p className="text-sm text-text-secondary mb-4">
           {tasks.length} {tasks.length === 1 ? "tarefa" : "tarefas"}
         </p>
+        <SortBar sort={sort} setSort={setSort} />
         <TaskList
           tasks={tasks}
           completedTasks={completed}
           onTaskClick={setSelectedTask}
-          emptyMessage="Inbox vazio. Capture uma nova tarefa abaixo."
+          emptyMessage="Inbox vazio — tudo em ordem por aqui."
+          emptyIcon="📥"
         />
       </div>
       {selectedTask && (

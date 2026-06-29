@@ -23,4 +23,15 @@ export const useUiStore = create((set) => ({
   showSearch: false,
   openSearch: () => set({ showSearch: true }),
   closeSearch: () => set({ showSearch: false }),
+
+  toasts: [],
+  showToast: ({ message, action, onAction, duration = 4500 }) => {
+    const id = Date.now();
+    set((s) => ({ toasts: [...s.toasts, { id, message, action, onAction }] }));
+    setTimeout(() => {
+      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+    }, duration);
+    return id;
+  },
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
