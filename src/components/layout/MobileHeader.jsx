@@ -18,7 +18,10 @@ export function MobileHeader() {
   const title = PAGE_TITLES[pathname] ?? "LCTarefas";
 
   return (
-    <header className="md:hidden flex items-center gap-3 px-4 py-3 bg-card border-b border-border shrink-0">
+    <header
+      className="md:hidden flex items-center gap-3 px-4 bg-card border-b border-border shrink-0"
+      style={{ paddingTop: "calc(env(safe-area-inset-top) + 10px)", paddingBottom: "10px" }}
+    >
       <button
         onClick={openDrawer}
         className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-main hover:bg-bg transition-colors text-xl"
