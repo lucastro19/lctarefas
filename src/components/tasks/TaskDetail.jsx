@@ -269,7 +269,7 @@ export function TaskDetail({ task, onClose }) {
           >
             <div className={["w-4 h-4 bg-white rounded-full shadow mt-0.5 transition-transform", someday ? "translate-x-4" : "translate-x-0.5"].join(" ")} />
           </div>
-          <span className="text-sm text-text-secondary">Algum Dia</span>
+          <span className="text-sm text-text-secondary">Depois</span>
         </label>
 
         {/* Tags */}

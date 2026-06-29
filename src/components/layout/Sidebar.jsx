@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { to: "/inbox", icon: "📥", label: "Inbox", dropId: "inbox" },
   { to: "/today", icon: "☀️", label: "Hoje", dropId: "today" },
   { to: "/upcoming", icon: "⏰", label: "Em Breve" },
-  { to: "/someday", icon: "🔮", label: "Algum Dia", dropId: "someday" },
+  { to: "/someday", icon: "🔮", label: "Depois", dropId: "someday" },
   { to: "/logbook", icon: "📋", label: "Histórico" },
   { to: "/trash", icon: "🗑️", label: "Lixeira" },
   { to: "/archive", icon: "📦", label: "Arquivo" },

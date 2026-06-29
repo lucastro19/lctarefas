@@ -5,7 +5,7 @@ const PAGE_TITLES = {
   "/inbox":    "Inbox",
   "/today":    "Hoje",
   "/upcoming": "Em Breve",
-  "/someday":  "Algum Dia",
+  "/someday":  "Depois",
   "/logbook":  "Histórico",
   "/trash":    "Lixeira",
   "/archive":  "Arquivo",

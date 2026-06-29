@@ -46,7 +46,7 @@ export function SearchModal({ onClose }) {
       const a = areas.find((a) => a.id === task.area_id);
       return a?.name ?? "";
     }
-    if (task.someday) return "Algum Dia";
+    if (task.someday) return "Depois";
     if (task.scheduled_date) return "Hoje";
     return "Inbox";
   };

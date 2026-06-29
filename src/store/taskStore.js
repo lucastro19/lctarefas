@@ -152,7 +152,7 @@ export const useTaskStore = create((set, get) => ({
     return get().updateTask(id, { scheduled_date: t, someday: false, archived_at: null, scheduled_time: time });
   },
 
-  // --- Mover para Algum Dia ---
+  // --- Mover para Depois ---
   moveToSomeday: async (id) =>
     get().updateTask(id, { someday: true, scheduled_date: null, archived_at: null }),
 

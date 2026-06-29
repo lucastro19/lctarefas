@@ -304,7 +304,7 @@ function TaskMenu({ task, onClose }) {
       )}
       {!isSomeday && (
         <button onClick={run(() => moveToSomeday(task.id))} className="menu-item w-full text-left px-3 py-2 text-xs transition-colors">
-          🔮 Mover para Algum Dia
+          🔮 Mover para Depois
         </button>
       )}
       {isArchived ? (

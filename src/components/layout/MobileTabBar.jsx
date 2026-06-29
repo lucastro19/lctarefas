@@ -6,7 +6,7 @@ const TABS = [
   { to: "/inbox",    icon: "📥", label: "Inbox" },
   { to: "/today",    icon: "☀️", label: "Hoje" },
   { to: "/upcoming", icon: "⏰", label: "Em Breve" },
-  { to: "/someday",  icon: "🔮", label: "Algum Dia" },
+  { to: "/someday",  icon: "🔮", label: "Depois" },
 ];
 
 export function MobileTabBar() {
