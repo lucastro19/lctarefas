@@ -346,6 +346,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const tagPickerRef = useRef(null);
   const collapseRef = useRef(null);
   const pendingCursorRef = useRef(null);
+  const longPressRef = useRef(null);
 
   const expanded = expandedTaskId === task.id;
   const selected = isSelected(task.id);
@@ -539,11 +540,25 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent;
 
+  const handleTouchStart = () => {
+    if (anySelected) return;
+    longPressRef.current = setTimeout(() => {
+      toggle(task.id);
+      navigator.vibrate?.(50);
+    }, 700);
+  };
+
+  const handleTouchEnd = () => clearTimeout(longPressRef.current);
+  const handleTouchMove = () => clearTimeout(longPressRef.current);
+
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       onDoubleClick={() => onClick?.()}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
       className={[
         "task-card group relative",
         completing ? "opacity-50" : "",
@@ -555,20 +570,6 @@ export function TaskCard({ task, subtasks = [], onClick }) {
       ].join(" ")}
     >
       <div className="task-card-row">
-        {/* Seleção */}
-        <button
-          onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
-          onDoubleClick={(e) => e.stopPropagation()}
-          className={[
-            "shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center mt-0.5 transition-all",
-            selected
-              ? "border-primary bg-primary"
-              : "border-[#8E8E93] hover:border-primary dark:border-white/40 dark:hover:border-primary bg-transparent",
-          ].join(" ")}
-        >
-          {selected && <span className="text-white text-[9px] leading-none font-bold">✓</span>}
-        </button>
-
         {/* Arraste */}
         <div
           {...listeners}
