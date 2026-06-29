@@ -26,14 +26,14 @@ export function MobileTabBar() {
           key={to}
           to={to}
           className={({ isActive }) => [
-            "flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors min-w-0",
+            "flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors min-w-0 relative",
             isActive ? "text-primary" : "text-text-secondary",
           ].join(" ")}
         >
           <span className="text-xl leading-none">{icon}</span>
           <span className="text-[10px] font-medium leading-none truncate">{label}</span>
           {counts[to] > 0 && (
-            <span className="absolute -top-1 right-1 w-4 h-4 bg-primary text-white text-[9px] rounded-full flex items-center justify-center font-bold">
+            <span className="absolute top-1 right-3 w-4 h-4 bg-primary text-white text-[9px] rounded-full flex items-center justify-center font-bold">
               {counts[to] > 99 ? "99" : counts[to]}
             </span>
           )}

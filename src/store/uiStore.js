@@ -15,4 +15,8 @@ export const useUiStore = create((set) => ({
   openQuickEntry: () => set({ showQuickEntry: true }),
   closeQuickEntry: () => set({ showQuickEntry: false }),
   toggleQuickEntry: () => set((s) => ({ showQuickEntry: !s.showQuickEntry })),
+
+  showDrawer: false,
+  openDrawer: () => set({ showDrawer: true }),
+  closeDrawer: () => set({ showDrawer: false }),
 }));

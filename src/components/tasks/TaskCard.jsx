@@ -576,7 +576,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
           className={[
-            "cursor-grab active:cursor-grabbing text-[#8E8E93] hover:text-[#3C3C43] dark:text-white/50 dark:hover:text-white/80 shrink-0 px-0.5 pt-0.5 transition-all select-none text-base",
+            "hidden md:block cursor-grab active:cursor-grabbing text-[#8E8E93] hover:text-[#3C3C43] dark:text-white/50 dark:hover:text-white/80 shrink-0 px-0.5 pt-0.5 transition-all select-none text-base",
             anySelected ? "opacity-0" : "opacity-100",
           ].join(" ")}
         >

@@ -7,6 +7,7 @@ import { useAuthStore } from "../../store/authStore";
 import { Badge } from "../ui/Badge";
 import { SettingsModal } from "../settings/SettingsModal";
 import { useTagStore } from "../../store/tagStore";
+import { useUiStore } from "../../store/uiStore";
 
 const NAV_ITEMS = [
   { to: "/inbox", icon: "📥", label: "Inbox", dropId: "inbox" },
@@ -18,12 +19,13 @@ const NAV_ITEMS = [
   { to: "/archive", icon: "📦", label: "Arquivo" },
 ];
 
-function NavItem({ to, icon, label, count, dropId }) {
+function NavItem({ to, icon, label, count, dropId, onNavigate }) {
   const { setNodeRef, isOver } = useDroppable({ id: dropId ?? `nav-${to}`, disabled: !dropId });
   return (
     <div ref={setNodeRef} className={["rounded-lg transition-colors", isOver ? "ring-2 ring-primary bg-primary/5" : ""].join(" ")}>
       <NavLink
         to={to}
+        onClick={onNavigate}
         className={({ isActive }) =>
           ["sidebar-item", isActive ? "active" : ""].join(" ")
         }
@@ -36,7 +38,7 @@ function NavItem({ to, icon, label, count, dropId }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r border-border flex-col shrink-0 h-full" }) {
   const [newAreaName, setNewAreaName] = useState("");
   const [addingArea, setAddingArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -44,6 +46,7 @@ export function Sidebar() {
   const { tags } = useTagStore();
   const { getInbox, getToday, getUpcoming, getSomeday, getTrash } = useTaskStore();
   const { user, signOut } = useAuthStore();
+  const { closeDrawer } = useUiStore();
   const navigate = useNavigate();
 
   const handleAddArea = async (e) => {
@@ -55,7 +58,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="hidden md:flex w-56 bg-sidebar border-r border-border flex-col shrink-0 h-full">
+    <aside className={className}>
       {/* Logo */}
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-center gap-2.5">
@@ -77,7 +80,7 @@ export function Sidebar() {
             "/someday": getSomeday().length,
             "/trash": getTrash().length,
           };
-          return <NavItem key={item.to} {...item} count={counts[item.to]} />;
+          return <NavItem key={item.to} {...item} count={counts[item.to]} onNavigate={closeDrawer} />;
         })}
 
         {/* Separator */}

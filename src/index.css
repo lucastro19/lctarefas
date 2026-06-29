@@ -139,6 +139,17 @@ html.dark .menu-item { color: #F2F2F7 !important; }
 html.dark .menu-item:hover { background-color: #3A3A3C !important; }
 
 /* ============================================================
+   MOBILE DRAWER
+   ============================================================ */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slide-in-left 0.22s ease-out;
+}
+
+/* ============================================================
    BASE
    ============================================================ */
 @layer base {

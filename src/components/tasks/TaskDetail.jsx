@@ -94,7 +94,10 @@ export function TaskDetail({ task, onClose }) {
     <aside className="fixed inset-0 z-50 md:static md:inset-auto md:z-auto w-full md:w-96 border-l border-border bg-card h-full overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-        <span className="text-xs text-text-secondary font-medium uppercase tracking-wide">Detalhe</span>
+        <button onClick={onClose} className="md:hidden flex items-center gap-1 text-primary text-sm font-medium">
+          ← Voltar
+        </button>
+        <span className="hidden md:block text-xs text-text-secondary font-medium uppercase tracking-wide">Detalhe</span>
         <button onClick={onClose} className="text-text-secondary hover:text-text-main text-lg leading-none">×</button>
       </div>
 

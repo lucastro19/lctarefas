@@ -3,6 +3,8 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@
 import { arrayMove } from "@dnd-kit/sortable";
 import { Sidebar } from "./Sidebar";
 import { MobileTabBar } from "./MobileTabBar";
+import { MobileHeader } from "./MobileHeader";
+import { MobileDrawer } from "./MobileDrawer";
 import { useTaskStore } from "../../store/taskStore";
 import { useSettingsStore, minutesToTime } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
@@ -80,7 +82,9 @@ export function Layout({ children }) {
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex h-screen overflow-hidden bg-bg">
+      <div className="flex flex-col h-screen overflow-hidden bg-bg">
+        <MobileHeader />
+        <div className="flex flex-1 overflow-hidden">
         {!focusMode && <Sidebar />}
         <main className="flex-1 overflow-y-auto relative pb-16 md:pb-0">
           <button
@@ -103,8 +107,10 @@ export function Layout({ children }) {
             <TaskDetail key={pendingTask.id} task={pendingTask} onClose={clearPendingTask} />
           </div>
         )}
+        </div>
       </div>
       <MobileTabBar />
+      <MobileDrawer />
 
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
