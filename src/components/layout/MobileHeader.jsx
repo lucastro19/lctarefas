@@ -13,7 +13,7 @@ const PAGE_TITLES = {
 
 export function MobileHeader() {
   const { pathname } = useLocation();
-  const { openDrawer } = useUiStore();
+  const { openDrawer, openSearch } = useUiStore();
 
   const title = PAGE_TITLES[pathname] ?? "LCTarefas";
 
@@ -29,10 +29,19 @@ export function MobileHeader() {
       >
         ☰
       </button>
-      <div className="flex items-center gap-2">
-        <img src="/lc-logo.png" alt="LC" className="w-6 h-6 object-contain" />
-        <span className="font-semibold text-sm text-text-main">{title}</span>
+
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <img src="/lc-logo.png" alt="LC" className="w-6 h-6 object-contain shrink-0" />
+        <span className="font-semibold text-sm text-text-main truncate">{title}</span>
       </div>
+
+      <button
+        onClick={openSearch}
+        className="w-9 h-9 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-main hover:bg-bg transition-colors text-lg shrink-0"
+        aria-label="Buscar"
+      >
+        🔍
+      </button>
     </header>
   );
 }

@@ -1,4 +1,5 @@
 import { useSettingsStore, DURATION_PRESETS } from "../../store/settingsStore";
+import { useTagStore } from "../../store/tagStore";
 
 const THEMES = [
   { value: "light", label: "☀️ Claro" },
@@ -6,8 +7,29 @@ const THEMES = [
   { value: "system",label: "💻 Sistema" },
 ];
 
+const ROUTE_OPTIONS = [
+  { id: "inbox",    icon: "📥", label: "Inbox" },
+  { id: "today",    icon: "☀️", label: "Hoje" },
+  { id: "upcoming", icon: "⏰", label: "Em Breve" },
+  { id: "someday",  icon: "🔮", label: "Depois" },
+  { id: "logbook",  icon: "📋", label: "Histórico" },
+  { id: "trash",    icon: "🗑️", label: "Lixeira" },
+  { id: "archive",  icon: "📦", label: "Arquivo" },
+];
+
 export function SettingsModal({ onClose }) {
-  const { dayStart, defaultDurationMinutes, theme, setDayStart, setDefaultDuration, setTheme } = useSettingsStore();
+  const { dayStart, defaultDurationMinutes, theme, tabBarIds, setDayStart, setDefaultDuration, setTheme, setTabBarIds } = useSettingsStore();
+  const { tags } = useTagStore();
+
+  const toggle = (id) => {
+    if (tabBarIds.includes(id)) {
+      // manter pelo menos 1 item
+      if (tabBarIds.length <= 1) return;
+      setTabBarIds(tabBarIds.filter((i) => i !== id));
+    } else {
+      setTabBarIds([...tabBarIds, id]);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
@@ -75,6 +97,61 @@ export function SettingsModal({ onClose }) {
             <p className="text-xs text-text-secondary mt-1.5">
               Usado quando a tarefa não tem duração definida.
             </p>
+          </div>
+
+          <div className="border-t border-border pt-4">
+            <label className="text-xs font-medium text-text-secondary block mb-2">📱 Barra inferior (mobile)</label>
+            <div className="space-y-1">
+              {ROUTE_OPTIONS.map(({ id, icon, label }) => {
+                const active = tabBarIds.includes(id);
+                return (
+                  <button
+                    key={id}
+                    onClick={() => toggle(id)}
+                    className={[
+                      "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors text-xs",
+                      active
+                        ? "border-primary bg-primary/5 text-text-main"
+                        : "border-border text-text-secondary hover:border-primary/40",
+                    ].join(" ")}
+                  >
+                    <span className="text-base w-5 text-center">{icon}</span>
+                    <span className="flex-1">{label}</span>
+                    <span className={["w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors", active ? "border-primary bg-primary" : "border-[#C7C7CC]"].join(" ")}>
+                      {active && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {tags.length > 0 && (
+                <>
+                  <p className="text-[10px] text-text-secondary uppercase tracking-widest pt-1 px-1">Tags</p>
+                  {tags.map((tag) => {
+                    const id = `tag:${tag.id}`;
+                    const active = tabBarIds.includes(id);
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => toggle(id)}
+                        className={[
+                          "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors text-xs",
+                          active
+                            ? "border-primary bg-primary/5 text-text-main"
+                            : "border-border text-text-secondary hover:border-primary/40",
+                        ].join(" ")}
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                        <span className="flex-1">{tag.name}</span>
+                        <span className={["w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors", active ? "border-primary bg-primary" : "border-[#C7C7CC]"].join(" ")}>
+                          {active && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </div>
           </div>
 
           <div className="border-t border-border pt-4">

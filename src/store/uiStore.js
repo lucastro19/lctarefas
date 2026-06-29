@@ -19,4 +19,8 @@ export const useUiStore = create((set) => ({
   showDrawer: false,
   openDrawer: () => set({ showDrawer: true }),
   closeDrawer: () => set({ showDrawer: false }),
+
+  showSearch: false,
+  openSearch: () => set({ showSearch: true }),
+  closeSearch: () => set({ showSearch: false }),
 }));

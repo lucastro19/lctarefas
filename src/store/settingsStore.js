@@ -17,9 +17,11 @@ export const useSettingsStore = create(
       dayStart: "09:00",
       defaultDurationMinutes: 30,
       theme: "light",
+      tabBarIds: ["inbox", "today", "upcoming", "someday"],
 
       setDayStart: (v) => set({ dayStart: v }),
       setDefaultDuration: (v) => set({ defaultDurationMinutes: Number(v) }),
+      setTabBarIds: (v) => set({ tabBarIds: v }),
       setTheme: (v) => {
         set({ theme: v });
         applyTheme(v);

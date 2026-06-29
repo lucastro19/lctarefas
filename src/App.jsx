@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { useSelectionStore } from "./store/selectionStore";
@@ -32,8 +32,7 @@ function AppRoutes() {
   const { theme } = useSettingsStore();
   const location = useLocation();
 
-  const [showSearch, setShowSearch] = useState(false);
-  const { toggleFocusMode, showQuickEntry, openQuickEntry, closeQuickEntry, toggleQuickEntry } = useUiStore();
+  const { toggleFocusMode, showQuickEntry, closeQuickEntry, toggleQuickEntry, showSearch, openSearch, closeSearch } = useUiStore();
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => { clearAll(); }, [location.pathname]);
@@ -57,10 +56,10 @@ function AppRoutes() {
   useEffect(() => {
     const handler = (e) => {
       const meta = e.metaKey || e.ctrlKey;
-      if (meta && e.key === "k") { e.preventDefault(); setShowSearch((v) => !v); }
+      if (meta && e.key === "k") { e.preventDefault(); showSearch ? closeSearch() : openSearch(); }
       if (meta && e.key === "n") { e.preventDefault(); toggleQuickEntry(); }
       if (meta && e.shiftKey && e.key === "F") { e.preventDefault(); toggleFocusMode(); }
-      if (e.key === "Escape") { setShowSearch(false); closeQuickEntry(); }
+      if (e.key === "Escape") { closeSearch(); closeQuickEntry(); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -94,7 +93,7 @@ function AppRoutes() {
         </Routes>
       </Layout>
 
-      {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
+      {showSearch && <SearchModal onClose={closeSearch} />}
       {showQuickEntry && <QuickEntry onClose={closeQuickEntry} />}
     </>
   );
