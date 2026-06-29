@@ -74,36 +74,40 @@ export function BulkActionBar() {
   ];
 
   return (
-    <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-1 bg-card border border-border rounded-2xl shadow-xl px-3 py-2">
-        <span className="text-xs font-medium text-text-secondary mr-2 pl-1">
-          {count} selecionada{count !== 1 ? "s" : ""}
+    <div className="fixed bottom-20 md:bottom-6 left-2 right-2 md:left-auto md:right-auto md:w-auto md:translate-x-0 md:left-1/2 z-50 pointer-events-none flex justify-center">
+      <div className="pointer-events-auto flex items-center bg-card border border-border rounded-2xl shadow-xl px-2 py-1.5 gap-0.5 w-full md:w-auto">
+        {/* Contagem */}
+        <span className="text-xs font-medium text-text-secondary px-2 shrink-0">
+          <span className="md:hidden">{count} sel.</span>
+          <span className="hidden md:inline">{count} selecionada{count !== 1 ? "s" : ""}</span>
         </span>
 
-        <div className="w-px h-5 bg-border mx-1" />
+        <div className="w-px h-5 bg-border mx-1 shrink-0" />
 
+        {/* Ações */}
         {actions.map((action) => (
           <button
             key={action.label}
             onClick={action.onClick}
             title={action.label}
             className={[
-              "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl text-[10px] font-medium transition-colors min-w-[44px]",
+              "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors flex-1 md:flex-none md:px-3 md:min-w-[52px]",
               action.danger
                 ? "text-danger hover:bg-danger/10"
                 : "text-text-main hover:bg-bg",
             ].join(" ")}
           >
             {action.icon}
-            <span>{action.label}</span>
+            <span className="text-[9px] md:text-[10px] font-medium leading-none">{action.label}</span>
           </button>
         ))}
 
-        <div className="w-px h-5 bg-border mx-1" />
+        <div className="w-px h-5 bg-border mx-1 shrink-0" />
 
+        {/* Fechar */}
         <button
           onClick={clearAll}
-          className="text-text-secondary hover:text-text-main px-2 py-1.5 rounded-xl transition-colors text-sm"
+          className="text-text-secondary hover:text-text-main w-8 h-8 flex items-center justify-center rounded-xl transition-colors shrink-0 text-sm"
         >
           ✕
         </button>
