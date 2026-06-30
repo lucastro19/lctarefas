@@ -1,13 +1,5 @@
-import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-
-export function generateCalendarToken(userId) {
-  return crypto
-    .createHmac('sha256', process.env.CALENDAR_SECRET)
-    .update(userId)
-    .digest('base64url')
-    .slice(0, 32);
-}
+import { generateCalendarToken } from '../_lib/calToken.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
@@ -27,7 +19,8 @@ export default async function handler(req, res) {
   const calToken = generateCalendarToken(user.id);
   const host = req.headers.host ?? 'tarefas.lcgestor.com.br';
   const isLocal = host.includes('localhost');
-  // webcals:// = webcal over HTTPS — iOS abre direto no app Calendário
+
+  // webcals:// = HTTPS webcal — iOS abre direto no app Calendário
   const protocol = isLocal ? 'http' : 'webcals';
   const url = `${protocol}://${host}/api/calendar/feed?uid=${user.id}&token=${calToken}`;
 
