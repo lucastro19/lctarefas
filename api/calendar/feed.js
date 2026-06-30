@@ -90,6 +90,7 @@ export default async function handler(req, res) {
   ].join('\r\n');
 
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="lctarefas-urgentes.ics"');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Access-Control-Allow-Origin', '*');
   return res.status(200).send(ical);

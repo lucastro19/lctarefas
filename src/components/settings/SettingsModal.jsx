@@ -40,7 +40,6 @@ export function SettingsModal({ onClose }) {
   }, []);
 
   const loadCalUrl = async () => {
-    if (calUrl) return;
     setCalLoading(true);
     try {
       const res = await fetch('/api/calendar/token', {
@@ -203,7 +202,7 @@ export function SettingsModal({ onClose }) {
           <div className="border-t border-border pt-4">
             <label className="text-xs font-medium text-text-secondary block mb-1">📅 Calendário de urgentes</label>
             <p className="text-[11px] text-text-secondary mb-3 leading-relaxed">
-              Assine no Calendário do iPhone para receber alarmes automáticos das tarefas urgentes — mesmo no silencioso, se ativar Alertas Críticos.
+              Assine no Calendário do iPhone para receber alarmes automáticos das tarefas urgentes, mesmo no silencioso (com Alertas Críticos).
             </p>
 
             {!calUrl ? (
@@ -216,24 +215,43 @@ export function SettingsModal({ onClose }) {
               </button>
             ) : (
               <div className="space-y-2.5">
-                <a
-                  href={calUrl}
-                  className="w-full flex items-center justify-center gap-2 text-xs py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition-colors"
-                >
-                  📅 Assinar no Calendário do iPhone
-                </a>
                 <button
                   onClick={copyCalUrl}
-                  className="w-full text-xs py-2 rounded-lg border border-border text-text-secondary hover:border-primary/50 transition-colors"
+                  className={["w-full flex items-center justify-center gap-2 text-xs py-2.5 rounded-lg font-medium transition-colors", calCopied ? "bg-success text-white" : "bg-primary text-white hover:bg-primary/90"].join(" ")}
                 >
-                  {calCopied ? "✓ URL copiada!" : "Copiar URL manualmente"}
+                  {calCopied ? "✓ URL copiada!" : "📋 Copiar link de assinatura"}
                 </button>
-                <p className="text-[10px] text-text-secondary leading-relaxed">
-                  Toque em <strong>"Assinar no Calendário"</strong> — o iOS abre o app Calendário automaticamente e pede confirmação.
-                </p>
-                <p className="text-[10px] text-text-secondary leading-relaxed">
-                  Para tocar no silencioso: <strong>Ajustes → Notificações → Calendário → Alertas Críticos → Ativar</strong>
-                </p>
+
+                <div className="bg-bg rounded-lg border border-border px-3 py-2">
+                  <p className="text-[10px] text-text-secondary font-mono break-all leading-relaxed select-all">
+                    {calUrl}
+                  </p>
+                </div>
+
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700 px-3 py-2.5 space-y-1.5">
+                  <p className="text-[11px] font-medium text-amber-800 dark:text-amber-300">Como assinar no iPhone:</p>
+                  <ol className="text-[10px] text-amber-700 dark:text-amber-400 space-y-1 list-none">
+                    <li>1. Toque em <strong>Copiar link</strong> acima</li>
+                    <li>2. Abra <strong>Ajustes → Calendário → Contas</strong></li>
+                    <li>3. <strong>Adicionar conta → Outro → Calendário Assinado</strong></li>
+                    <li>4. Cole a URL e toque em <strong>Avançar</strong></li>
+                  </ol>
+                </div>
+
+                <div className="rounded-lg border border-border px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-medium text-text-secondary">Para alarmes no silencioso:</p>
+                  <p className="text-[10px] text-text-secondary leading-relaxed">
+                    <strong>Ajustes → Notificações → Calendário → Alertas Críticos → Ativar</strong>
+                  </p>
+                </div>
+
+                <button
+                  onClick={loadCalUrl}
+                  disabled={calLoading}
+                  className="w-full text-[10px] py-1.5 rounded-lg border border-border text-text-secondary hover:border-primary/50 transition-colors disabled:opacity-50"
+                >
+                  {calLoading ? "Atualizando…" : "↻ Regenerar link"}
+                </button>
               </div>
             )}
           </div>
