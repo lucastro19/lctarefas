@@ -367,6 +367,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const pendingCursorRef = useRef(null);
   const longPressRef = useRef(null);
   const swipeStartRef = useRef(null);
+  const cardRef = useRef(null);
 
   const expanded = expandedTaskId === task.id;
   const selected = isSelected(task.id);
@@ -445,6 +446,23 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
+  }, [expanded]);
+
+  // Clique fora do card → recolhe
+  useEffect(() => {
+    if (!expanded) return;
+    const handler = (e) => {
+      if (cardRef.current && !cardRef.current.contains(e.target)) {
+        collapseRef.current?.();
+      }
+    };
+    // mousedown no desktop, touchstart no mobile
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, [expanded]);
 
   const resizeTextarea = (el) => {
@@ -614,7 +632,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const swipeRight = swipeX > 0;
 
   return (
-    <div className="relative overflow-hidden rounded-card">
+    <div ref={cardRef} className="relative overflow-hidden rounded-card">
       {/* Swipe reveal backgrounds */}
       {swipeActive && (
         <div className={[
