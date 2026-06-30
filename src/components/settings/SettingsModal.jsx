@@ -31,9 +31,35 @@ export function SettingsModal({ onClose }) {
   const [pushError, setPushError] = useState("");
   const pushSupported = isPushSupported();
 
+  const [calUrl, setCalUrl] = useState("");
+  const [calLoading, setCalLoading] = useState(false);
+  const [calCopied, setCalCopied] = useState(false);
+
   useEffect(() => {
     getSubscriptionStatus().then(setPushEnabled);
   }, []);
+
+  const loadCalUrl = async () => {
+    if (calUrl) return;
+    setCalLoading(true);
+    try {
+      const res = await fetch('/api/calendar/token', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      setCalUrl(data.url ?? "");
+    } catch {
+      setCalUrl("");
+    } finally {
+      setCalLoading(false);
+    }
+  };
+
+  const copyCalUrl = () => {
+    navigator.clipboard.writeText(calUrl);
+    setCalCopied(true);
+    setTimeout(() => setCalCopied(false), 2000);
+  };
 
   const togglePush = async () => {
     setPushLoading(true);
@@ -169,6 +195,42 @@ export function SettingsModal({ onClose }) {
                 {pushEnabled && (
                   <p className="text-[11px] text-success">✓ Notificações ativas neste dispositivo</p>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* Calendário de urgentes */}
+          <div className="border-t border-border pt-4">
+            <label className="text-xs font-medium text-text-secondary block mb-1">📅 Calendário de urgentes</label>
+            <p className="text-[11px] text-text-secondary mb-3 leading-relaxed">
+              Assine no Calendário do iPhone para receber alarmes automáticos das tarefas urgentes — mesmo no silencioso, se ativar Alertas Críticos.
+            </p>
+
+            {!calUrl ? (
+              <button
+                onClick={loadCalUrl}
+                disabled={calLoading}
+                className="w-full text-xs py-2 rounded-lg border border-primary text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
+              >
+                {calLoading ? "Gerando URL…" : "Gerar URL do calendário"}
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 bg-bg border border-border rounded-lg px-3 py-2">
+                  <span className="text-[10px] text-text-secondary flex-1 truncate font-mono">{calUrl}</span>
+                  <button
+                    onClick={copyCalUrl}
+                    className={["text-xs font-medium shrink-0 transition-colors", calCopied ? "text-success" : "text-primary"].join(" ")}
+                  >
+                    {calCopied ? "Copiado!" : "Copiar"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-text-secondary leading-relaxed">
+                  No iPhone: <strong>Ajustes → Calendário → Contas → Adicionar conta → Outro → Cal. subscrito</strong> → cole a URL acima.
+                </p>
+                <p className="text-[10px] text-text-secondary leading-relaxed">
+                  Para tocar no silencioso: <strong>Ajustes → Notificações → Calendário → Alertas críticos → Ativar</strong>
+                </p>
               </div>
             )}
           </div>
