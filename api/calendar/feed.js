@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     .is('deleted_at', null)
     .not('scheduled_date', 'is', null);
 
-  if (error) return res.status(500).send('DB error');
+  if (error) return res.status(500).send(`DB error: ${JSON.stringify(error)}`);
 
   const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 
