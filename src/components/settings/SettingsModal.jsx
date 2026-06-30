@@ -212,24 +212,27 @@ export function SettingsModal({ onClose }) {
                 disabled={calLoading}
                 className="w-full text-xs py-2 rounded-lg border border-primary text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
               >
-                {calLoading ? "Gerando URL…" : "Gerar URL do calendário"}
+                {calLoading ? "Gerando…" : "Gerar link de assinatura"}
               </button>
             ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 bg-bg border border-border rounded-lg px-3 py-2">
-                  <span className="text-[10px] text-text-secondary flex-1 truncate font-mono">{calUrl}</span>
-                  <button
-                    onClick={copyCalUrl}
-                    className={["text-xs font-medium shrink-0 transition-colors", calCopied ? "text-success" : "text-primary"].join(" ")}
-                  >
-                    {calCopied ? "Copiado!" : "Copiar"}
-                  </button>
-                </div>
+              <div className="space-y-2.5">
+                <a
+                  href={calUrl}
+                  className="w-full flex items-center justify-center gap-2 text-xs py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition-colors"
+                >
+                  📅 Assinar no Calendário do iPhone
+                </a>
+                <button
+                  onClick={copyCalUrl}
+                  className="w-full text-xs py-2 rounded-lg border border-border text-text-secondary hover:border-primary/50 transition-colors"
+                >
+                  {calCopied ? "✓ URL copiada!" : "Copiar URL manualmente"}
+                </button>
                 <p className="text-[10px] text-text-secondary leading-relaxed">
-                  No iPhone: <strong>Ajustes → Calendário → Contas → Adicionar conta → Outro → Cal. subscrito</strong> → cole a URL acima.
+                  Toque em <strong>"Assinar no Calendário"</strong> — o iOS abre o app Calendário automaticamente e pede confirmação.
                 </p>
                 <p className="text-[10px] text-text-secondary leading-relaxed">
-                  Para tocar no silencioso: <strong>Ajustes → Notificações → Calendário → Alertas críticos → Ativar</strong>
+                  Para tocar no silencioso: <strong>Ajustes → Notificações → Calendário → Alertas Críticos → Ativar</strong>
                 </p>
               </div>
             )}
