@@ -7,6 +7,8 @@ import { useTagStore } from "../../store/tagStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { durationLabel, DURATION_PRESETS } from "../../store/settingsStore";
+import { useAuthStore } from "../../store/authStore";
+import { sendUrgentPush } from "../../lib/pushNotifications";
 
 // Usa data LOCAL (não UTC) para evitar bug de timezone em fusos negativos (BR = UTC-3)
 function localDateStr(d = new Date()) {
@@ -224,6 +226,7 @@ function TimeField({ value, onChange }) {
 function UrgencyButton({ task, updateTask }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const { session } = useAuthStore();
 
   useEffect(() => {
     const handler = (e) => {
@@ -233,7 +236,11 @@ function UrgencyButton({ task, updateTask }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const setUrgent = (val) => { updateTask(task.id, { is_urgent: val }); setOpen(false); };
+  const setUrgent = (val) => {
+    updateTask(task.id, { is_urgent: val });
+    if (val) sendUrgentPush(session?.access_token, task.title);
+    setOpen(false);
+  };
 
   return (
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>

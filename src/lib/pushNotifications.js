@@ -63,6 +63,15 @@ export async function unsubscribeFromPush(accessToken) {
   }).catch(() => {});
 }
 
+export async function sendUrgentPush(accessToken, taskTitle) {
+  if (!accessToken) return;
+  await fetch('/api/push/urgent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ title: taskTitle }),
+  }).catch(() => {});
+}
+
 export async function getSubscriptionStatus() {
   if (!isPushSupported()) return false;
   try {
