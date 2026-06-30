@@ -27,8 +27,14 @@ export default async function handler(req, res) {
   const { uid, token } = req.query ?? {};
   if (!uid || !token) return res.status(400).send('Missing params');
 
-  const expected = generateCalendarToken(uid);
-  if (token !== expected) return res.status(401).send('Unauthorized');
+  let expected;
+  try {
+    expected = generateCalendarToken(uid);
+  } catch (err) {
+    return res.status(500).send(`Config error: ${err.message}`);
+  }
+  if (!process.env.CALENDAR_SECRET) return res.status(500).send('CALENDAR_SECRET not set');
+  if (token !== expected) return res.status(401).send(`Unauthorized (got: ${token?.slice(0,8)}, expected: ${expected?.slice(0,8)}`);
 
   const supabase = createClient(
     process.env.VITE_SUPABASE_URL,
@@ -90,7 +96,6 @@ export default async function handler(req, res) {
   ].join('\r\n');
 
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="lctarefas-urgentes.ics"');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Access-Control-Allow-Origin', '*');
   return res.status(200).send(ical);
