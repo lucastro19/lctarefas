@@ -27,14 +27,8 @@ export default async function handler(req, res) {
   const { uid, token } = req.query ?? {};
   if (!uid || !token) return res.status(400).send('Missing params');
 
-  let expected;
-  try {
-    expected = generateCalendarToken(uid);
-  } catch (err) {
-    return res.status(500).send(`Config error: ${err.message}`);
-  }
-  if (!process.env.CALENDAR_SECRET) return res.status(500).send('CALENDAR_SECRET not set');
-  if (token !== expected) return res.status(401).send(`Unauthorized (got: ${token?.slice(0,8)}, expected: ${expected?.slice(0,8)}`);
+  const expected = generateCalendarToken(uid);
+  if (token !== expected) return res.status(401).send('Unauthorized');
 
   const supabase = createClient(
     process.env.VITE_SUPABASE_URL,
@@ -51,7 +45,7 @@ export default async function handler(req, res) {
     .is('deleted_at', null)
     .not('scheduled_date', 'is', null);
 
-  if (error) return res.status(500).send(`DB error: ${JSON.stringify(error)}`);
+  if (error) return res.status(500).send('DB error');
 
   const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 
