@@ -1,5 +1,8 @@
+import { useState, useEffect } from "react";
 import { useSettingsStore, DURATION_PRESETS } from "../../store/settingsStore";
 import { useTagStore } from "../../store/tagStore";
+import { useAuthStore } from "../../store/authStore";
+import { isPushSupported, subscribeToPush, unsubscribeFromPush, getSubscriptionStatus } from "../../lib/pushNotifications";
 
 const THEMES = [
   { value: "light", label: "☀️ Claro" },
@@ -21,6 +24,34 @@ const ROUTE_OPTIONS = [
 export function SettingsModal({ onClose }) {
   const { dayStart, defaultDurationMinutes, theme, tabBarIds, setDayStart, setDefaultDuration, setTheme, setTabBarIds } = useSettingsStore();
   const { tags } = useTagStore();
+  const { session } = useAuthStore();
+
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState("");
+  const pushSupported = isPushSupported();
+
+  useEffect(() => {
+    getSubscriptionStatus().then(setPushEnabled);
+  }, []);
+
+  const togglePush = async () => {
+    setPushLoading(true);
+    setPushError("");
+    try {
+      if (pushEnabled) {
+        await unsubscribeFromPush(session?.access_token);
+        setPushEnabled(false);
+      } else {
+        await subscribeToPush(session?.access_token);
+        setPushEnabled(true);
+      }
+    } catch (err) {
+      setPushError(err.message);
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   const toggle = (id) => {
     if (tabBarIds.includes(id)) {
@@ -106,6 +137,40 @@ export function SettingsModal({ onClose }) {
             <p className="text-xs text-text-secondary mt-1.5">
               Usado quando a tarefa não tem duração definida.
             </p>
+          </div>
+
+          {/* Notificações Push */}
+          <div className="border-t border-border pt-4">
+            <label className="text-xs font-medium text-text-secondary block mb-3">🔔 Notificações</label>
+            {!pushSupported ? (
+              <p className="text-xs text-text-secondary">
+                Instale o app na tela inicial do iPhone para ativar notificações push (iOS 16.4+).
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-text-main font-medium">Notificações push</p>
+                    <p className="text-[11px] text-text-secondary mt-0.5">
+                      Avisa quando uma tarefa começa
+                    </p>
+                  </div>
+                  <button
+                    onClick={togglePush}
+                    disabled={pushLoading}
+                    className={["w-11 h-6 rounded-full transition-colors relative shrink-0", pushEnabled ? "bg-success" : "bg-[#C7C7CC]", pushLoading ? "opacity-60" : ""].join(" ")}
+                  >
+                    <span className={["absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform", pushEnabled ? "translate-x-5" : "translate-x-0.5"].join(" ")} />
+                  </button>
+                </div>
+                {pushError && (
+                  <p className="text-[11px] text-danger">{pushError}</p>
+                )}
+                {pushEnabled && (
+                  <p className="text-[11px] text-success">✓ Notificações ativas neste dispositivo</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-border pt-4">
