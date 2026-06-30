@@ -27,8 +27,8 @@ export default async function handler(req, res) {
   const calToken = generateCalendarToken(user.id);
   const host = req.headers.host ?? 'tarefas.lcgestor.com.br';
   const isLocal = host.includes('localhost');
-  // webcal:// faz o iOS abrir direto no app Calendário com um toque
-  const protocol = isLocal ? 'http' : 'webcal';
+  // webcals:// = webcal over HTTPS — iOS abre direto no app Calendário
+  const protocol = isLocal ? 'http' : 'webcals';
   const url = `${protocol}://${host}/api/calendar/feed?uid=${user.id}&token=${calToken}`;
 
   return res.status(200).json({ url });
