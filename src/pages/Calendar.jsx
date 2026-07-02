@@ -8,197 +8,117 @@ import {
 import { useTaskStore } from "../store/taskStore";
 import { TaskDetail } from "../components/tasks/TaskDetail";
 
-/* ── Helpers ── */
+/* ─── Helpers ─────────────────────────────────────────────── */
 function localDateStr(d = new Date()) {
-  return (
-    d.getFullYear() +
-    "-" + String(d.getMonth() + 1).padStart(2, "0") +
-    "-" + String(d.getDate()).padStart(2, "0")
-  );
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-
 function addDays(d, n) {
-  const r = new Date(d + "T12:00:00");
-  r.setDate(r.getDate() + n);
-  return localDateStr(r);
+  const r = new Date(d + "T12:00:00"); r.setDate(r.getDate() + n); return localDateStr(r);
 }
-
-function mondayOf(dateStr) {
-  const d = new Date(dateStr + "T12:00:00");
-  const day = d.getDay();
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-  return localDateStr(d);
+function mondayOf(d) {
+  const r = new Date(d + "T12:00:00"), day = r.getDay();
+  r.setDate(r.getDate() + (day === 0 ? -6 : 1 - day)); return localDateStr(r);
 }
-
-function formatMonthYear(dateStr) {
-  const d = new Date(dateStr + "T12:00:00");
-  return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }).toLowerCase();
+function startOfMonth(d) {
+  const r = new Date(d + "T12:00:00"); r.setDate(1); return localDateStr(r);
 }
+function timeToMinutes(t) { if (!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; }
+function minutesToTime(min) { return `${String(Math.floor(min/60)).padStart(2,"0")}:${String(min%60).padStart(2,"0")}`; }
+function snapQ(min) { return Math.round(min/15)*15; }
+function fmtFull(d)  { return new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"}); }
+function fmtWeekday(d){ return new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long"}); }
+function fmtMonthYear(d){ return new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"}).toLowerCase(); }
+function fmtYear(d){ return String(new Date(d+"T12:00:00").getFullYear()); }
 
-function timeToMinutes(t) {
-  if (!t) return null;
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function minutesToTime(min) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-/* ── Constantes ── */
-const HOUR_HEIGHT = 56; // px por hora — menor para caber mais na tela
+/* ─── Constantes ─────────────────────────────────────────── */
+const HOUR_HEIGHT = 52;
 const GRID_START_H = 6;
-const GRID_END_H = 23;
-const STRIP_BACK = 14;
-const STRIP_FORWARD = 60;
-
-const gridHours = Array.from(
-  { length: GRID_END_H - GRID_START_H },
-  (_, i) => GRID_START_H + i
-);
+const GRID_END_H   = 23;
+const gridHours = Array.from({length: GRID_END_H-GRID_START_H}, (_,i)=>GRID_START_H+i);
 
 const VIEWS = [
-  { id: "day",      label: "Dia",    shortcut: "D", cols: 1 },
-  { id: "3day",     label: "3 dias", shortcut: "3", cols: 3 },
-  { id: "workweek", label: "Úteis",  shortcut: "U", cols: 5 },
-  { id: "week",     label: "Semana", shortcut: "S", cols: 7 },
+  {id:"day",   label:"Dia",    shortcut:"D"},
+  {id:"week",  label:"Semana", shortcut:"S"},
+  {id:"month", label:"Mês",    shortcut:"M"},
+  {id:"year",  label:"Ano",    shortcut:"A"},
 ];
 
-function getDaysForView(view, anchorDate) {
-  if (view === "day") return [anchorDate];
-  if (view === "3day") return [0, 1, 2].map((n) => addDays(anchorDate, n));
-  const mon = mondayOf(anchorDate);
-  if (view === "workweek") return [0, 1, 2, 3, 4].map((n) => addDays(mon, n));
-  return [0, 1, 2, 3, 4, 5, 6].map((n) => addDays(mon, n));
+function getDays(view, anchor) {
+  if (view==="day")      return [anchor];
+  if (view==="3day")     return [0,1,2].map(n=>addDays(anchor,n));
+  if (view==="workweek") return [0,1,2,3,4].map(n=>addDays(mondayOf(anchor),n));
+  if (view==="week")     return [0,1,2,3,4,5,6].map(n=>addDays(mondayOf(anchor),n));
+  return [];
 }
 
-function navigateView(view, anchor, dir) {
-  return addDays(anchor, dir * ({ day: 1, "3day": 3, workweek: 7, week: 7 }[view] ?? 1));
+function navigate(view, anchor, dir) {
+  if (view==="month") {
+    const d=new Date(anchor+"T12:00:00"); d.setMonth(d.getMonth()+dir); return localDateStr(d);
+  }
+  if (view==="year") {
+    const d=new Date(anchor+"T12:00:00"); d.setFullYear(d.getFullYear()+dir); return localDateStr(d);
+  }
+  return addDays(anchor, dir*({day:1,"3day":3,workweek:7,week:7}[view]??1));
 }
 
-function snapToQuarter(min) {
-  return Math.round(min / 15) * 15;
+/* ─── Layout de eventos sobrepostos ─────────────────────── */
+function layoutEvents(tasks) {
+  const sorted = [...tasks].sort((a,b)=>(timeToMinutes(a.scheduled_time)??0)-(timeToMinutes(b.scheduled_time)??0));
+  const cols = []; // end time de cada coluna
+  const result = sorted.map(task=>{
+    const s = timeToMinutes(task.scheduled_time) ?? (GRID_START_H*60);
+    const e = s + (task.duration_minutes ?? 30);
+    let col = cols.findIndex(end => end <= s);
+    if (col===-1){ col=cols.length; cols.push(e); } else cols[col]=e;
+    return {task, col};
+  });
+  const total = cols.length || 1;
+  return result.map(r=>({...r, total}));
 }
 
-/* ── Ponto de carga ── */
-function LoadDot({ count }) {
-  if (count === 0) return <div className="h-1 w-1" />;
-  const cls = count < 3 ? "bg-success" : count < 6 ? "bg-warning" : "bg-danger";
-  return <div className={`w-1.5 h-1.5 rounded-full ${cls}`} />;
-}
-
-/* ── Barra de carga ── */
-function LoadBar({ minutes }) {
-  const pct = Math.min(100, (minutes / (8 * 60)) * 100);
-  if (pct === 0) return null;
-  const color = minutes < 180 ? "#34C759" : minutes < 360 ? "#FF9500" : "#FF3B30";
+/* ─── Mini componentes visuais ───────────────────────────── */
+function EventCircle({done,urgent,size=12}){
+  const cls = done ? "border-[#636366] bg-[#636366]" : urgent ? "border-danger bg-transparent" : "border-success bg-transparent";
   return (
-    <div className="h-0.5 rounded-full bg-border/40 overflow-hidden w-full mt-0.5">
-      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
-    </div>
+    <span className={`inline-flex items-center justify-center rounded-full border-2 shrink-0 ${cls}`}
+      style={{width:size, height:size}}>
+      {done && <svg width="6" height="4" viewBox="0 0 6 4" fill="none">
+        <path d="M1 2L2.2 3L5 1" stroke="white" strokeWidth="1.4" strokeLinecap="round"/>
+      </svg>}
+    </span>
   );
 }
 
-/* ── Strip horizontal de dias ── */
-function DayStrip({ anchorDate, today, tasksByDay, onSelect, view }) {
-  const activeRef = useRef(null);
-  const mounted = useRef(false);
-  const days = Array.from({ length: STRIP_BACK + 1 + STRIP_FORWARD }, (_, i) => addDays(today, i - STRIP_BACK));
-  const viewDays = getDaysForView(view, anchorDate);
-
-  useEffect(() => {
-    if (activeRef.current) {
-      activeRef.current.scrollIntoView({
-        behavior: mounted.current ? "smooth" : "instant",
-        block: "nearest", inline: "center",
-      });
-      mounted.current = true;
-    }
-  }, [anchorDate, view]);
-
-  return (
-    <div className="flex gap-0.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-      {days.map((dateStr) => {
-        const isToday = dateStr === today;
-        const isInView = viewDays.includes(dateStr);
-        const isAnchor = dateStr === anchorDate;
-        const d = new Date(dateStr + "T12:00:00");
-        const dayNum = d.getDate();
-        const dayLabel = d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "").slice(0, 3);
-        const activeTasks = (tasksByDay[dateStr] ?? []).filter((t) => !t.completed_at);
-        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-
-        return (
-          <button
-            key={dateStr}
-            ref={isAnchor ? activeRef : null}
-            onClick={() => onSelect(dateStr)}
-            className={[
-              "flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-xl shrink-0 transition-all min-w-[40px] cursor-pointer",
-              isInView ? "bg-primary/10 border border-primary/25" : "hover:bg-card border border-transparent",
-            ].join(" ")}
-          >
-            <span className={["text-[9px] font-semibold uppercase tracking-wide",
-              isInView ? "text-primary" : isWeekend ? "text-danger/50" : "text-text-secondary"].join(" ")}>
-              {dayLabel}
-            </span>
-            <span className={["w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold",
-              isToday && isInView ? "bg-primary text-white" :
-              isToday ? "bg-primary/20 text-primary" :
-              isInView ? "text-primary font-bold" :
-              isWeekend ? "text-text-secondary/50" : "text-text-main"].join(" ")}>
-              {dayNum}
-            </span>
-            <LoadDot count={activeTasks.length} />
-          </button>
-        );
-      })}
-    </div>
-  );
+function LoadBar({minutes}){
+  const pct = Math.min(100,(minutes/(8*60))*100);
+  if(!pct) return null;
+  const c = minutes<180?"#34C759":minutes<360?"#FF9500":"#FF3B30";
+  return <div className="h-0.5 rounded-full bg-border/40 overflow-hidden w-full mt-0.5">
+    <div className="h-full rounded-full" style={{width:`${pct}%`,backgroundColor:c}}/>
+  </div>;
 }
 
-/* ── Conteúdo visual de um bloco de tarefa (reutilizado no DragOverlay) ── */
-function TaskBlockContent({ task, height, onToggle, onSelect }) {
-  const isDone = !!task.completed_at;
-  const isUrgent = task.is_urgent && !isDone;
-
-  const borderColor = isDone ? "#48484A" : isUrgent ? "#FF3B30" : "#4F8EF7";
-  const bgColor = isDone ? "rgba(58,58,60,0.6)" : isUrgent ? "rgba(255,59,48,0.12)" : "rgba(79,142,247,0.12)";
-  const textColor = isDone ? "#8E8E93" : isUrgent ? "#FF3B30" : "#4F8EF7";
-
+/* ─── Visual de evento na timeline ──────────────────────── */
+function EventContent({task, height, onToggle}){
+  const done = !!task.completed_at, urgent = task.is_urgent && !done;
+  const color = done?"#636366":urgent?"#FF3B30":"#30D158";
+  const bg = done?"rgba(99,99,102,0.08)":urgent?"rgba(255,59,48,0.08)":"rgba(48,209,88,0.08)";
   return (
-    <div
-      className="w-full h-full flex items-start gap-1.5 px-2 py-1 rounded-md overflow-hidden"
-      style={{ backgroundColor: bgColor, borderLeft: `3px solid ${borderColor}` }}
-    >
-      {/* Botão circular de conclusão */}
+    <div className="w-full h-full flex gap-1.5 px-1.5 py-1 overflow-hidden" style={{backgroundColor:bg, borderLeft:`2.5px solid ${color}`}}>
       <button
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggle?.(task); }}
-        className={[
-          "shrink-0 w-3.5 h-3.5 mt-[2px] rounded-full border-2 flex items-center justify-center transition-colors",
-          isDone ? "border-[#8E8E93] bg-[#8E8E93]" : isUrgent ? "border-danger hover:bg-danger/20" : "border-primary hover:bg-primary/20",
-        ].join(" ")}
-        title={isDone ? "Desmarcar" : "Concluir"}
+        onPointerDown={e=>e.stopPropagation()}
+        onClick={e=>{e.stopPropagation();e.preventDefault();onToggle?.(task);}}
+        className="mt-[2px] shrink-0"
       >
-        {isDone && (
-          <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
-            <path d="M1 2.5L2.8 4L6 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
+        <EventCircle done={done} urgent={urgent} size={11}/>
       </button>
-
-      {/* Texto */}
       <div className="flex-1 min-w-0">
-        <p className={["text-[11px] font-semibold leading-tight truncate", isDone ? "line-through" : ""].join(" ")}
-          style={{ color: textColor }}>
+        <p className={`text-[11px] font-medium leading-tight truncate ${done?"line-through opacity-50":""}`} style={{color}}>
           {task.title}
         </p>
-        {height > 40 && task.scheduled_time && (
-          <p className="text-[9px] text-text-secondary leading-none mt-0.5">
-            {task.scheduled_time.slice(0, 5)} · {task.duration_minutes ?? 30}min
+        {height>38 && task.scheduled_time && (
+          <p className="text-[9px] text-text-secondary/60 mt-0.5 leading-none">
+            {task.scheduled_time.slice(0,5)}{task.duration_minutes && task.duration_minutes!==30?` · ${task.duration_minutes}min`:""}
           </p>
         )}
       </div>
@@ -206,396 +126,459 @@ function TaskBlockContent({ task, height, onToggle, onSelect }) {
   );
 }
 
-/* ── Bloco de tarefa arrastável ── */
-function DraggableTaskBlock({ task, onSelect, onToggle }) {
-  const startMin = timeToMinutes(task.scheduled_time) ?? (GRID_START_H * 60);
-  const duration = task.duration_minutes ?? 30;
-  const top = ((startMin - GRID_START_H * 60) / 60) * HOUR_HEIGHT;
-  const height = Math.max(28, (duration / 60) * HOUR_HEIGHT);
+/* ─── Evento arrastável ──────────────────────────────────── */
+function DraggableEvent({task, col, total, onSelect, onToggle}){
+  const start = timeToMinutes(task.scheduled_time)??(GRID_START_H*60);
+  const dur   = task.duration_minutes??30;
+  const top   = ((start-GRID_START_H*60)/60)*HOUR_HEIGHT;
+  const height= Math.max(22,(dur/60)*HOUR_HEIGHT);
+  const w     = `${100/total}%`;
+  const left  = `${(col/total)*100}%`;
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
-    data: { task },
-  });
+  const {attributes,listeners,setNodeRef,transform,isDragging} = useDraggable({id:task.id, data:{task}});
 
   return (
     <div
       ref={setNodeRef}
+      data-task-id={task.id}
       style={{
-        position: "absolute",
-        top,
-        left: 3,
-        right: 3,
-        height,
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        opacity: isDragging ? 0.3 : 1,
-        zIndex: isDragging ? 0 : 2,
-        cursor: isDragging ? "grabbing" : "grab",
-        touchAction: "none",
+        position:"absolute", top, left, width:w, height,
+        transform: transform?`translate3d(${transform.x}px,${transform.y}px,0)`:undefined,
+        opacity: isDragging?0.25:1,
+        zIndex: isDragging?0:2,
+        touchAction:"none",
+        paddingLeft: col>0?1:0,
+        paddingRight: col<total-1?1:0,
+        cursor:"grab",
       }}
-      {...attributes}
-      {...listeners}
-      onClick={(e) => {
-        // Se não houve drag, abre detalhe
-        if (!isDragging) { e.stopPropagation(); onSelect(task); }
-      }}
+      {...attributes} {...listeners}
+      onClick={e=>{if(!isDragging){e.stopPropagation();onSelect(task);}}}
     >
-      <TaskBlockContent task={task} height={height} onToggle={onToggle} onSelect={onSelect} />
+      <EventContent task={task} height={height} onToggle={onToggle}/>
     </div>
   );
 }
 
-/* ── Coluna de um dia (droppable) ── */
-function DroppableDayColumn({ dateStr, children, isToday }) {
-  const { setNodeRef, isOver } = useDroppable({ id: dateStr });
+/* ─── Coluna droppable de um dia ─────────────────────────── */
+function DayCol({dateStr, isToday, children, onDoubleClick}){
+  const {setNodeRef, isOver} = useDroppable({id:dateStr});
   return (
     <div
       ref={setNodeRef}
+      onDoubleClick={e=>onDoubleClick(e,dateStr)}
       className={[
-        "flex-1 relative border-l border-border/30 min-w-0 transition-colors",
-        isToday ? "bg-primary/[0.015]" : "",
-        isOver ? "bg-primary/[0.06]" : "",
+        "flex-1 relative border-l border-border/25 min-w-0 transition-colors",
+        isToday?"bg-primary/[0.02]":"",
+        isOver?"bg-primary/[0.06]":"",
       ].join(" ")}
-      style={{ minWidth: 0 }}
+      style={{minWidth:0}}
     >
       {children}
     </div>
   );
 }
 
-/* ── Grid de horas multi-dia ── */
-function TimeGrid({ days, tasksByDay, today, onTaskSelect, onTaskToggle, gridScrollRef }) {
-  return (
-    <div
-      ref={gridScrollRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden"
-      style={{ scrollbarWidth: "thin" }}
-    >
-      {/* Container de altura fixa — width 100% garante que não haja scroll horizontal */}
-      <div style={{ height: gridHours.length * HOUR_HEIGHT, width: "100%", position: "relative" }} className="flex">
+/* ─── Timeline multi-dia ─────────────────────────────────── */
+function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDoubleClick, gridRef}){
+  const now = new Date();
+  const nowMin = now.getHours()*60+now.getMinutes();
 
-        {/* Rótulos de hora — coluna fixa */}
-        <div className="w-11 shrink-0 relative z-10" style={{ background: "inherit" }}>
-          {gridHours.map((h) => (
-            <div
-              key={h}
-              style={{ position: "absolute", top: (h - GRID_START_H) * HOUR_HEIGHT, right: 0, left: 0 }}
-              className="flex justify-end pr-2"
-            >
-              <span className="text-[9px] text-text-secondary/50 tabular-nums leading-none -mt-[5px] select-none">
-                {String(h).padStart(2, "0")}:00
+  return (
+    <div ref={gridRef} className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth:"thin"}}>
+      <div style={{height:gridHours.length*HOUR_HEIGHT, width:"100%", position:"relative"}} className="flex">
+
+        {/* Horas */}
+        <div className="w-11 shrink-0 relative z-10" style={{background:"inherit"}}>
+          {gridHours.map(h=>(
+            <div key={h} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,right:0,left:0}} className="flex justify-end pr-2">
+              <span className="text-[9px] text-text-secondary/40 tabular-nums leading-none -mt-[5px] select-none">
+                {String(h).padStart(2,"0")}:00
               </span>
             </div>
           ))}
         </div>
 
-        {/* Colunas dos dias */}
-        {days.map((dateStr) => {
-          const isToday = dateStr === today;
-          const timedTasks = (tasksByDay[dateStr] ?? []).filter((t) => t.scheduled_time);
+        {/* Colunas */}
+        {days.map(dateStr=>{
+          const isToday = dateStr===today;
+          const timedTasks = (tasksByDay[dateStr]??[]).filter(t=>t.scheduled_time);
+          const laid = layoutEvents(timedTasks);
           return (
-            <DroppableDayColumn key={dateStr} dateStr={dateStr} isToday={isToday}>
-              {/* Linhas de hora */}
-              {gridHours.map((h) => (
-                <div
-                  key={h}
-                  style={{ position: "absolute", top: (h - GRID_START_H) * HOUR_HEIGHT, left: 0, right: 0 }}
-                  className={h % 2 === 0 ? "border-t border-border/30" : "border-t border-border/12"}
-                />
+            <DayCol key={dateStr} dateStr={dateStr} isToday={isToday} onDoubleClick={onDoubleClick}>
+              {gridHours.map(h=>(
+                <div key={h} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,left:0,right:0}}
+                  className={h%2===0?"border-t border-border/25":"border-t border-border/10"}/>
               ))}
-              {/* Blocos de tarefa */}
-              {timedTasks.map((t) => (
-                <DraggableTaskBlock
-                  key={t.id}
-                  task={t}
-                  onSelect={onTaskSelect}
-                  onToggle={onTaskToggle}
-                />
+              {laid.map(({task,col,total})=>(
+                <DraggableEvent key={task.id} task={task} col={col} total={total}
+                  onSelect={onTaskSelect} onToggle={onTaskToggle}/>
               ))}
-            </DroppableDayColumn>
+            </DayCol>
           );
         })}
 
-        {/* Linha de horário atual */}
-        {days.includes(today) && (() => {
-          const now = new Date();
-          const min = now.getHours() * 60 + now.getMinutes();
-          if (min < GRID_START_H * 60 || min >= GRID_END_H * 60) return null;
-          const top = ((min - GRID_START_H * 60) / 60) * HOUR_HEIGHT;
-          return (
-            <div
-              style={{ position: "absolute", top, left: 44, right: 0, zIndex: 20, pointerEvents: "none" }}
-              className="flex items-center"
-            >
-              <div className="w-2 h-2 rounded-full bg-danger shrink-0 -ml-1" />
-              <div className="flex-1 border-t-[1.5px] border-danger" />
-            </div>
-          );
-        })()}
+        {/* Linha "agora" */}
+        {days.includes(today) && nowMin>=GRID_START_H*60 && nowMin<GRID_END_H*60 && (
+          <div style={{position:"absolute",top:((nowMin-GRID_START_H*60)/60)*HOUR_HEIGHT,left:44,right:0,zIndex:20,pointerEvents:"none"}}
+            className="flex items-center">
+            <div className="w-2 h-2 rounded-full bg-danger -ml-1 shrink-0"/>
+            <div className="flex-1 border-t-[1.5px] border-danger"/>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ── Componente principal ── */
-export function Calendar() {
-  const { tasks, updateTask, completeTask, uncompleteTask } = useTaskStore();
-  const today = localDateStr();
-
-  const [view, setView] = useState("day");
-  const [anchorDate, setAnchorDate] = useState(today);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [draggingTask, setDraggingTask] = useState(null);
-
-  const gridScrollRef = useRef(null);
-
-  const days = getDaysForView(view, anchorDate);
-
-  const tasksByDay = tasks.reduce((acc, t) => {
-    if (!t.scheduled_date || t.deleted_at) return acc;
-    (acc[t.scheduled_date] ??= []).push(t);
-    return acc;
-  }, {});
-
-  const goBack    = useCallback(() => setAnchorDate((d) => navigateView(view, d, -1)), [view]);
-  const goForward = useCallback(() => setAnchorDate((d) => navigateView(view, d,  1)), [view]);
-  const goToday   = useCallback(() => setAnchorDate(today), [today]);
-
-  const handleToggle = useCallback(async (task) => {
-    if (task.completed_at) await uncompleteTask(task.id);
-    else await completeTask(task.id);
-  }, [completeTask, uncompleteTask]);
-
-  /* ── DnD ── */
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 }, // ≥ 6px de movimento para iniciar drag
-    })
-  );
-
-  const handleDragStart = ({ active }) => {
-    setDraggingTask(active.data.current?.task ?? null);
-  };
-
-  const handleDragEnd = ({ active, over, delta }) => {
-    setDraggingTask(null);
-    if (!over || !active.data.current) return;
-
-    const task = active.data.current.task;
-    const newDate = over.id;
-
-    // Calcula novo horário pelo deslocamento vertical
-    const origMin = timeToMinutes(task.scheduled_time) ?? (GRID_START_H * 60);
-    const deltaMin = (delta.y / HOUR_HEIGHT) * 60;
-    const snapped = snapToQuarter(origMin + deltaMin);
-    const clampedMin = Math.max(GRID_START_H * 60, Math.min((GRID_END_H - 1) * 60, snapped));
-    const newTime = minutesToTime(clampedMin);
-
-    const changed = newDate !== task.scheduled_date || newTime !== task.scheduled_time;
-    if (changed) updateTask(task.id, { scheduled_date: newDate, scheduled_time: newTime });
-  };
-
-  /* ── Atalhos de teclado ── */
-  useEffect(() => {
-    const handler = (e) => {
-      const el = e.target;
-      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) return;
-      if (e.key === "Escape" && selectedTask) { setSelectedTask(null); return; }
-      const k = e.key.toLowerCase();
-      if (k === "d" || k === "1")          { setView("day"); return; }
-      if (k === "3")                        { setView("3day"); return; }
-      if (k === "u")                        { setView("workweek"); return; }
-      if (k === "s" || k === "7")           { setView("week"); return; }
-      if (k === "t")                        { goToday(); return; }
-      if (k === "arrowleft"  || k === "k") { goBack(); return; }
-      if (k === "arrowright" || k === "j") { goForward(); return; }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [goBack, goForward, goToday, selectedTask]);
-
-  /* ── Scroll para horário atual no mount ── */
-  useEffect(() => {
-    if (gridScrollRef.current) {
-      const now = new Date();
-      const min = now.getHours() * 60 + now.getMinutes();
-      const offset = ((min - GRID_START_H * 60) / 60) * HOUR_HEIGHT - 100;
-      gridScrollRef.current.scrollTop = Math.max(0, offset);
-    }
-  }, []);
-
-  /* ── Dados resumidos ── */
-  const totalActive = days.reduce((s, d) => s + (tasksByDay[d] ?? []).filter((t) => !t.completed_at).length, 0);
-  const totalMinutes = days.reduce(
-    (s, d) => s + (tasksByDay[d] ?? []).filter((t) => !t.completed_at).reduce((a, t) => a + (t.duration_minutes ?? 30), 0), 0
-  );
-
-  const monthLabel = formatMonthYear(days[0]);
-
-  /* ── Cabeçalho das colunas (fora do scroll) ── */
-  const DayHeaders = () => (
-    <div className="flex shrink-0 border-b border-border bg-card/50">
-      <div className="w-11 shrink-0" />
-      {days.map((dateStr) => {
-        const d = new Date(dateStr + "T12:00:00");
-        const isToday = dateStr === today;
-        const activeTasks = (tasksByDay[dateStr] ?? []).filter((t) => !t.completed_at);
-        const mins = activeTasks.reduce((s, t) => s + (t.duration_minutes ?? 30), 0);
-        const dayLabel = d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
-        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-        const untimedCount = (tasksByDay[dateStr] ?? []).filter((t) => !t.scheduled_time && !t.completed_at).length;
-
+/* ─── Cabeçalho das colunas ──────────────────────────────── */
+function DayHeaders({days, tasksByDay, today}){
+  const DAY_NAMES = ["dom","seg","ter","qua","qui","sex","sáb"];
+  return (
+    <div className="flex shrink-0 border-b border-border bg-card/60">
+      <div className="w-11 shrink-0"/>
+      {days.map(dateStr=>{
+        const d = new Date(dateStr+"T12:00:00");
+        const isToday = dateStr===today;
+        const isWeekend = d.getDay()===0||d.getDay()===6;
+        const actMin = (tasksByDay[dateStr]??[]).filter(t=>!t.completed_at).reduce((s,t)=>s+(t.duration_minutes??30),0);
         return (
-          <div
-            key={dateStr}
-            className={[
-              "flex-1 flex flex-col items-center py-2 px-1 min-w-0 border-l border-border/40",
-              isToday ? "bg-primary/5" : "",
-            ].join(" ")}
-          >
-            <span className={["text-[10px] font-semibold uppercase tracking-wide",
-              isToday ? "text-primary" : isWeekend ? "text-danger/60" : "text-text-secondary"].join(" ")}>
-              {dayLabel}
+          <div key={dateStr} className={["flex-1 flex flex-col items-center py-2 min-w-0 border-l border-border/25",isToday?"bg-primary/[0.04]":""].join(" ")}>
+            <span className={["text-[9px] font-semibold uppercase tracking-wider",isToday?"text-primary":isWeekend?"text-danger/60":"text-text-secondary"].join(" ")}>
+              {DAY_NAMES[d.getDay()]}
             </span>
-            <span className={["w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold mt-0.5",
-              isToday ? "bg-primary text-white" : "text-text-main"].join(" ")}>
+            <span className={["w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold mt-0.5",isToday?"bg-primary text-white":"text-text-main"].join(" ")}>
               {d.getDate()}
             </span>
-            <LoadBar minutes={mins} />
-            {untimedCount > 0 && (
-              <span className="text-[8px] text-text-secondary/60 mt-0.5">{untimedCount} sem hora</span>
-            )}
+            <LoadBar minutes={actMin}/>
           </div>
         );
       })}
     </div>
   );
+}
 
-  /* ── Chips de tarefas sem horário ── */
-  const UntimedSection = () => {
-    const untimedByDay = days.map((d) => (tasksByDay[d] ?? []).filter((t) => !t.scheduled_time));
-    if (!untimedByDay.some((a) => a.length)) return null;
-    return (
-      <div className="flex shrink-0 border-b border-border/40 max-h-20 overflow-y-auto">
-        <div className="w-11 shrink-0 flex items-center justify-center">
-          <span className="text-[8px] text-text-secondary/40 leading-tight text-center select-none">sem<br />hora</span>
-        </div>
-        {days.map((dateStr, i) => (
-          <div key={dateStr} className="flex-1 flex flex-wrap gap-1 p-1.5 min-w-0 border-l border-border/30">
-            {untimedByDay[i].slice(0, 3).map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedTask(t)}
-                className={[
-                  "text-[9px] px-1.5 py-0.5 rounded border truncate max-w-full",
-                  t.completed_at ? "border-border/40 text-[#636366] line-through" :
-                  t.is_urgent ? "border-danger/40 bg-danger/10 text-danger" :
-                  "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20",
-                ].join(" ")}
-              >
-                {t.title}
+/* ─── Linha "dia inteiro" ────────────────────────────────── */
+function AllDayRow({days, tasksByDay, onTaskSelect}){
+  const anyUntimed = days.some(d=>(tasksByDay[d]??[]).some(t=>!t.scheduled_time));
+  if(!anyUntimed) return null;
+  return (
+    <div className="flex shrink-0 border-b border-border/30 bg-card/30" style={{minHeight:28,maxHeight:80}}>
+      <div className="w-11 shrink-0 flex items-center justify-center">
+        <span className="text-[8px] text-text-secondary/40 leading-tight text-center select-none">dia<br/>inteiro</span>
+      </div>
+      {days.map(dateStr=>{
+        const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.scheduled_time);
+        return (
+          <div key={dateStr} className="flex-1 flex flex-wrap gap-0.5 px-1 py-1 min-w-0 border-l border-border/20">
+            {tasks.slice(0,2).map(t=>(
+              <button key={t.id} onClick={()=>onTaskSelect(t)}
+                className="flex items-center gap-0.5 max-w-full overflow-hidden">
+                <EventCircle done={!!t.completed_at} urgent={t.is_urgent&&!t.completed_at} size={9}/>
+                <span className={`text-[9px] truncate ${t.completed_at?"line-through text-text-secondary/50":"text-text-main"}`}>
+                  {t.title}
+                </span>
               </button>
             ))}
-            {untimedByDay[i].length > 3 && (
-              <span className="text-[8px] text-text-secondary self-center">
-                +{untimedByDay[i].length - 3}
-              </span>
-            )}
+            {tasks.length>2&&<span className="text-[8px] text-text-secondary/50">mais {tasks.length-2}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── Visão Mês ──────────────────────────────────────────── */
+function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
+  const ref = new Date(anchor+"T12:00:00");
+  const year=ref.getFullYear(), month=ref.getMonth();
+  const first=new Date(year,month,1), sd=first.getDay();
+  const skip = sd===0?6:sd-1;
+  const start=new Date(first); start.setDate(1-skip);
+
+  const weeks=[];
+  const cur=new Date(start);
+  for(let w=0;w<6;w++){
+    const week=[];
+    for(let d=0;d<7;d++){week.push(localDateStr(cur));cur.setDate(cur.getDate()+1);}
+    weeks.push(week);
+    if(w>=4&&new Date(week[6]+"T12:00:00").getMonth()!==month) break;
+  }
+
+  const DN=["seg","ter","qua","qui","sex","sáb","dom"];
+  return (
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="grid grid-cols-7 border-b border-border shrink-0">
+        {DN.map(d=>(
+          <div key={d} className="text-center py-1.5 text-[9px] font-semibold text-text-secondary/60 uppercase tracking-wide">{d}</div>
+        ))}
+      </div>
+      <div className={`flex-1 min-h-0 grid overflow-hidden`} style={{gridTemplateRows:`repeat(${weeks.length},1fr)`}}>
+        {weeks.map((week,wi)=>(
+          <div key={wi} className="grid grid-cols-7 border-b border-border/30 min-h-0">
+            {week.map(dateStr=>{
+              const d=new Date(dateStr+"T12:00:00");
+              const inMonth=d.getMonth()===month;
+              const isToday=dateStr===today;
+              const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.completed_at);
+              return (
+                <div key={dateStr} onClick={()=>{onDaySelect(dateStr);}}
+                  className="border-r border-border/20 p-1 cursor-pointer hover:bg-card/60 overflow-hidden flex flex-col min-h-0">
+                  <div className={["w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold mx-auto mb-0.5 shrink-0",
+                    isToday?"bg-primary text-white":inMonth?"text-text-main":"text-text-secondary/25"].join(" ")}>
+                    {d.getDate()}
+                  </div>
+                  <div className="flex-1 overflow-hidden min-h-0">
+                    {tasks.slice(0,3).map(t=>(
+                      <button key={t.id} onClick={e=>{e.stopPropagation();onTaskSelect(t);}}
+                        className="w-full flex items-center gap-0.5 text-left py-px px-0.5 rounded hover:bg-primary/10 overflow-hidden">
+                        <EventCircle done={!!t.completed_at} urgent={t.is_urgent&&!t.completed_at} size={8}/>
+                        <span className="text-[9px] truncate text-text-main">{t.title}</span>
+                      </button>
+                    ))}
+                    {tasks.length>3&&<p className="text-[8px] text-text-secondary/50 pl-1">e mais {tasks.length-3}</p>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
-    );
+    </div>
+  );
+}
+
+/* ─── Mini mês (para visão Ano) ──────────────────────────── */
+function MiniMonthGrid({year, month, tasksByDay, today, onDayClick}){
+  const first=new Date(year,month,1), sd=first.getDay();
+  const skip=sd===0?6:sd-1;
+  const start=new Date(first); start.setDate(1-skip);
+  const cells=[];
+  const cur=new Date(start);
+  for(let i=0;i<42;i++){
+    cells.push({str:localDateStr(cur), d:cur.getDate(), inMonth:cur.getMonth()===month});
+    cur.setDate(cur.getDate()+1);
+    if(i>=34&&cur.getMonth()!==month) break;
+  }
+  const MNAME=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"][month];
+  const DN2=["S","T","Q","Q","S","S","D"];
+  return (
+    <div>
+      <p className="text-xs font-semibold text-text-main mb-1.5 capitalize">{MNAME}</p>
+      <div className="grid grid-cols-7 gap-0">
+        {DN2.map((l,i)=><span key={i} className="text-[7px] text-text-secondary/40 text-center pb-0.5">{l}</span>)}
+        {cells.map(({str,d,inMonth})=>{
+          const isToday=str===today;
+          const hasTasks=(tasksByDay[str]??[]).some(t=>!t.completed_at);
+          return (
+            <button key={str} onClick={()=>onDayClick(str)}
+              className="flex flex-col items-center mb-0.5">
+              <span className={["w-5 h-5 flex items-center justify-center rounded-full text-[9px] leading-none",
+                isToday?"bg-primary text-white font-bold":inMonth?"text-text-main":"text-text-secondary/20"].join(" ")}>
+                {d}
+              </span>
+              {hasTasks&&inMonth&&<div className="w-1 h-1 rounded-full bg-primary/60 mt-[-1px]"/>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function YearView({anchor, tasksByDay, today, onDayClick}){
+  const year=new Date(anchor+"T12:00:00").getFullYear();
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto p-5">
+      <div className="grid grid-cols-4 gap-x-8 gap-y-8">
+        {Array.from({length:12},(_,i)=>(
+          <MiniMonthGrid key={i} year={year} month={i} tasksByDay={tasksByDay} today={today} onDayClick={onDayClick}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Componente principal ───────────────────────────────── */
+export function Calendar(){
+  const {tasks, updateTask, completeTask, uncompleteTask, createTask} = useTaskStore();
+  const today = localDateStr();
+
+  const [view,      setView]      = useState("day");
+  const [anchor,    setAnchor]    = useState(today);
+  const [selected,  setSelected]  = useState(null);
+  const [dragging,  setDragging]  = useState(null);
+  const gridRef = useRef(null);
+
+  const isTimeline = ["day","3day","workweek","week"].includes(view);
+  const days = isTimeline ? getDays(view, anchor) : [];
+
+  const tasksByDay = tasks.reduce((acc,t)=>{
+    if(!t.scheduled_date||t.deleted_at) return acc;
+    (acc[t.scheduled_date]??=[]).push(t); return acc;
+  },{});
+
+  const goBack    = useCallback(()=>setAnchor(a=>navigate(view,a,-1)),[view]);
+  const goForward = useCallback(()=>setAnchor(a=>navigate(view,a, 1)),[view]);
+  const goToday   = useCallback(()=>setAnchor(today),[today]);
+
+  const handleToggle = useCallback(async t=>{
+    if(t.completed_at) await uncompleteTask(t.id); else await completeTask(t.id);
+  },[completeTask,uncompleteTask]);
+
+  /* ── Duplo clique: criar tarefa com data/hora ── */
+  const handleDoubleClick = useCallback(async(e, dateStr)=>{
+    if(e.target.closest("[data-task-id]")) return; // não disparar em cima de tarefa
+    const col = e.currentTarget;
+    const rect = col.getBoundingClientRect();
+    const yInCol = e.clientY - rect.top;
+    const minOffset = (yInCol / HOUR_HEIGHT) * 60;
+    const total = snapQ(GRID_START_H*60 + minOffset);
+    const clamped = Math.max(GRID_START_H*60, Math.min((GRID_END_H-1)*60, total));
+    const time = minutesToTime(clamped);
+    const newTask = await createTask({ scheduled_date: dateStr, scheduled_time: time, title: "" });
+    if(newTask) setSelected(newTask);
+  },[createTask]);
+
+  /* ── Scroll para hora atual ── */
+  useEffect(()=>{
+    if(!gridRef.current||!isTimeline) return;
+    const now = new Date();
+    const min = now.getHours()*60+now.getMinutes();
+    const offset = ((min-GRID_START_H*60)/60)*HOUR_HEIGHT - 100;
+    gridRef.current.scrollTop = Math.max(0, offset);
+  },[view]);
+
+  /* ── DnD ── */
+  const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:6}}));
+
+  const onDragStart = ({active})=>setDragging(active.data.current?.task??null);
+  const onDragEnd = ({active,over,delta})=>{
+    setDragging(null);
+    if(!over||!active.data.current) return;
+    const task=active.data.current.task;
+    const newDate=over.id;
+    const orig=timeToMinutes(task.scheduled_time)??(GRID_START_H*60);
+    const deltaMin=(delta.y/HOUR_HEIGHT)*60;
+    const snapped=snapQ(orig+deltaMin);
+    const clamped=Math.max(GRID_START_H*60,Math.min((GRID_END_H-1)*60,snapped));
+    const newTime=minutesToTime(clamped);
+    if(newDate!==task.scheduled_date||newTime!==task.scheduled_time)
+      updateTask(task.id,{scheduled_date:newDate,scheduled_time:newTime});
   };
 
+  /* ── Atalhos ── */
+  useEffect(()=>{
+    const h=e=>{
+      const el=e.target;
+      if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"||el.isContentEditable) return;
+      if(e.key==="Escape"&&selected){setSelected(null);return;}
+      const k=e.key.toLowerCase();
+      if(k==="d"||k==="1"){setView("day");return;}
+      if(k==="3"){setView("3day");return;}
+      if(k==="u"){setView("workweek");return;}
+      if(k==="s"||k==="7"){setView("week");return;}
+      if(k==="m"){setView("month");return;}
+      if(k==="a"){setView("year");return;}
+      if(k==="t"){goToday();return;}
+      if(k==="arrowleft"||k==="k"){goBack();return;}
+      if(k==="arrowright"||k==="j"){goForward();return;}
+    };
+    window.addEventListener("keydown",h);
+    return()=>window.removeEventListener("keydown",h);
+  },[goBack,goForward,goToday,selected]);
+
+  /* ── Cabeçalho dinâmico por visão ── */
+  const headerTitle = view==="day"    ? fmtFull(anchor)
+                    : view==="year"   ? fmtYear(anchor)
+                    : fmtMonthYear(anchor);
+  const headerSub   = view==="day"    ? fmtWeekday(anchor) : null;
+
+  /* ── Dia selecionado em mês/ano → vai para dia ── */
+  const onDaySelect = (dateStr)=>{ setAnchor(dateStr); setView("day"); };
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <div className="flex h-full overflow-hidden">
 
-        {/* Área principal */}
+        {/* ── Coluna principal ── */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden px-3 pt-4 pb-2 md:px-5">
 
-          {/* Título — linha própria para não colidir com botão Foco */}
-          <h1 className="text-xl font-semibold text-text-main mb-2 shrink-0">Calendário</h1>
-
-          {/* Nav + mês + visões — com mr-36 para evitar botão Foco */}
-          <div className="flex items-center gap-2 mb-2 shrink-0 mr-36">
-            <div className="flex items-center gap-0.5">
-              <button onClick={goBack} title="← ou K"
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-card text-text-secondary hover:text-text-main transition-colors text-base">‹</button>
-              <button onClick={goToday} title="T"
-                className="text-xs px-2.5 py-1 rounded-lg border border-border text-text-secondary hover:border-primary hover:text-primary transition-colors">Hoje</button>
-              <button onClick={goForward} title="→ ou J"
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-card text-text-secondary hover:text-text-main transition-colors text-base">›</button>
+          {/* Título (adaptável) + nav + visões */}
+          <div className="shrink-0 mb-3 mr-36">
+            <div className="mb-2">
+              <h1 className={["font-bold text-text-main leading-tight capitalize", view==="year"?"text-4xl":"text-2xl"].join(" ")}>
+                {headerTitle}
+              </h1>
+              {headerSub && <p className="text-sm text-text-secondary mt-0.5 capitalize">{headerSub}</p>}
             </div>
-            <span className="text-sm text-text-secondary capitalize flex-1 min-w-0 truncate">{monthLabel}</span>
-            {/* Selector de visão */}
-            <div className="flex gap-0.5 bg-bg rounded-lg p-0.5 border border-border shrink-0">
-              {VIEWS.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setView(v.id)}
-                  title={`${v.label} (${v.shortcut})`}
-                  className={["text-[11px] px-2 py-1 rounded-md transition-colors whitespace-nowrap",
-                    view === v.id ? "bg-card shadow-sm text-text-main font-medium" : "text-text-secondary hover:text-text-main"].join(" ")}
-                >
-                  {v.label}
-                </button>
-              ))}
+
+            {/* Nav + visões numa linha */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0.5">
+                <button onClick={goBack} title="← K"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-card text-text-secondary hover:text-text-main transition-colors">‹</button>
+                <button onClick={goToday} title="T"
+                  className="text-xs px-2.5 py-1 rounded-lg border border-border text-text-secondary hover:border-primary hover:text-primary transition-colors">Hoje</button>
+                <button onClick={goForward} title="J →"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-card text-text-secondary hover:text-text-main transition-colors">›</button>
+              </div>
+
+              <div className="flex gap-0.5 bg-bg rounded-lg p-0.5 border border-border ml-auto">
+                {VIEWS.map(v=>(
+                  <button key={v.id} onClick={()=>setView(v.id)} title={`${v.label} (${v.shortcut})`}
+                    className={["text-[11px] px-2.5 py-1 rounded-md transition-colors whitespace-nowrap",
+                      (v.id===view||(v.id==="day"&&["3day","workweek"].includes(view)))
+                        ?"bg-card shadow-sm text-text-main font-medium"
+                        :"text-text-secondary hover:text-text-main"].join(" ")}>
+                    {v.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Strip de dias */}
-          <div className="shrink-0 mb-2">
-            <DayStrip anchorDate={anchorDate} today={today} tasksByDay={tasksByDay} onSelect={setAnchorDate} view={view} />
-          </div>
-
-          {/* Resumo */}
-          {totalActive > 0 && (
-            <p className="text-[10px] text-text-secondary mb-1.5 shrink-0">
-              {totalActive} tarefa{totalActive !== 1 ? "s" : ""} · {Math.round(totalMinutes / 60)}h agendadas
-              <span className="ml-2 opacity-50">arrastar para mover · clique para editar</span>
-            </p>
+          {/* Área de conteúdo */}
+          {isTimeline ? (
+            <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-border overflow-hidden">
+              <DayHeaders days={days} tasksByDay={tasksByDay} today={today}/>
+              <AllDayRow  days={days} tasksByDay={tasksByDay} onTaskSelect={setSelected}/>
+              <TimeGrid
+                days={days} tasksByDay={tasksByDay} today={today}
+                onTaskSelect={setSelected} onTaskToggle={handleToggle}
+                onDoubleClick={handleDoubleClick} gridRef={gridRef}
+              />
+              {view==="day"&&(
+                <p className="text-[9px] text-text-secondary/30 text-center py-1 shrink-0 select-none">
+                  Duplo clique para nova tarefa · Arrastar para mover
+                </p>
+              )}
+            </div>
+          ) : view==="month" ? (
+            <div className="flex-1 min-h-0 rounded-xl border border-border overflow-hidden">
+              <MonthView anchor={anchor} tasksByDay={tasksByDay} today={today}
+                onDaySelect={onDaySelect} onTaskSelect={setSelected}/>
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 rounded-xl border border-border overflow-hidden">
+              <YearView anchor={anchor} tasksByDay={tasksByDay} today={today}
+                onDayClick={onDaySelect}/>
+            </div>
           )}
-
-          {/* Grade — ocupa todo o espaço restante */}
-          <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-border overflow-hidden">
-            <DayHeaders />
-            <UntimedSection />
-            <TimeGrid
-              days={days}
-              tasksByDay={tasksByDay}
-              today={today}
-              onTaskSelect={setSelectedTask}
-              onTaskToggle={handleToggle}
-              gridScrollRef={gridScrollRef}
-            />
-          </div>
         </div>
 
-        {/* Painel lateral de edição */}
-        {selectedTask && (
-          <div onClick={(e) => e.stopPropagation()}>
-            <TaskDetail
-              key={selectedTask.id}
-              task={selectedTask}
-              onClose={() => setSelectedTask(null)}
-            />
+        {/* ── Painel lateral de edição ── */}
+        {selected && (
+          <div onClick={e=>e.stopPropagation()}>
+            <TaskDetail key={selected.id} task={selected} onClose={()=>setSelected(null)}/>
           </div>
         )}
       </div>
 
-      {/* Preview durante o drag */}
       <DragOverlay dropAnimation={null}>
-        {draggingTask && (
-          <div
-            style={{
-              height: Math.max(28, ((draggingTask.duration_minutes ?? 30) / 60) * HOUR_HEIGHT),
-              width: 160,
-              opacity: 0.85,
-            }}
-            className="rounded-md shadow-lg"
-          >
-            <TaskBlockContent task={draggingTask} height={Math.max(28, ((draggingTask.duration_minutes ?? 30) / 60) * HOUR_HEIGHT)} />
+        {dragging&&(
+          <div style={{height:Math.max(22,((dragging.duration_minutes??30)/60)*HOUR_HEIGHT),width:160,opacity:0.9}}
+            className="rounded-md shadow-xl overflow-hidden">
+            <EventContent task={dragging} height={Math.max(22,((dragging.duration_minutes??30)/60)*HOUR_HEIGHT)}/>
           </div>
         )}
       </DragOverlay>
