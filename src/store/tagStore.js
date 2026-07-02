@@ -56,4 +56,29 @@ export const useTagStore = create((set, get) => ({
       },
     }));
   },
+
+  updateTag: async (tagId, fields) => {
+    const { data } = await supabase.from("tags").update(fields).eq("id", tagId).select().single();
+    if (data) set((s) => ({
+      tags: s.tags.map((t) => (t.id === tagId ? data : t)),
+      taskTags: Object.fromEntries(
+        Object.entries(s.taskTags).map(([tid, tags]) => [
+          tid, tags.map((t) => (t.id === tagId ? { ...t, ...fields } : t))
+        ])
+      ),
+    }));
+  },
+
+  deleteTag: async (tagId) => {
+    await supabase.from("task_tags").delete().eq("tag_id", tagId);
+    await supabase.from("tags").delete().eq("id", tagId);
+    set((s) => ({
+      tags: s.tags.filter((t) => t.id !== tagId),
+      taskTags: Object.fromEntries(
+        Object.entries(s.taskTags).map(([tid, tags]) => [
+          tid, tags.filter((t) => t.id !== tagId)
+        ])
+      ),
+    }));
+  },
 }));

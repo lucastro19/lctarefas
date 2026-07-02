@@ -70,50 +70,34 @@ const TIME_SLOTS = Array.from({ length: 48 }, (_, i) => {
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-/* ── Campo de data: texto digitável + ícone abre calendário nativo ── */
+/* ── Campo de data: clique abre calendário nativo ── */
 function DateField({ value, onChange }) {
   const hiddenRef = useRef(null);
-  const [display, setDisplay] = useState(isoToDisplay(value));
 
-  useEffect(() => { setDisplay(isoToDisplay(value)); }, [value]);
-
-  const handleTextChange = (e) => {
-    const v = e.target.value;
-    setDisplay(v);
-    const iso = displayToIso(v);
-    if (iso) onChange(iso);
-    else if (!v) onChange("");
+  const openPicker = () => {
+    if (hiddenRef.current) {
+      hiddenRef.current.showPicker?.();
+      hiddenRef.current.focus();
+    }
   };
 
   const handleHiddenChange = (e) => {
-    const iso = e.target.value;
-    setDisplay(isoToDisplay(iso));
-    onChange(iso || "");
+    onChange(e.target.value || "");
   };
 
   return (
-    <div className={["inline-flex items-center gap-1 rounded-full transition-colors", value ? "meta-chip-filled pl-2 pr-1 py-0.5" : ""].join(" ")}>
-      <button
-        tabIndex={-1}
-        onClick={() => hiddenRef.current?.showPicker?.()}
-        title="Abrir calendário"
-        className="text-[12px] shrink-0 text-text-secondary hover:text-primary transition-colors leading-none"
-      >
-        📅
-      </button>
-      <input
-        type="text"
-        value={display}
-        onChange={handleTextChange}
-        placeholder="dd/mm/aaaa"
-        maxLength={10}
-        className="text-xs bg-transparent outline-none text-text-main w-[72px] placeholder:text-[#AEAEB2] dark:placeholder:text-[#636366]"
-        style={{ colorScheme: "normal" }}
-      />
+    <div
+      onClick={openPicker}
+      className={["inline-flex items-center gap-1 rounded-full cursor-pointer transition-colors select-none", value ? "meta-chip-filled pl-2 pr-1 py-0.5" : ""].join(" ")}
+    >
+      <span className="text-[12px] shrink-0 text-text-secondary leading-none">📅</span>
+      <span className={["text-xs", value ? "text-text-main" : "text-[#AEAEB2] dark:text-[#636366]"].join(" ")}>
+        {value ? isoToDisplay(value) : "dd/mm/aa"}
+      </span>
       {value && (
         <button
           tabIndex={-1}
-          onClick={() => { setDisplay(""); onChange(""); }}
+          onClick={(e) => { e.stopPropagation(); onChange(""); }}
           className="text-text-secondary hover:text-danger transition-colors text-[10px] leading-none px-0.5"
         >×</button>
       )}
@@ -203,10 +187,11 @@ function TimeField({ value, onChange }) {
         >×</button>
       )}
 
-      {open && (
+      {open && createPortal(
         <div
           ref={listRef}
-          className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-md z-50 py-1 max-h-44 overflow-y-auto min-w-[72px]"
+          style={{ position: "fixed", top: (() => { const el = wrapRef.current; if (!el) return 0; const r = el.getBoundingClientRect(); return r.bottom + 4; })(), left: (() => { const el = wrapRef.current; if (!el) return 0; return el.getBoundingClientRect().left; })(), zIndex: 9999 }}
+          className="bg-card border border-border rounded-lg shadow-md py-1 max-h-44 overflow-y-auto min-w-[72px]"
         >
           {TIME_SLOTS.map((t) => (
             <button
@@ -217,7 +202,8 @@ function TimeField({ value, onChange }) {
               {t}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -239,13 +225,21 @@ function UrgencyButton({ task, updateTask }) {
 
   const setUrgent = (val) => {
     updateTask(task.id, { is_urgent: val });
-    if (val) sendUrgentPush(session?.access_token, task.title);
+    if (val) {
+      // Só envia push imediato se não tiver data futura
+      const isToday = task.scheduled_date === todayStr();
+      const hasFutureDate = task.scheduled_date && task.scheduled_date > todayStr();
+      if (!hasFutureDate) sendUrgentPush(session?.access_token, task.title);
+    }
     setOpen(false);
   };
+
+  const btnId = `urgency-btn-${task.id}`;
 
   return (
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
       <button
+        id={btnId}
         onMouseDown={(e) => { e.preventDefault(); setOpen((v) => !v); }}
         title={task.is_urgent ? "Urgente — clique para alterar" : "Definir urgência"}
         className={[
@@ -258,8 +252,10 @@ function UrgencyButton({ task, updateTask }) {
         🔔
       </button>
 
-      {open && (
-        <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-md z-50 py-1 min-w-[170px]">
+      {open && createPortal(
+        <div style={{ position: "fixed", top: (() => { const el = document.getElementById(btnId); return el ? el.getBoundingClientRect().bottom + 4 : 0; })(), left: (() => { const el = document.getElementById(btnId); return el ? el.getBoundingClientRect().left : 0; })(), zIndex: 9999 }}
+          className="bg-card border border-border rounded-lg shadow-md py-1 min-w-[170px]"
+        >
           <button
             onMouseDown={(e) => { e.preventDefault(); setUrgent(false); }}
             className="menu-item w-full text-left px-3 py-2 text-xs flex items-center gap-2"
@@ -275,7 +271,8 @@ function UrgencyButton({ task, updateTask }) {
             <span className={["w-3 text-danger text-center", task.is_urgent ? "opacity-100" : "opacity-0"].join(" ")}>✓</span>
             <span className="text-danger font-medium">🔔 Marcar como Urgente</span>
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -729,7 +726,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 onBlur={saveTitle}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); notesRef.current?.focus(); } }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full text-sm text-text-main bg-transparent outline-none leading-snug"
+                className="w-full text-base font-medium text-text-main bg-transparent outline-none leading-snug"
                 placeholder="Título"
               />
 
@@ -838,7 +835,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   e.stopPropagation();
                   if (anySelected) { toggle(task.id); return; }
                   if (!task.completed_at) {
-                    if (window.innerWidth < 768) { onClick?.(); } else { expandTask("title"); }
+                    if (onClick) { onClick(); } else { expandTask("title"); }
                   }
                 }}
                 onDoubleClick={(e) => e.stopPropagation()}
@@ -857,7 +854,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
-                    if (window.innerWidth < 768) { onClick?.(); } else { expandTask("notes"); }
+                    if (onClick) { onClick(); } else { expandTask("notes"); }
                   }}
                   onDoubleClick={(e) => e.stopPropagation()}
                   className="text-xs text-text-secondary mt-0.5 leading-relaxed whitespace-pre-wrap break-words cursor-text"
@@ -872,7 +869,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
-                    if (window.innerWidth < 768) { onClick?.(); } else { expandTask("title"); }
+                    if (onClick) { onClick(); } else { expandTask("title"); }
                   }}
                   onDoubleClick={(e) => e.stopPropagation()}
                 >

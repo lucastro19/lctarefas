@@ -4,6 +4,8 @@ import { useTagStore } from "../../store/tagStore";
 import { useAuthStore } from "../../store/authStore";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getSubscriptionStatus } from "../../lib/pushNotifications";
 
+const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
+
 const THEMES = [
   { value: "light", label: "☀️ Claro" },
   { value: "dark",  label: "🌙 Escuro" },
@@ -23,7 +25,15 @@ const ROUTE_OPTIONS = [
 
 export function SettingsModal({ onClose }) {
   const { dayStart, defaultDurationMinutes, theme, tabBarIds, setDayStart, setDefaultDuration, setTheme, setTabBarIds } = useSettingsStore();
-  const { tags } = useTagStore();
+  const { tags, createTag, updateTag, deleteTag, fetchTags } = useTagStore();
+  const [editingTagId, setEditingTagId] = useState(null);
+  const [editingTagName, setEditingTagName] = useState("");
+  const [editingTagColor, setEditingTagColor] = useState("#8E8E93");
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#4F8EF7");
+  const [addingTag, setAddingTag] = useState(false);
+
+  useEffect(() => { fetchTags(); }, []);
   const { session } = useAuthStore();
 
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -254,6 +264,86 @@ export function SettingsModal({ onClose }) {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Gerenciar Tags */}
+          <div className="border-t border-border pt-4">
+            <label className="text-xs font-medium text-text-secondary block mb-2">🏷️ Etiquetas</label>
+            <div className="space-y-1.5">
+              {tags.map((tag) => (
+                <div key={tag.id} className="flex items-center gap-2">
+                  {editingTagId === tag.id ? (
+                    <>
+                      <div className="flex gap-1 flex-wrap">
+                        {TAG_COLORS.map((c) => (
+                          <button key={c} onClick={() => setEditingTagColor(c)}
+                            className={["w-4 h-4 rounded-full border-2 transition-transform", editingTagColor === c ? "border-white scale-125" : "border-transparent"].join(" ")}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                      <input
+                        autoFocus
+                        value={editingTagName}
+                        onChange={(e) => setEditingTagName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { updateTag(tag.id, { name: editingTagName.trim(), color: editingTagColor }); setEditingTagId(null); }
+                          if (e.key === "Escape") setEditingTagId(null);
+                        }}
+                        className="flex-1 text-xs bg-bg border border-primary rounded px-2 py-1 outline-none text-text-main"
+                      />
+                      <button onClick={() => { updateTag(tag.id, { name: editingTagName.trim(), color: editingTagColor }); setEditingTagId(null); }}
+                        className="text-[10px] text-primary font-medium px-1">✓</button>
+                      <button onClick={() => setEditingTagId(null)} className="text-[10px] text-text-secondary px-1">✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                      <span className="flex-1 text-xs text-text-main">{tag.name}</span>
+                      <button onClick={() => { setEditingTagId(tag.id); setEditingTagName(tag.name); setEditingTagColor(tag.color); }}
+                        className="text-[10px] text-text-secondary hover:text-primary transition-colors px-1">✎</button>
+                      <button onClick={() => { if (confirm(`Excluir etiqueta "${tag.name}"?`)) deleteTag(tag.id); }}
+                        className="text-[10px] text-text-secondary hover:text-danger transition-colors px-1">🗑</button>
+                    </>
+                  )}
+                </div>
+              ))}
+
+              {addingTag ? (
+                <div className="space-y-2 pt-1">
+                  <div className="flex gap-1 flex-wrap">
+                    {TAG_COLORS.map((c) => (
+                      <button key={c} onClick={() => setNewTagColor(c)}
+                        className={["w-4 h-4 rounded-full border-2 transition-transform", newTagColor === c ? "border-white scale-125" : "border-transparent"].join(" ")}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      autoFocus
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter" && newTagName.trim()) { await createTag(newTagName.trim(), newTagColor); setNewTagName(""); setNewTagColor("#4F8EF7"); setAddingTag(false); }
+                        if (e.key === "Escape") setAddingTag(false);
+                      }}
+                      placeholder="Nome da etiqueta"
+                      className="flex-1 text-xs bg-bg border border-border rounded px-2 py-1 outline-none focus:border-primary text-text-main"
+                    />
+                    <button
+                      onClick={async () => { if (newTagName.trim()) { await createTag(newTagName.trim(), newTagColor); setNewTagName(""); setNewTagColor("#4F8EF7"); setAddingTag(false); } }}
+                      className="text-xs text-white bg-primary px-2 py-1 rounded"
+                    >Criar</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setAddingTag(true)}
+                  className="w-full text-xs py-1.5 rounded-lg border border-dashed border-border text-text-secondary hover:border-primary/50 hover:text-primary transition-colors">
+                  + Nova etiqueta
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="border-t border-border pt-4">

@@ -167,7 +167,9 @@ export const useTaskStore = create((set, get) => ({
   moveToToday: async (id) => {
     const t = today();
     const time = nextSequentialTime(t, get().tasks.filter((task) => task.id !== id));
-    return get().updateTask(id, { scheduled_date: t, someday: false, archived_at: null, scheduled_time: time });
+    const result = await get().updateTask(id, { scheduled_date: t, someday: false, archived_at: null, scheduled_time: time });
+    if (result) useUiStore.getState().showToast({ message: "Tarefa movida para Hoje ☀️" });
+    return result;
   },
 
   // --- Mover para Depois ---

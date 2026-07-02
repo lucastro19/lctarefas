@@ -232,7 +232,15 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
   const [addingProject, setAddingProject] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [showMenu, setShowMenu] = useState(false);
-  const { archiveArea, deleteArea } = useAreaStore();
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(area.name);
+  const { archiveArea, deleteArea, updateArea } = useAreaStore();
+
+  const commitRename = async () => {
+    if (renameDraft.trim() && renameDraft.trim() !== area.name)
+      await updateArea(area.id, { name: renameDraft.trim() });
+    setRenaming(false);
+  };
   const { setNodeRef: areaDropRef, isOver: isOverArea } = useDroppable({ id: `area-${area.id}` });
 
   const handleAddProject = async (e) => {
@@ -255,7 +263,19 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
           }
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
-          <span className="flex-1 truncate font-medium">{area.name}</span>
+          {renaming ? (
+            <input
+              autoFocus
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenaming(false); }}
+              onClick={(e) => e.preventDefault()}
+              className="flex-1 text-sm font-medium bg-transparent outline-none border-b border-primary text-text-main"
+            />
+          ) : (
+            <span className="flex-1 truncate font-medium">{area.name}</span>
+          )}
         </NavLink>
         </div>
 
@@ -279,6 +299,7 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
         <ContextMenu
           onClose={() => setShowMenu(false)}
           items={[
+            { label: "Renomear", action: () => { setRenameDraft(area.name); setRenaming(true); } },
             { label: "Novo projeto", action: () => setAddingProject(true) },
             { label: "Arquivar área", action: () => { archiveArea(area.id); navigate("/inbox"); } },
             { label: "Mover para lixeira", danger: true, action: () => { deleteArea(area.id); navigate("/inbox"); } },
@@ -319,7 +340,15 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
 
 function ProjectItem({ project, navigate }) {
   const [showMenu, setShowMenu] = useState(false);
-  const { archiveProject, deleteProject } = useAreaStore();
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(project.name);
+  const { archiveProject, deleteProject, updateProject } = useAreaStore();
+
+  const commitRename = async () => {
+    if (renameDraft.trim() && renameDraft.trim() !== project.name)
+      await updateProject(project.id, { name: renameDraft.trim() });
+    setRenaming(false);
+  };
   const { setNodeRef: projectDropRef, isOver: isOverProject } = useDroppable({ id: `project-${project.id}` });
   const { getByProject, getCompletedByProject } = useTaskStore();
   const active = getByProject(project.id).length;
@@ -337,7 +366,19 @@ function ProjectItem({ project, navigate }) {
       >
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
         <span className="flex-1 truncate min-w-0">
-          <span className="block truncate">{project.name}</span>
+          {renaming ? (
+            <input
+              autoFocus
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenaming(false); }}
+              onClick={(e) => e.preventDefault()}
+              className="w-full text-xs bg-transparent outline-none border-b border-primary text-text-main"
+            />
+          ) : (
+            <span className="block truncate">{project.name}</span>
+          )}
           {total > 0 && (
             <span className="block mt-0.5 h-0.5 rounded-full bg-border overflow-hidden">
               <span
@@ -360,6 +401,7 @@ function ProjectItem({ project, navigate }) {
         <ContextMenu
           onClose={() => setShowMenu(false)}
           items={[
+            { label: "Renomear", action: () => { setRenameDraft(project.name); setRenaming(true); } },
             { label: "Arquivar projeto", action: () => { archiveProject(project.id); navigate("/inbox"); } },
             { label: "Mover para lixeira", danger: true, action: () => { deleteProject(project.id); navigate("/inbox"); } },
           ]}
