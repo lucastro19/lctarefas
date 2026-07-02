@@ -261,23 +261,44 @@ function DayHeaders({days, tasksByDay, today}){
         const d = new Date(dateStr+"T12:00:00");
         const isToday = dateStr===today;
         const isWeekend = d.getDay()===0||d.getDay()===6;
-        const label = `${DAY_NAMES[d.getDay()]}., ${d.getDate()}`;
+        const dayName = `${DAY_NAMES[d.getDay()]}.`;
+        const dayNum  = d.getDate();
+        const weekendColor = "rgba(255,100,90,0.60)";
+        const normalColor  = "rgba(200,200,200,0.55)";
         return (
           <div
             key={dateStr}
-            className="flex-1 flex items-center justify-center py-3 min-w-0"
+            className="flex-1 flex flex-col items-center justify-center py-2 min-w-0 gap-0.5"
             style={{borderLeft:"1px solid rgba(255,255,255,0.07)"}}
           >
+            {/* Nome do dia — sempre pequeno e muted */}
+            <span className="text-[10.5px] select-none leading-none"
+              style={{
+                fontWeight: 500,
+                color: isToday ? "rgba(91,156,246,0.80)" : isWeekend ? weekendColor : normalColor,
+              }}>
+              {dayName}
+            </span>
+            {/* Número — círculo azul se hoje, texto normal caso contrário */}
             {isToday ? (
-              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] font-semibold select-none"
-                style={{backgroundColor:"rgba(79,142,247,0.18)",color:"#5B9CF6", letterSpacing:"-0.01em"}}>
-                {label}
+              <span className="flex items-center justify-center rounded-full select-none"
+                style={{
+                  width:28, height:28,
+                  backgroundColor:"#4F8EF7",
+                  color:"#fff",
+                  fontSize:14,
+                  fontWeight:700,
+                  lineHeight:1,
+                }}>
+                {dayNum}
               </span>
             ) : (
               <span className="select-none"
-                style={{fontSize:13, fontWeight:400, letterSpacing:"-0.01em",
-                  color: isWeekend?"rgba(255,100,90,0.60)":"rgba(200,200,200,0.55)"}}>
-                {label}
+                style={{
+                  fontSize:14, fontWeight:500, lineHeight:1,
+                  color: isWeekend ? weekendColor : normalColor,
+                }}>
+                {dayNum}
               </span>
             )}
           </div>
@@ -291,8 +312,18 @@ function DayHeaders({days, tasksByDay, today}){
 function AllDayRow({days, tasksByDay, onTaskSelect}){
   return (
     <div className="flex shrink-0" style={{minHeight:28,maxHeight:80,borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
-      <div className="w-14 shrink-0 flex items-end justify-end pr-3 pb-1.5">
-        <span className="text-[10px] font-medium select-none leading-none" style={{color:"rgba(200,200,200,0.35)"}}>dia inteiro</span>
+      {/* Rótulo vertical para caber em w-14 sem quebrar */}
+      <div className="w-14 shrink-0 flex items-center justify-center">
+        <span className="select-none text-[9px] font-medium"
+          style={{
+            writingMode:"vertical-rl",
+            textOrientation:"mixed",
+            transform:"rotate(180deg)",
+            color:"rgba(200,200,200,0.30)",
+            letterSpacing:"0.06em",
+          }}>
+          dia inteiro
+        </span>
       </div>
       {days.map(dateStr=>{
         const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.scheduled_time);

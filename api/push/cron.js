@@ -1,3 +1,15 @@
+/*
+  Cron de notificações — roda a cada 15 minutos via Vercel Cron.
+  Janela de busca: [now, now+16min] para cobrir cada execução.
+
+  Notificações enviadas:
+  ─ Urgente: aviso 15min antes + aviso 5min antes + na hora
+  ─ Normal: na hora agendada
+  ─ Deadline: às 08:00 do dia de vencimento
+  ─ Resumo matinal: às 08:00 com contagem e lista das tarefas do dia
+  ─ Payload inclui taskId para ações "Concluir" e "Adiar" no SW
+*/
+
 import webpush from 'web-push';
 import { createClient } from '@supabase/supabase-js';
 
@@ -15,87 +27,173 @@ function getSupabase() {
   );
 }
 
-// Converte Date UTC para string de tempo no fuso do Brasil (UTC-3)
+// Converte Date UTC → horário de Brasília (UTC-3)
+function toBR(date) {
+  return new Date(date.getTime() - 3 * 60 * 60 * 1000);
+}
 function brTimeStr(date) {
-  const br = new Date(date.getTime() - 3 * 60 * 60 * 1000);
-  return `${String(br.getUTCHours()).padStart(2, '0')}:${String(br.getUTCMinutes()).padStart(2, '0')}`;
+  const br = toBR(date);
+  return `${String(br.getUTCHours()).padStart(2,'0')}:${String(br.getUTCMinutes()).padStart(2,'0')}`;
+}
+function brDateStr(date) {
+  return toBR(date).toISOString().split('T')[0];
 }
 
-function brDateStr(date) {
-  const br = new Date(date.getTime() - 3 * 60 * 60 * 1000);
-  return br.toISOString().split('T')[0];
+async function sendPush(sub, payload) {
+  await webpush.sendNotification(
+    { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+    JSON.stringify(payload)
+  );
 }
 
 export default async function handler(req, res) {
-  // Proteção: exige CRON_SECRET via header ou query param
-  const secret = (req.headers['x-cron-secret'] ?? req.query?.secret ?? '').trim();
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  // Vercel Cron injeta: Authorization: Bearer {CRON_SECRET}
+  const authHeader = req.headers.authorization ?? '';
+  const token      = authHeader.replace('Bearer ', '').trim();
+  // Suporte a query param como fallback (debug manual)
+  const secret = process.env.CRON_SECRET ?? '';
+  if (!secret || (token !== secret && req.query?.secret !== secret)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const supabase = getSupabase();
-  const now = new Date();
-  const todayBR = brDateStr(now);
-  const currentTime = brTimeStr(now);
-  const futureTime = brTimeStr(new Date(now.getTime() + 16 * 60 * 1000)); // janela +16 min
+  const now      = new Date();
+  const todayBR  = brDateStr(now);
+  const nowTime  = brTimeStr(now);
+  const windowEnd = brTimeStr(new Date(now.getTime() + 16 * 60 * 1000));
+  const hourBR    = toBR(now).getUTCHours();
+  const minBR     = toBR(now).getUTCMinutes();
 
-  // Busca tarefas com horário dentro da janela (hoje, não concluídas)
-  const { data: tasks, error: tasksErr } = await supabase
+  // ── 1. Tarefas na janela de horário (notificação principal) ──
+  const { data: tasksNow } = await supabase
     .from('tasks')
-    .select('id, title, scheduled_time, user_id')
+    .select('id, title, notes, scheduled_time, is_urgent, user_id')
     .eq('scheduled_date', todayBR)
-    .gte('scheduled_time', currentTime)
-    .lte('scheduled_time', futureTime)
+    .not('scheduled_time', 'is', null)
+    .gte('scheduled_time', nowTime)
+    .lte('scheduled_time', windowEnd)
     .is('completed_at', null)
     .is('deleted_at', null);
 
-  if (tasksErr) return res.status(500).json({ error: tasksErr.message });
-  if (!tasks?.length) return res.status(200).json({ sent: 0, message: 'Sem tarefas no período' });
+  // ── 2. Urgentes: aviso 15 min antes ─────────────────────────
+  const early15Start = brTimeStr(new Date(now.getTime() + 15 * 60 * 1000));
+  const early15End   = brTimeStr(new Date(now.getTime() + 31 * 60 * 1000));
+  const { data: tasksEarly15 } = await supabase
+    .from('tasks')
+    .select('id, title, scheduled_time, user_id')
+    .eq('scheduled_date', todayBR)
+    .eq('is_urgent', true)
+    .not('scheduled_time', 'is', null)
+    .gte('scheduled_time', early15Start)
+    .lte('scheduled_time', early15End)
+    .is('completed_at', null)
+    .is('deleted_at', null);
 
-  // Agrupa por usuário
-  const byUser = {};
-  for (const t of tasks) {
-    (byUser[t.user_id] ??= []).push(t);
+  // ── 3. Urgentes: aviso 5 min antes ──────────────────────────
+  const early5Start = brTimeStr(new Date(now.getTime() + 5 * 60 * 1000));
+  const early5End   = brTimeStr(new Date(now.getTime() + 21 * 60 * 1000));
+  const { data: tasksEarly5 } = await supabase
+    .from('tasks')
+    .select('id, title, scheduled_time, user_id')
+    .eq('scheduled_date', todayBR)
+    .eq('is_urgent', true)
+    .not('scheduled_time', 'is', null)
+    .gte('scheduled_time', early5Start)
+    .lte('scheduled_time', early5End)
+    .is('completed_at', null)
+    .is('deleted_at', null);
+
+  // ── 4 & 5. Deadline + Resumo matinal (só entre 08:00–08:16) ─
+  let tasksDeadline = [];
+  let tasksSummary  = [];
+  if (hourBR === 8 && minBR < 16) {
+    const [{ data: dl }, { data: sm }] = await Promise.all([
+      supabase.from('tasks').select('id, title, user_id')
+        .eq('deadline', todayBR).is('completed_at', null).is('deleted_at', null),
+      supabase.from('tasks').select('id, title, user_id')
+        .eq('scheduled_date', todayBR).is('completed_at', null).is('deleted_at', null),
+    ]);
+    tasksDeadline = dl ?? [];
+    tasksSummary  = sm ?? [];
   }
 
-  // Busca subscriptions dos usuários com tarefas
-  const { data: subs, error: subsErr } = await supabase
-    .from('push_subscriptions')
-    .select('*')
-    .in('user_id', Object.keys(byUser));
+  // ── Coleta user_ids e subscriptions ─────────────────────────
+  const allTasks = [
+    ...(tasksNow     ?? []),
+    ...(tasksEarly15 ?? []),
+    ...(tasksEarly5  ?? []),
+    ...tasksDeadline,
+    ...tasksSummary,
+  ];
+  if (!allTasks.length) {
+    return res.status(200).json({ sent: 0, message: 'Sem notificações nesta janela' });
+  }
 
-  if (subsErr) return res.status(500).json({ error: subsErr.message });
-  if (!subs?.length) return res.status(200).json({ sent: 0, message: 'Sem subscriptions' });
+  const userIds = [...new Set(allTasks.map((t) => t.user_id))];
+  const { data: subs } = await supabase
+    .from('push_subscriptions').select('*').in('user_id', userIds);
+
+  if (!subs?.length) {
+    return res.status(200).json({ sent: 0, message: 'Sem subscriptions ativas' });
+  }
+
+  const subsByUser = {};
+  for (const s of subs) (subsByUser[s.user_id] ??= []).push(s);
 
   let sent = 0;
 
-  await Promise.allSettled(
-    subs.map(async (sub) => {
-      const userTasks = byUser[sub.user_id] ?? [];
-      if (!userTasks.length) return;
-
-      const firstTask = userTasks[0];
-      const title = userTasks.length === 1
-        ? firstTask.title
-        : `${userTasks.length} tarefas agendadas`;
-      const body = userTasks.length === 1
-        ? `⏰ ${firstTask.scheduled_time} — toque para abrir`
-        : userTasks.slice(0, 3).map((t) => `· ${t.title}`).join('\n');
-
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify({ title, body, url: '/today', tag: `task-${firstTask.id}` })
-        );
-        sent++;
-      } catch (err) {
-        // Remove subscriptions expiradas
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await supabase.from('push_subscriptions').delete().eq('id', sub.id);
+  async function pushToUser(userId, payload) {
+    await Promise.allSettled(
+      (subsByUser[userId] ?? []).map(async (sub) => {
+        try {
+          await sendPush(sub, payload);
+          sent++;
+        } catch (err) {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            await supabase.from('push_subscriptions').delete().eq('id', sub.id);
+          }
         }
-      }
-    })
-  );
+      })
+    );
+  }
 
-  return res.status(200).json({ sent, tasks: tasks.length });
+  // ── Dispara notificações ─────────────────────────────────────
+  await Promise.allSettled([
+    // Principais
+    ...(tasksNow ?? []).map((t) => pushToUser(t.user_id, {
+      title : t.is_urgent ? `🔴 ${t.title}` : `🔔 ${t.title}`,
+      body  : t.notes?.slice(0, 120) ?? (t.is_urgent ? 'Tarefa urgente no horário.' : 'Tarefa agendada para agora.'),
+      url   : '/today', tag: `task-${t.id}`, taskId: t.id,
+    })),
+    // 15 min antes
+    ...(tasksEarly15 ?? []).map((t) => pushToUser(t.user_id, {
+      title : `⚠️ Em 15 min — ${t.title}`,
+      body  : 'Tarefa urgente começando em breve.',
+      url   : '/today', tag: `task-${t.id}-early15`, taskId: t.id,
+    })),
+    // 5 min antes
+    ...(tasksEarly5 ?? []).map((t) => pushToUser(t.user_id, {
+      title : `🚨 Em 5 min — ${t.title}`,
+      body  : 'Últimos minutos!',
+      url   : '/today', tag: `task-${t.id}-early5`, taskId: t.id,
+    })),
+    // Deadlines (agrupado por usuário)
+    ...Object.entries(
+      tasksDeadline.reduce((acc, t) => { (acc[t.user_id] ??= []).push(t); return acc; }, {})
+    ).map(([uid, tasks]) => pushToUser(uid, {
+      title : tasks.length === 1 ? `⏳ Vence hoje — ${tasks[0].title}` : `⏳ ${tasks.length} prazos vencem hoje`,
+      body  : tasks.length > 1 ? tasks.slice(0,3).map((t) => `· ${t.title}`).join('\n') : 'Prazo encerra hoje.',
+      url   : '/today', tag: `deadline-${uid}`,
+    })),
+    // Resumo matinal (agrupado por usuário)
+    ...Object.entries(
+      tasksSummary.reduce((acc, t) => { (acc[t.user_id] ??= []).push(t); return acc; }, {})
+    ).map(([uid, tasks]) => pushToUser(uid, {
+      title : `📋 ${tasks.length} tarefa${tasks.length > 1 ? 's' : ''} para hoje`,
+      body  : tasks.slice(0,3).map((t) => `· ${t.title}`).join('\n') + (tasks.length > 3 ? `\n…e mais ${tasks.length - 3}` : ''),
+      url   : '/today', tag: `summary-${uid}`,
+    })),
+  ]);
+
+  return res.status(200).json({ sent, tasks: allTasks.length });
 }
