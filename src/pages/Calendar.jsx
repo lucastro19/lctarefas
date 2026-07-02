@@ -234,22 +234,27 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
 function DayHeaders({days, tasksByDay, today}){
   const DAY_NAMES = ["dom","seg","ter","qua","qui","sex","sáb"];
   return (
-    <div className="flex shrink-0 border-b border-border bg-card/60">
+    <div className="flex shrink-0 border-b border-border/30" style={{backgroundColor:"var(--color-bg,#111)"}}>
       <div className="w-11 shrink-0"/>
       {days.map(dateStr=>{
         const d = new Date(dateStr+"T12:00:00");
         const isToday = dateStr===today;
         const isWeekend = d.getDay()===0||d.getDay()===6;
-        const actMin = (tasksByDay[dateStr]??[]).filter(t=>!t.completed_at).reduce((s,t)=>s+(t.duration_minutes??30),0);
         return (
-          <div key={dateStr} className={["flex-1 flex flex-col items-center py-2 min-w-0 border-l border-border/25",isToday?"bg-primary/[0.04]":""].join(" ")}>
-            <span className={["text-[9px] font-semibold uppercase tracking-wider",isToday?"text-primary":isWeekend?"text-danger/60":"text-text-secondary"].join(" ")}>
-              {DAY_NAMES[d.getDay()]}
+          <div
+            key={dateStr}
+            className={["flex-1 flex items-center justify-center py-2.5 min-w-0 border-l border-border/15"].join(" ")}
+          >
+            <span className={[
+              "text-[12px] font-normal tracking-tight select-none",
+              isToday
+                ? "text-primary font-semibold"
+                : isWeekend
+                  ? "text-danger/45"
+                  : "text-text-secondary/55",
+            ].join(" ")}>
+              {DAY_NAMES[d.getDay()]}.,&nbsp;{d.getDate()}
             </span>
-            <span className={["w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold mt-0.5",isToday?"bg-primary text-white":"text-text-main"].join(" ")}>
-              {d.getDate()}
-            </span>
-            <LoadBar minutes={actMin}/>
           </div>
         );
       })}
@@ -259,17 +264,15 @@ function DayHeaders({days, tasksByDay, today}){
 
 /* ─── Linha "dia inteiro" ────────────────────────────────── */
 function AllDayRow({days, tasksByDay, onTaskSelect}){
-  const anyUntimed = days.some(d=>(tasksByDay[d]??[]).some(t=>!t.scheduled_time));
-  if(!anyUntimed) return null;
   return (
-    <div className="flex shrink-0 border-b border-border/30 bg-card/30" style={{minHeight:28,maxHeight:80}}>
-      <div className="w-11 shrink-0 flex items-center justify-center">
-        <span className="text-[8px] text-text-secondary/40 leading-tight text-center select-none">dia<br/>inteiro</span>
+    <div className="flex shrink-0 border-b border-border/20" style={{minHeight:26,maxHeight:80,backgroundColor:"var(--color-bg,#111)"}}>
+      <div className="w-11 shrink-0 flex items-end justify-end pr-2 pb-1">
+        <span className="text-[9px] text-text-secondary/35 select-none leading-none">dia inteiro</span>
       </div>
       {days.map(dateStr=>{
         const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.scheduled_time);
         return (
-          <div key={dateStr} className="flex-1 flex flex-wrap gap-0.5 px-1 py-1 min-w-0 border-l border-border/20">
+          <div key={dateStr} className="flex-1 flex flex-wrap gap-0.5 px-1 py-1 min-w-0 border-l border-border/15">
             {tasks.slice(0,2).map(t=>(
               <button key={t.id} onClick={()=>onTaskSelect(t)}
                 className="flex items-center gap-0.5 max-w-full overflow-hidden">
