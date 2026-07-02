@@ -304,38 +304,127 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
     if(w>=4&&new Date(week[6]+"T12:00:00").getMonth()!==month) break;
   }
 
+  // cabeçalho seg → dom (segunda começa semana no Brasil)
   const DN=["seg","ter","qua","qui","sex","sáb","dom"];
+
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <div className="grid grid-cols-7 border-b border-border shrink-0">
-        {DN.map(d=>(
-          <div key={d} className="text-center py-1.5 text-[9px] font-semibold text-text-secondary/60 uppercase tracking-wide">{d}</div>
-        ))}
+
+      {/* Cabeçalho dos dias da semana */}
+      <div className="grid grid-cols-7 shrink-0 border-b border-border/50">
+        {DN.map((d,i)=>{
+          const isWknd = i>=5; // sáb=5, dom=6
+          return (
+            <div key={d} className={["text-center py-2 text-[10px] font-semibold uppercase tracking-widest select-none",
+              isWknd?"text-danger/50":"text-text-secondary/50"].join(" ")}>
+              {d}
+            </div>
+          );
+        })}
       </div>
-      <div className={`flex-1 min-h-0 grid overflow-hidden`} style={{gridTemplateRows:`repeat(${weeks.length},1fr)`}}>
+
+      {/* Grade de semanas — cada linha ocupa fração igual da altura restante */}
+      <div
+        className="flex-1 min-h-0 overflow-hidden"
+        style={{display:"grid", gridTemplateRows:`repeat(${weeks.length},1fr)`}}
+      >
         {weeks.map((week,wi)=>(
-          <div key={wi} className="grid grid-cols-7 border-b border-border/30 min-h-0">
+          <div
+            key={wi}
+            className="min-h-0"
+            style={{display:"grid", gridTemplateColumns:"repeat(7,1fr)"}}
+          >
             {week.map(dateStr=>{
-              const d=new Date(dateStr+"T12:00:00");
-              const inMonth=d.getMonth()===month;
-              const isToday=dateStr===today;
-              const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.completed_at);
+              const d      = new Date(dateStr+"T12:00:00");
+              const dayNum = d.getDate();
+              const inMonth= d.getMonth()===month;
+              const isToday= dateStr===today;
+              const isWknd = d.getDay()===0||d.getDay()===6;
+
+              // Ordena: não concluídas primeiro, depois concluídas; dentro de cada grupo por hora
+              const allTasks = (tasksByDay[dateStr]??[]).sort((a,b)=>{
+                const ad=a.completed_at?1:0, bd=b.completed_at?1:0;
+                if(ad!==bd) return ad-bd;
+                return (a.scheduled_time??"")<(b.scheduled_time??"")?-1:1;
+              });
+
+              // Quantas linhas a célula aguenta? estimamos 4 para células normais
+              const MAX=4;
+              const visible=allTasks.slice(0,MAX);
+              const overflow=allTasks.length-MAX;
+
+              // Cor do número do dia
+              const numCls = isToday
+                ? "bg-primary text-white font-bold"
+                : !inMonth
+                  ? "text-text-secondary/20"
+                  : isWknd
+                    ? "text-danger/60 font-semibold"
+                    : "text-text-main font-semibold";
+
               return (
-                <div key={dateStr} onClick={()=>{onDaySelect(dateStr);}}
-                  className="border-r border-border/20 p-1 cursor-pointer hover:bg-card/60 overflow-hidden flex flex-col min-h-0">
-                  <div className={["w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold mx-auto mb-0.5 shrink-0",
-                    isToday?"bg-primary text-white":inMonth?"text-text-main":"text-text-secondary/25"].join(" ")}>
-                    {d.getDate()}
+                <div
+                  key={dateStr}
+                  onClick={()=>onDaySelect(dateStr)}
+                  className={[
+                    "border-r border-b border-border/20 flex flex-col min-h-0 overflow-hidden cursor-pointer transition-colors",
+                    inMonth?"hover:bg-card/50":"",
+                  ].join(" ")}
+                >
+                  {/* Número do dia — topo esquerdo, estilo iOS */}
+                  <div className="px-1.5 pt-1.5 pb-0.5 shrink-0">
+                    <span className={[
+                      "inline-flex items-center justify-center w-[22px] h-[22px] rounded-full text-[12px] leading-none",
+                      numCls,
+                    ].join(" ")}>
+                      {dayNum}
+                    </span>
                   </div>
-                  <div className="flex-1 overflow-hidden min-h-0">
-                    {tasks.slice(0,3).map(t=>(
-                      <button key={t.id} onClick={e=>{e.stopPropagation();onTaskSelect(t);}}
-                        className="w-full flex items-center gap-0.5 text-left py-px px-0.5 rounded hover:bg-primary/10 overflow-hidden">
-                        <EventCircle done={!!t.completed_at} urgent={t.is_urgent&&!t.completed_at} size={8}/>
-                        <span className="text-[9px] truncate text-text-main">{t.title}</span>
-                      </button>
-                    ))}
-                    {tasks.length>3&&<p className="text-[8px] text-text-secondary/50 pl-1">e mais {tasks.length-3}</p>}
+
+                  {/* Lista de tarefas — preenche o resto da célula */}
+                  <div className="flex-1 min-h-0 overflow-hidden px-0.5 pb-1 flex flex-col gap-px">
+                    {visible.map(t=>{
+                      const done=!!t.completed_at;
+                      const urgent=t.is_urgent&&!done;
+                      const dotColor=done?"#636366":urgent?"#FF3B30":"#30D158";
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={e=>{e.stopPropagation();onTaskSelect(t);}}
+                          className={[
+                            "w-full flex items-center gap-1 text-left px-1 py-[1px] rounded transition-colors overflow-hidden shrink-0",
+                            !inMonth?"opacity-30":"",
+                            done?"hover:bg-border/20":"hover:bg-card",
+                          ].join(" ")}
+                        >
+                          {/* Bolinha colorida */}
+                          <span
+                            className="shrink-0 w-[6px] h-[6px] rounded-full mt-px"
+                            style={{backgroundColor:dotColor, opacity: done?0.5:1}}
+                          />
+                          {/* Título */}
+                          <span className={[
+                            "flex-1 min-w-0 text-[10.5px] leading-snug truncate",
+                            done?"line-through text-text-secondary/40":"text-text-main",
+                          ].join(" ")}>
+                            {t.title}
+                          </span>
+                          {/* Horário */}
+                          {t.scheduled_time&&(
+                            <span className="shrink-0 text-[8.5px] tabular-nums text-text-secondary/50 ml-0.5">
+                              {t.scheduled_time.slice(0,5)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    {/* Overflow */}
+                    {overflow>0&&(
+                      <p className="text-[9px] italic text-text-secondary/40 pl-2 leading-tight shrink-0">
+                        e mais {overflow}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
