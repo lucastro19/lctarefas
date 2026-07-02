@@ -356,6 +356,7 @@ export function TaskDetail({ task, onClose }) {
             <option value="daily">Diariamente</option>
             <option value="weekdays">Dias úteis (seg–sex)</option>
             <option value="weekly">Semanalmente</option>
+            <option value="biweekly">Quinzenalmente (a cada 2 semanas)</option>
             <option value="monthly">Mensalmente</option>
           </select>
         </div>

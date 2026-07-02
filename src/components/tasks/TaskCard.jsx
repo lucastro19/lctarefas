@@ -57,7 +57,9 @@ function isOverdue(date) {
 
 const RECURRENCE_LABELS = {
   daily: "Diariamente",
+  weekdays: "Dias úteis",
   weekly: "Semanalmente",
+  biweekly: "Quinzenalmente",
   monthly: "Mensalmente",
   yearly: "Anualmente",
 };
@@ -271,7 +273,7 @@ function UrgencyButton({ task, updateTask }) {
 }
 
 /* ── Menu contextual ── */
-function TaskMenuPortal({ task, buttonId, onClose }) {
+function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete }) {
   const [pos, setPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
@@ -284,14 +286,13 @@ function TaskMenuPortal({ task, buttonId, onClose }) {
 
   return (
     <div style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 9999 }}>
-      <TaskMenu task={task} onClose={onClose} />
+      <TaskMenu task={task} onClose={onClose} onRecurrenceDelete={onRecurrenceDelete} />
     </div>
   );
 }
 
-function TaskMenu({ task, onClose }) {
-  const { deleteTask, deleteRecurrenceFuture, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
-  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
+function TaskMenu({ task, onClose, onRecurrenceDelete }) {
+  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
   const ref = useRef(null);
 
   useEffect(() => {
@@ -354,7 +355,8 @@ function TaskMenu({ task, onClose }) {
         onClick={(e) => {
           e.stopPropagation();
           if (task.recurrence) {
-            setShowRecurrenceModal(true);
+            onClose();
+            onRecurrenceDelete();
           } else {
             deleteTask(task.id);
             onClose();
@@ -364,28 +366,20 @@ function TaskMenu({ task, onClose }) {
       >
         🗑️ Mover para lixeira
       </button>
-
-      {showRecurrenceModal && (
-        <RecurrenceDeleteModal
-          task={task}
-          onDeleteThis={() => { deleteTask(task.id); onClose(); }}
-          onDeleteFuture={() => { deleteRecurrenceFuture(task.id); onClose(); }}
-          onCancel={() => setShowRecurrenceModal(false)}
-        />
-      )}
     </div>
   );
 }
 
 /* ── Componente principal ── */
 export function TaskCard({ task, subtasks = [], onClick }) {
-  const { completeTask, uncompleteTask, updateTask } = useTaskStore();
+  const { completeTask, uncompleteTask, updateTask, deleteTask, deleteRecurrenceFuture } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { toggle, isSelected, selectedIds } = useSelectionStore();
   const { expandedTaskId, setExpandedTaskId } = useUiStore();
 
   const [completing, setCompleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [focusField, setFocusField] = useState("title");
   const [titleDraft, setTitleDraft] = useState(task.title);
@@ -668,6 +662,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const swipeRight = swipeX > 0;
 
   return (
+    <>
     <div ref={cardRef} className="relative rounded-card" style={{ zIndex: showMenu ? 20 : undefined }}>
     <div
       ref={setNodeRef}
@@ -836,6 +831,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   <option value="daily">Diariamente</option>
                   <option value="weekdays">Dias úteis</option>
                   <option value="weekly">Semanalmente</option>
+                  <option value="biweekly">Quinzenalmente</option>
                   <option value="monthly">Mensalmente</option>
                 </select>
               </div>
@@ -847,9 +843,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (anySelected) { toggle(task.id); return; }
-                  if (!task.completed_at) {
-                    if (onClick) { onClick(); } else { expandTask("title"); }
-                  }
+                  if (!task.completed_at) expandTask("title");
                 }}
                 onDoubleClick={(e) => e.stopPropagation()}
                 className={[
@@ -867,7 +861,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
-                    if (onClick) { onClick(); } else { expandTask("notes"); }
+                    if (!task.completed_at) expandTask("notes");
                   }}
                   onDoubleClick={(e) => e.stopPropagation()}
                   className="text-xs text-text-secondary mt-0.5 leading-relaxed whitespace-pre-wrap break-words cursor-text"
@@ -882,7 +876,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
-                    if (onClick) { onClick(); } else { expandTask("title"); }
+                    if (!task.completed_at) expandTask("title");
                   }}
                   onDoubleClick={(e) => e.stopPropagation()}
                 >
@@ -938,7 +932,12 @@ export function TaskCard({ task, subtasks = [], onClick }) {
             ···
           </button>
           {showMenu && createPortal(
-            <TaskMenuPortal task={task} buttonId={`menu-btn-${task.id}`} onClose={() => setShowMenu(false)} />,
+            <TaskMenuPortal
+              task={task}
+              buttonId={`menu-btn-${task.id}`}
+              onClose={() => setShowMenu(false)}
+              onRecurrenceDelete={() => setShowRecurrenceModal(true)}
+            />,
             document.body
           )}
         </div>
@@ -969,5 +968,14 @@ export function TaskCard({ task, subtasks = [], onClick }) {
       )}
     </div>
     </div>
+    {showRecurrenceModal && (
+      <RecurrenceDeleteModal
+        task={task}
+        onDeleteThis={() => { deleteTask(task.id); setShowRecurrenceModal(false); }}
+        onDeleteFuture={() => { deleteRecurrenceFuture(task.id); setShowRecurrenceModal(false); }}
+        onCancel={() => setShowRecurrenceModal(false)}
+      />
+    )}
+    </>
   );
 }
