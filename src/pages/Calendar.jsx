@@ -31,7 +31,7 @@ function fmtMonthYear(d){ return new Date(d+"T12:00:00").toLocaleDateString("pt-
 function fmtYear(d){ return String(new Date(d+"T12:00:00").getFullYear()); }
 
 /* ─── Constantes ─────────────────────────────────────────── */
-const HOUR_HEIGHT = 52;
+const HOUR_HEIGHT = 64;   // px por hora — mais espaço, mais legível
 const GRID_START_H = 6;
 const GRID_END_H   = 23;
 const gridHours = Array.from({length: GRID_END_H-GRID_START_H}, (_,i)=>GRID_START_H+i);
@@ -113,25 +113,29 @@ function LoadBar({minutes}){
 /* ─── Visual de evento na timeline ──────────────────────── */
 function EventContent({task, height, onToggle}){
   const done = !!task.completed_at, urgent = task.is_urgent && !done;
-  const color = done?"#636366":urgent?"#FF3B30":"#34C759";
-  const bg = done?"rgba(99,99,102,0.07)":urgent?"rgba(255,59,48,0.09)":"rgba(52,199,89,0.09)";
+  const color = done?"#8E8E93":urgent?"#FF453A":"#34C759";
+  const bg    = done?"rgba(142,142,147,0.10)":urgent?"rgba(255,69,58,0.13)":"rgba(52,199,89,0.13)";
+  const borderColor = done?"rgba(142,142,147,0.35)":urgent?"rgba(255,69,58,0.80)":"rgba(52,199,89,0.80)";
   return (
-    <div className="w-full h-full flex gap-1.5 px-1.5 py-1 overflow-hidden rounded-r-sm"
-      style={{backgroundColor:bg, borderLeft:`2.5px solid ${color}`, borderRadius:"0 3px 3px 0"}}>
+    <div className="w-full h-full flex gap-2 px-2 py-1.5 overflow-hidden"
+      style={{backgroundColor:bg, borderLeft:`3px solid ${borderColor}`, borderRadius:"0 4px 4px 0"}}>
       <button
         onPointerDown={e=>e.stopPropagation()}
         onClick={e=>{e.stopPropagation();e.preventDefault();onToggle?.(task);}}
-        className="mt-[2px] shrink-0 transition-opacity hover:opacity-70"
+        className="mt-[1px] shrink-0 transition-opacity hover:opacity-70"
       >
-        <EventCircle done={done} urgent={urgent} size={11}/>
+        <EventCircle done={done} urgent={urgent} size={13}/>
       </button>
       <div className="flex-1 min-w-0">
-        <p className={`text-[11px] font-medium leading-snug truncate ${done?"line-through":""}` } style={{color: done?"#636366":color, opacity: done?0.45:1}}>
+        <p className={`text-[12.5px] font-semibold leading-snug truncate ${done?"line-through":""}`}
+          style={{color: done?"rgba(200,200,200,0.35)":color}}>
           {task.title}
         </p>
-        {height>38 && task.scheduled_time && (
-          <p className="text-[9.5px] mt-0.5 leading-none tabular-nums" style={{color, opacity:0.55}}>
-            {task.scheduled_time.slice(0,5)}{task.duration_minutes && task.duration_minutes!==30?` · ${task.duration_minutes}min`:""}
+        {height>40 && task.scheduled_time && (
+          <p className="text-[11px] mt-0.5 leading-none tabular-nums font-medium"
+            style={{color: done?"rgba(200,200,200,0.25)":urgent?"rgba(255,100,90,0.75)":"rgba(52,199,89,0.70)"}}>
+            {task.scheduled_time.slice(0,5)}
+            {task.duration_minutes && task.duration_minutes!==30?` · ${task.duration_minutes}min`:""}
           </p>
         )}
       </div>
@@ -144,7 +148,7 @@ function DraggableEvent({task, col, total, onSelect, onToggle}){
   const start = timeToMinutes(task.scheduled_time)??(GRID_START_H*60);
   const dur   = task.duration_minutes??30;
   const top   = ((start-GRID_START_H*60)/60)*HOUR_HEIGHT;
-  const height= Math.max(22,(dur/60)*HOUR_HEIGHT);
+  const height= Math.max(26,(dur/60)*HOUR_HEIGHT);
   const w     = `${100/total}%`;
   const left  = `${(col/total)*100}%`;
 
@@ -200,11 +204,11 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
       <div style={{height:gridHours.length*HOUR_HEIGHT, width:"100%", position:"relative"}} className="flex">
 
         {/* Horas */}
-        <div className="w-11 shrink-0 relative z-10" style={{background:"inherit"}}>
+        <div className="w-14 shrink-0 relative z-10" style={{background:"inherit"}}>
           {gridHours.map(h=>(
-            <div key={h} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,right:0,left:0}} className="flex justify-end pr-2.5">
-              <span className="text-[10px] tabular-nums leading-none -mt-[6px] select-none"
-                style={{color:"rgba(128,128,128,0.40)"}}>
+            <div key={h} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,right:0,left:0}} className="flex justify-end pr-3">
+              <span className="text-[11.5px] font-medium tabular-nums leading-none -mt-[7px] select-none"
+                style={{color:"rgba(200,200,200,0.65)"}}>
                 {String(h).padStart(2,"0")}:00
               </span>
             </div>
@@ -218,12 +222,12 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
           const laid = layoutEvents(timedTasks);
           return (
             <DayCol key={dateStr} dateStr={dateStr} isToday={isToday} onDoubleClick={onDoubleClick}>
-              {/* Linhas de hora + meia hora */}
+              {/* Linhas de hora (sólida) + meia hora (tracejada) */}
               {gridHours.flatMap(h=>[
                 <div key={`h${h}`} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,left:0,right:0,
-                  borderTop:"1px solid rgba(128,128,128,0.16)"}}/>,
+                  borderTop:"1px solid rgba(255,255,255,0.10)"}}/>,
                 <div key={`hh${h}`} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT+HOUR_HEIGHT/2,left:0,right:0,
-                  borderTop:"1px solid rgba(128,128,128,0.06)"}}/>,
+                  borderTop:"1px dashed rgba(255,255,255,0.04)"}}/>,
               ])}
               {laid.map(({task,col,total})=>(
                 <DraggableEvent key={task.id} task={task} col={col} total={total}
@@ -235,7 +239,7 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
 
         {/* Linha "agora" */}
         {days.includes(today) && nowMin>=GRID_START_H*60 && nowMin<GRID_END_H*60 && (
-          <div style={{position:"absolute",top:((nowMin-GRID_START_H*60)/60)*HOUR_HEIGHT,left:44,right:0,zIndex:20,pointerEvents:"none"}}
+          <div style={{position:"absolute",top:((nowMin-GRID_START_H*60)/60)*HOUR_HEIGHT,left:56,right:0,zIndex:20,pointerEvents:"none"}}
             className="flex items-center">
             <div className="shrink-0 rounded-full -ml-[3px]"
               style={{width:7,height:7,backgroundColor:"#FF3B30",boxShadow:"0 0 5px rgba(255,59,48,0.6)"}}/>
@@ -251,8 +255,8 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
 function DayHeaders({days, tasksByDay, today}){
   const DAY_NAMES = ["dom","seg","ter","qua","qui","sex","sáb"];
   return (
-    <div className="flex shrink-0" style={{borderBottom:"1px solid rgba(128,128,128,0.18)"}}>
-      <div className="w-11 shrink-0"/>
+    <div className="flex shrink-0" style={{borderBottom:"1px solid rgba(255,255,255,0.10)"}}>
+      <div className="w-14 shrink-0"/>
       {days.map(dateStr=>{
         const d = new Date(dateStr+"T12:00:00");
         const isToday = dateStr===today;
@@ -262,16 +266,17 @@ function DayHeaders({days, tasksByDay, today}){
           <div
             key={dateStr}
             className="flex-1 flex items-center justify-center py-3 min-w-0"
-            style={{borderLeft:"1px solid rgba(128,128,128,0.12)"}}
+            style={{borderLeft:"1px solid rgba(255,255,255,0.07)"}}
           >
             {isToday ? (
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold select-none"
-                style={{backgroundColor:"rgba(79,142,247,0.15)",color:"#4F8EF7", letterSpacing:"-0.01em"}}>
+              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] font-semibold select-none"
+                style={{backgroundColor:"rgba(79,142,247,0.18)",color:"#5B9CF6", letterSpacing:"-0.01em"}}>
                 {label}
               </span>
             ) : (
-              <span className="text-[11.5px] font-normal select-none tracking-tight"
-                style={{color: isWeekend?"rgba(255,59,48,0.45)":"rgba(128,128,128,0.50)"}}>
+              <span className="select-none"
+                style={{fontSize:13, fontWeight:400, letterSpacing:"-0.01em",
+                  color: isWeekend?"rgba(255,100,90,0.60)":"rgba(200,200,200,0.55)"}}>
                 {label}
               </span>
             )}
@@ -285,15 +290,15 @@ function DayHeaders({days, tasksByDay, today}){
 /* ─── Linha "dia inteiro" ────────────────────────────────── */
 function AllDayRow({days, tasksByDay, onTaskSelect}){
   return (
-    <div className="flex shrink-0" style={{minHeight:26,maxHeight:80,borderBottom:"1px solid rgba(128,128,128,0.12)"}}>
-      <div className="w-11 shrink-0 flex items-end justify-end pr-2.5 pb-1.5">
-        <span className="text-[9px] select-none leading-none" style={{color:"rgba(128,128,128,0.30)"}}>dia inteiro</span>
+    <div className="flex shrink-0" style={{minHeight:28,maxHeight:80,borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+      <div className="w-14 shrink-0 flex items-end justify-end pr-3 pb-1.5">
+        <span className="text-[10px] font-medium select-none leading-none" style={{color:"rgba(200,200,200,0.35)"}}>dia inteiro</span>
       </div>
       {days.map(dateStr=>{
         const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.scheduled_time);
         return (
           <div key={dateStr} className="flex-1 flex flex-wrap gap-0.5 px-1 py-1 min-w-0"
-            style={{borderLeft:"1px solid rgba(128,128,128,0.12)"}}>
+            style={{borderLeft:"1px solid rgba(255,255,255,0.07)"}}>
             {tasks.slice(0,2).map(t=>(
               <button key={t.id} onClick={()=>onTaskSelect(t)}
                 className="flex items-center gap-0.5 max-w-full overflow-hidden">
@@ -340,12 +345,12 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
       {/* Cabeçalho dos dias */}
-      <div className="grid grid-cols-7 shrink-0" style={{borderBottom:"1px solid rgba(128,128,128,0.18)"}}>
+      <div className="grid grid-cols-7 shrink-0" style={{borderBottom:"1px solid rgba(255,255,255,0.10)"}}>
         {DN.map((d,i)=>{
           const isWknd = i===0||i===6;
           return (
-            <div key={d} className="text-center py-2 text-[9.5px] font-medium select-none tracking-widest uppercase"
-              style={{color: isWknd?"rgba(255,59,48,0.40)":"rgba(128,128,128,0.40)"}}>
+            <div key={d} className="text-center py-2.5 text-[11px] font-medium select-none tracking-wider uppercase"
+              style={{color: isWknd?"rgba(255,100,90,0.55)":"rgba(200,200,200,0.50)"}}>
               {d}
             </div>
           );
@@ -391,26 +396,27 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
                   onClick={()=>onDaySelect(dateStr)}
                   className="flex flex-col min-h-0 overflow-hidden cursor-pointer transition-colors"
                   style={{
-                    borderRight:"1px solid rgba(128,128,128,0.12)",
-                    borderBottom:"1px solid rgba(128,128,128,0.12)",
+                    borderRight:"1px solid rgba(255,255,255,0.08)",
+                    borderBottom:"1px solid rgba(255,255,255,0.08)",
                     backgroundColor: isToday?"rgba(79,142,247,0.04)":"transparent",
                   }}
                   onMouseEnter={e=>{ if(inMonth) e.currentTarget.style.backgroundColor=isToday?"rgba(79,142,247,0.07)":"rgba(128,128,128,0.04)"; }}
                   onMouseLeave={e=>{ e.currentTarget.style.backgroundColor=isToday?"rgba(79,142,247,0.04)":"transparent"; }}
                 >
                   {/* Número do dia — alinhado à DIREITA (estilo iOS) */}
-                  <div className="pr-1.5 pt-1 pb-0.5 flex justify-end shrink-0">
+                  <div className="pr-2 pt-1.5 pb-0.5 flex justify-end shrink-0">
                     <span className={[
-                      "inline-flex items-center justify-center rounded-full text-[11px] leading-none px-1",
-                      isFirstOfMonth ? "text-[9.5px] h-[20px] min-w-[20px]" : "w-[20px] h-[20px]",
-                      isToday
-                        ? "bg-primary text-white font-bold"
-                        : !inMonth
-                          ? "text-text-secondary/20"
-                          : isWknd
-                            ? "text-danger/70 font-medium"
-                            : "text-text-main font-medium",
-                    ].join(" ")}>
+                      "inline-flex items-center justify-center rounded-full leading-none px-1 font-medium",
+                      isFirstOfMonth ? "text-[10px] h-[22px] min-w-[22px]" : "text-[12px] w-[22px] h-[22px]",
+                    ].join(" ")}
+                    style={{
+                      backgroundColor: isToday?"#4F8EF7":"transparent",
+                      color: isToday?"#fff"
+                        : !inMonth?"rgba(200,200,200,0.18)"
+                        : isWknd?"rgba(255,100,90,0.65)"
+                        : "rgba(220,220,220,0.85)",
+                      fontWeight: isToday?700:500,
+                    }}>
                       {dayLabel}
                     </span>
                   </div>
@@ -443,14 +449,14 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
                           />
                           {/* Título */}
                           <span className={[
-                            "flex-1 min-w-0 text-[10px] leading-snug truncate",
-                            done?"line-through text-text-secondary/35":"text-text-main",
+                            "flex-1 min-w-0 text-[11px] font-medium leading-snug truncate",
+                            done?"line-through text-text-secondary/30":"text-text-main",
                           ].join(" ")}>
                             {t.title}
                           </span>
                           {/* Horário à direita */}
                           {t.scheduled_time&&(
-                            <span className="shrink-0 text-[8.5px] tabular-nums text-text-secondary/45 ml-0.5 leading-none">
+                            <span className="shrink-0 text-[9.5px] tabular-nums text-text-secondary/50 ml-1 leading-none font-medium">
                               {t.scheduled_time.slice(0,5)}
                             </span>
                           )}
@@ -704,7 +710,7 @@ export function Calendar(){
           {/* Área de conteúdo */}
           {isTimeline ? (
             <div className="flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden"
-              style={{border:"1px solid rgba(128,128,128,0.18)"}}>
+              style={{border:"1px solid rgba(255,255,255,0.10)"}}>
               <DayHeaders days={days} tasksByDay={tasksByDay} today={today}/>
               <AllDayRow  days={days} tasksByDay={tasksByDay} onTaskSelect={setSelected}/>
               <TimeGrid
@@ -721,13 +727,13 @@ export function Calendar(){
             </div>
           ) : view==="month" ? (
             <div className="flex-1 min-h-0 rounded-xl overflow-hidden"
-              style={{border:"1px solid rgba(128,128,128,0.18)"}}>
+              style={{border:"1px solid rgba(255,255,255,0.10)"}}>
               <MonthView anchor={anchor} tasksByDay={tasksByDay} today={today}
                 onDaySelect={onDaySelect} onTaskSelect={setSelected}/>
             </div>
           ) : (
             <div className="flex-1 min-h-0 rounded-xl overflow-hidden"
-              style={{border:"1px solid rgba(128,128,128,0.18)"}}>
+              style={{border:"1px solid rgba(255,255,255,0.10)"}}>
               <YearView anchor={anchor} tasksByDay={tasksByDay} today={today}
                 onDayClick={onDaySelect}/>
             </div>

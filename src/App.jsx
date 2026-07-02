@@ -54,6 +54,31 @@ function AppRoutes() {
     if (user && tasks.length > 0) scheduleTaskNotifications(tasks);
   }, [tasks, user]);
 
+  // Listener: ações de notificação vindas do Service Worker (Concluir / Adiar)
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const { completeTask, updateTask } = useTaskStore.getState();
+    const handler = async (event) => {
+      const { type, taskId, minutes } = event.data ?? {};
+      if (!taskId) return;
+      if (type === "COMPLETE_TASK") {
+        await completeTask(taskId);
+      }
+      if (type === "SNOOZE_TASK" && minutes) {
+        const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+        if (!task?.scheduled_time) return;
+        const [h, m] = task.scheduled_time.split(":").map(Number);
+        const newMin = h * 60 + m + minutes;
+        const newH = Math.floor(newMin / 60) % 24;
+        const newM = newMin % 60;
+        const newTime = `${String(newH).padStart(2, "0")}:${String(newM).padStart(2, "0")}`;
+        await updateTask(taskId, { scheduled_time: newTime });
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handler);
+    return () => navigator.serviceWorker.removeEventListener("message", handler);
+  }, []);
+
   // Atalhos globais de teclado
   useEffect(() => {
     const handler = (e) => {

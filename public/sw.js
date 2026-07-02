@@ -11,7 +11,14 @@ self.addEventListener('push', (event) => {
   try { payload = event.data.json(); }
   catch { payload = { title: 'LCTarefas', body: event.data.text() }; }
 
-  const { title = 'LCTarefas', body = '', url = '/today', tag } = payload;
+  const { title = 'LCTarefas', body = '', url = '/today', tag, taskId } = payload;
+
+  const actions = taskId
+    ? [
+        { action: 'complete', title: '✓ Concluir' },
+        { action: 'snooze',   title: '⏰ +30 min'  },
+      ]
+    : [];
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -20,27 +27,62 @@ self.addEventListener('push', (event) => {
       badge: '/favicon-32.png',
       tag: tag ?? 'lctarefas',
       renotify: true,
-      data: { url },
+      data: { url, taskId },
       vibrate: [100, 50, 100],
+      actions,
     })
   );
 });
 
-// ── Clique na notificação ──────────────────────────────────────
+// ── Clique / ação na notificação ──────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? '/today';
 
+  const { taskId, url } = event.notification.data ?? {};
+  const action = event.action;
+
+  // Ação: Concluir tarefa
+  if (action === 'complete' && taskId) {
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+        const msg = { type: 'COMPLETE_TASK', taskId };
+        if (list.length > 0) {
+          list[0].postMessage(msg);
+          return 'focus' in list[0] ? list[0].focus() : null;
+        }
+        // App fechado: abre e passa o taskId via query string para completar ao carregar
+        return clients.openWindow(`/?complete=${taskId}`);
+      })
+    );
+    return;
+  }
+
+  // Ação: Adiar 30 minutos
+  if (action === 'snooze' && taskId) {
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+        const msg = { type: 'SNOOZE_TASK', taskId, minutes: 30 };
+        if (list.length > 0) {
+          list[0].postMessage(msg);
+          return 'focus' in list[0] ? list[0].focus() : null;
+        }
+        return clients.openWindow(`/?snooze=${taskId}&minutes=30`);
+      })
+    );
+    return;
+  }
+
+  // Clique padrão: abre/foca o app na URL da tarefa
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      // Foca janela existente se houver
+      const target = url ?? '/today';
       for (const client of list) {
         if ('focus' in client) {
-          client.navigate(url);
+          client.navigate(target);
           return client.focus();
         }
       }
-      return clients.openWindow(url);
+      return clients.openWindow(target);
     })
   );
 });

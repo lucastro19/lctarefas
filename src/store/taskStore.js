@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { useSettingsStore, minutesToTime } from "./settingsStore";
 import { useUiStore } from "./uiStore";
+import { cancelNotification } from "../services/notifications";
 
 const today = () => new Date().toISOString().split("T")[0];
 const inDays = (n) => {
@@ -118,6 +119,7 @@ export const useTaskStore = create((set, get) => ({
   // --- Complete/Uncomplete ---
   completeTask: async (id) => {
     const task = get().tasks.find((t) => t.id === id);
+    cancelNotification(id); // cancela timers pendentes imediatamente
     await get().updateTask(id, { completed_at: new Date().toISOString() });
     useUiStore.getState().showToast({
       message: "Tarefa concluída",
