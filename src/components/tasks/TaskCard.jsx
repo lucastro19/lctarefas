@@ -8,6 +8,7 @@ import { useTagStore } from "../../store/tagStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { durationLabel, DURATION_PRESETS } from "../../store/settingsStore";
+import { useAreaStore } from "../../store/areaStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 
 // Usa data LOCAL (não UTC) para evitar bug de timezone em fusos negativos (BR = UTC-3)
@@ -374,6 +375,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
 export function TaskCard({ task, subtasks = [], onClick }) {
   const { completeTask, uncompleteTask, updateTask, deleteTask, deleteRecurrenceFuture } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, addTagToTask, removeTagFromTask } = useTagStore();
+  const { areas, projects } = useAreaStore();
   const { toggle, isSelected, selectedIds } = useSelectionStore();
   const { expandedTaskId, setExpandedTaskId } = useUiStore();
 
@@ -408,6 +410,11 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const subtaskDone = subtasks.filter((s) => s.completed).length;
   const overdueDeadline = isOverdue(task.deadline);
   const isUrgent = !!task.is_urgent && !task.completed_at;
+
+  const taskProject = task.project_id ? projects.find((p) => p.id === task.project_id) : null;
+  const taskArea = task.area_id ? areas.find((a) => a.id === task.area_id) : null;
+  const contextLabel = taskProject ?? taskArea ?? null;
+  const collapsedTags = taskTags[task.id] ?? [];
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -620,7 +627,8 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   };
 
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
-    task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent;
+    task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
+    contextLabel || collapsedTags.length > 0;
 
   const handleTouchStart = (e) => {
     swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -914,6 +922,29 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   )}
                   {subtaskTotal > 0 && (
                     <span className="text-xs text-text-secondary">{subtaskDone}/{subtaskTotal}</span>
+                  )}
+                  {contextLabel && (
+                    <span
+                      className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full"
+                      style={{
+                        color: contextLabel.color ?? "#8E8E93",
+                        backgroundColor: (contextLabel.color ?? "#8E8E93") + "22",
+                      }}
+                    >
+                      {taskProject ? "◆" : "▣"} {contextLabel.name}
+                    </span>
+                  )}
+                  {collapsedTags.length > 0 && (
+                    <span className="flex items-center gap-0.5">
+                      {collapsedTags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          title={tag.name}
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                      ))}
+                    </span>
                   )}
                 </div>
               )}

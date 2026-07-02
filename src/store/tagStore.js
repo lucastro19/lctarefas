@@ -19,6 +19,19 @@ export const useTagStore = create((set, get) => ({
     set((s) => ({ taskTags: { ...s.taskTags, [taskId]: tags } }));
   },
 
+  fetchAllTaskTags: async () => {
+    const { data } = await supabase
+      .from("task_tags")
+      .select("task_id, tags(id, name, color)");
+    const map = {};
+    for (const row of data ?? []) {
+      if (!row.tags) continue;
+      if (!map[row.task_id]) map[row.task_id] = [];
+      map[row.task_id].push(row.tags);
+    }
+    set((s) => ({ taskTags: { ...s.taskTags, ...map } }));
+  },
+
   createTag: async (name, color = "#8E8E93") => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase

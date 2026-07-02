@@ -29,7 +29,7 @@ function AppRoutes() {
   const { user, loading, init } = useAuthStore();
   const { tasks, fetchTasks } = useTaskStore();
   const { fetchAll } = useAreaStore();
-  const { fetchTags } = useTagStore();
+  const { fetchTags, fetchAllTaskTags } = useTagStore();
   const { clearAll } = useSelectionStore();
   const { theme } = useSettingsStore();
   const location = useLocation();
@@ -45,6 +45,7 @@ function AppRoutes() {
       fetchTasks();
       fetchAll();
       fetchTags();
+      fetchAllTaskTags();
       requestNotificationPermission();
     }
   }, [user]);
