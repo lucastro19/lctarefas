@@ -8,8 +8,6 @@ import { useTagStore } from "../../store/tagStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { durationLabel, DURATION_PRESETS } from "../../store/settingsStore";
-import { useAuthStore } from "../../store/authStore";
-import { sendUrgentPush } from "../../lib/pushNotifications";
 
 // Usa data LOCAL (não UTC) para evitar bug de timezone em fusos negativos (BR = UTC-3)
 function localDateStr(d = new Date()) {
@@ -213,7 +211,6 @@ function TimeField({ value, onChange }) {
 function UrgencyButton({ task, updateTask }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const { session } = useAuthStore();
 
   useEffect(() => {
     const handler = (e) => {
@@ -225,12 +222,6 @@ function UrgencyButton({ task, updateTask }) {
 
   const setUrgent = (val) => {
     updateTask(task.id, { is_urgent: val });
-    if (val) {
-      // Só envia push imediato se não tiver data futura
-      const isToday = task.scheduled_date === todayStr();
-      const hasFutureDate = task.scheduled_date && task.scheduled_date > todayStr();
-      if (!hasFutureDate) sendUrgentPush(session?.access_token, task.title);
-    }
     setOpen(false);
   };
 

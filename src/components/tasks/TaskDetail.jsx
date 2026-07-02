@@ -2,9 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAreaStore } from "../../store/areaStore";
-import { useAuthStore } from "../../store/authStore";
 import { DURATION_PRESETS, durationLabel } from "../../store/settingsStore";
-import { sendUrgentPush } from "../../lib/pushNotifications";
 
 function localDateStr(d = new Date()) {
   return (
@@ -34,7 +32,6 @@ export function TaskDetail({ task, onClose }) {
   const { updateTask, deleteTask, archiveTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, fetchTags, createTag, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
-  const { session } = useAuthStore();
 
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? "");
@@ -364,7 +361,6 @@ export function TaskDetail({ task, onClose }) {
               const next = !isUrgent;
               setIsUrgent(next);
               await updateTask(task.id, { is_urgent: next });
-              if (next) sendUrgentPush(session?.access_token, title);
             }}
             className={["w-9 h-5 rounded-full transition-colors", isUrgent ? "bg-[#FF3B30]" : "bg-[#C7C7CC]"].join(" ")}
           >
