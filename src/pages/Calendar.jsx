@@ -76,6 +76,18 @@ function layoutEvents(tasks) {
   return result.map(r=>({...r, total}));
 }
 
+/* ─── Ícones SVG ────────────────────────────────────────── */
+function ChevronLeft(){
+  return <svg width="6" height="11" viewBox="0 0 6 11" fill="none" aria-hidden>
+    <path d="M5 1L1 5.5L5 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>;
+}
+function ChevronRight(){
+  return <svg width="6" height="11" viewBox="0 0 6 11" fill="none" aria-hidden>
+    <path d="M1 1L5 5.5L1 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>;
+}
+
 /* ─── Mini componentes visuais ───────────────────────────── */
 function EventCircle({done,urgent,size=12}){
   const cls = done ? "border-[#636366] bg-[#636366]" : urgent ? "border-danger bg-transparent" : "border-success bg-transparent";
@@ -93,31 +105,32 @@ function LoadBar({minutes}){
   const pct = Math.min(100,(minutes/(8*60))*100);
   if(!pct) return null;
   const c = minutes<180?"#34C759":minutes<360?"#FF9500":"#FF3B30";
-  return <div className="h-0.5 rounded-full bg-border/40 overflow-hidden w-full mt-0.5">
-    <div className="h-full rounded-full" style={{width:`${pct}%`,backgroundColor:c}}/>
+  return <div className="h-[2px] rounded-full overflow-hidden w-full mt-1" style={{backgroundColor:"rgba(128,128,128,0.15)"}}>
+    <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,backgroundColor:c}}/>
   </div>;
 }
 
 /* ─── Visual de evento na timeline ──────────────────────── */
 function EventContent({task, height, onToggle}){
   const done = !!task.completed_at, urgent = task.is_urgent && !done;
-  const color = done?"#636366":urgent?"#FF3B30":"#30D158";
-  const bg = done?"rgba(99,99,102,0.08)":urgent?"rgba(255,59,48,0.08)":"rgba(48,209,88,0.08)";
+  const color = done?"#636366":urgent?"#FF3B30":"#34C759";
+  const bg = done?"rgba(99,99,102,0.07)":urgent?"rgba(255,59,48,0.09)":"rgba(52,199,89,0.09)";
   return (
-    <div className="w-full h-full flex gap-1.5 px-1.5 py-1 overflow-hidden" style={{backgroundColor:bg, borderLeft:`2.5px solid ${color}`}}>
+    <div className="w-full h-full flex gap-1.5 px-1.5 py-1 overflow-hidden rounded-r-sm"
+      style={{backgroundColor:bg, borderLeft:`2.5px solid ${color}`, borderRadius:"0 3px 3px 0"}}>
       <button
         onPointerDown={e=>e.stopPropagation()}
         onClick={e=>{e.stopPropagation();e.preventDefault();onToggle?.(task);}}
-        className="mt-[2px] shrink-0"
+        className="mt-[2px] shrink-0 transition-opacity hover:opacity-70"
       >
         <EventCircle done={done} urgent={urgent} size={11}/>
       </button>
       <div className="flex-1 min-w-0">
-        <p className={`text-[11px] font-medium leading-tight truncate ${done?"line-through opacity-50":""}`} style={{color}}>
+        <p className={`text-[11px] font-medium leading-snug truncate ${done?"line-through":""}` } style={{color: done?"#636366":color, opacity: done?0.45:1}}>
           {task.title}
         </p>
         {height>38 && task.scheduled_time && (
-          <p className="text-[9px] text-text-secondary/60 mt-0.5 leading-none">
+          <p className="text-[9.5px] mt-0.5 leading-none tabular-nums" style={{color, opacity:0.55}}>
             {task.scheduled_time.slice(0,5)}{task.duration_minutes && task.duration_minutes!==30?` · ${task.duration_minutes}min`:""}
           </p>
         )}
@@ -166,12 +179,11 @@ function DayCol({dateStr, isToday, children, onDoubleClick}){
     <div
       ref={setNodeRef}
       onDoubleClick={e=>onDoubleClick(e,dateStr)}
-      className={[
-        "flex-1 relative border-l border-border/25 min-w-0 transition-colors",
-        isToday?"bg-primary/[0.02]":"",
-        isOver?"bg-primary/[0.06]":"",
-      ].join(" ")}
-      style={{minWidth:0}}
+      className="flex-1 relative border-l border-border/[0.18] min-w-0 transition-colors"
+      style={{
+        minWidth:0,
+        backgroundColor: isOver?"rgba(79,142,247,0.05)":isToday?"rgba(79,142,247,0.025)":"transparent",
+      }}
     >
       {children}
     </div>
@@ -190,8 +202,9 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
         {/* Horas */}
         <div className="w-11 shrink-0 relative z-10" style={{background:"inherit"}}>
           {gridHours.map(h=>(
-            <div key={h} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,right:0,left:0}} className="flex justify-end pr-2">
-              <span className="text-[9px] text-text-secondary/40 tabular-nums leading-none -mt-[5px] select-none">
+            <div key={h} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,right:0,left:0}} className="flex justify-end pr-2.5">
+              <span className="text-[10px] tabular-nums leading-none -mt-[6px] select-none"
+                style={{color:"rgba(128,128,128,0.40)"}}>
                 {String(h).padStart(2,"0")}:00
               </span>
             </div>
@@ -205,10 +218,13 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
           const laid = layoutEvents(timedTasks);
           return (
             <DayCol key={dateStr} dateStr={dateStr} isToday={isToday} onDoubleClick={onDoubleClick}>
-              {gridHours.map(h=>(
-                <div key={h} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,left:0,right:0}}
-                  className={h%2===0?"border-t border-border/25":"border-t border-border/10"}/>
-              ))}
+              {/* Linhas de hora + meia hora */}
+              {gridHours.flatMap(h=>[
+                <div key={`h${h}`} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT,left:0,right:0,
+                  borderTop:"1px solid rgba(128,128,128,0.16)"}}/>,
+                <div key={`hh${h}`} style={{position:"absolute",top:(h-GRID_START_H)*HOUR_HEIGHT+HOUR_HEIGHT/2,left:0,right:0,
+                  borderTop:"1px solid rgba(128,128,128,0.06)"}}/>,
+              ])}
               {laid.map(({task,col,total})=>(
                 <DraggableEvent key={task.id} task={task} col={col} total={total}
                   onSelect={onTaskSelect} onToggle={onTaskToggle}/>
@@ -221,8 +237,9 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
         {days.includes(today) && nowMin>=GRID_START_H*60 && nowMin<GRID_END_H*60 && (
           <div style={{position:"absolute",top:((nowMin-GRID_START_H*60)/60)*HOUR_HEIGHT,left:44,right:0,zIndex:20,pointerEvents:"none"}}
             className="flex items-center">
-            <div className="w-2 h-2 rounded-full bg-danger -ml-1 shrink-0"/>
-            <div className="flex-1 border-t-[1.5px] border-danger"/>
+            <div className="shrink-0 rounded-full -ml-[3px]"
+              style={{width:7,height:7,backgroundColor:"#FF3B30",boxShadow:"0 0 5px rgba(255,59,48,0.6)"}}/>
+            <div className="flex-1" style={{borderTop:"1px solid rgba(255,59,48,0.55)"}}/>
           </div>
         )}
       </div>
@@ -234,27 +251,30 @@ function TimeGrid({days, tasksByDay, today, onTaskSelect, onTaskToggle, onDouble
 function DayHeaders({days, tasksByDay, today}){
   const DAY_NAMES = ["dom","seg","ter","qua","qui","sex","sáb"];
   return (
-    <div className="flex shrink-0 border-b border-border/30" style={{backgroundColor:"var(--color-bg,#111)"}}>
+    <div className="flex shrink-0" style={{borderBottom:"1px solid rgba(128,128,128,0.18)"}}>
       <div className="w-11 shrink-0"/>
       {days.map(dateStr=>{
         const d = new Date(dateStr+"T12:00:00");
         const isToday = dateStr===today;
         const isWeekend = d.getDay()===0||d.getDay()===6;
+        const label = `${DAY_NAMES[d.getDay()]}., ${d.getDate()}`;
         return (
           <div
             key={dateStr}
-            className={["flex-1 flex items-center justify-center py-2.5 min-w-0 border-l border-border/15"].join(" ")}
+            className="flex-1 flex items-center justify-center py-3 min-w-0"
+            style={{borderLeft:"1px solid rgba(128,128,128,0.12)"}}
           >
-            <span className={[
-              "text-[12px] font-normal tracking-tight select-none",
-              isToday
-                ? "text-primary font-semibold"
-                : isWeekend
-                  ? "text-danger/45"
-                  : "text-text-secondary/55",
-            ].join(" ")}>
-              {DAY_NAMES[d.getDay()]}.,&nbsp;{d.getDate()}
-            </span>
+            {isToday ? (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold select-none"
+                style={{backgroundColor:"rgba(79,142,247,0.15)",color:"#4F8EF7", letterSpacing:"-0.01em"}}>
+                {label}
+              </span>
+            ) : (
+              <span className="text-[11.5px] font-normal select-none tracking-tight"
+                style={{color: isWeekend?"rgba(255,59,48,0.45)":"rgba(128,128,128,0.50)"}}>
+                {label}
+              </span>
+            )}
           </div>
         );
       })}
@@ -265,14 +285,15 @@ function DayHeaders({days, tasksByDay, today}){
 /* ─── Linha "dia inteiro" ────────────────────────────────── */
 function AllDayRow({days, tasksByDay, onTaskSelect}){
   return (
-    <div className="flex shrink-0 border-b border-border/20" style={{minHeight:26,maxHeight:80,backgroundColor:"var(--color-bg,#111)"}}>
-      <div className="w-11 shrink-0 flex items-end justify-end pr-2 pb-1">
-        <span className="text-[9px] text-text-secondary/35 select-none leading-none">dia inteiro</span>
+    <div className="flex shrink-0" style={{minHeight:26,maxHeight:80,borderBottom:"1px solid rgba(128,128,128,0.12)"}}>
+      <div className="w-11 shrink-0 flex items-end justify-end pr-2.5 pb-1.5">
+        <span className="text-[9px] select-none leading-none" style={{color:"rgba(128,128,128,0.30)"}}>dia inteiro</span>
       </div>
       {days.map(dateStr=>{
         const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.scheduled_time);
         return (
-          <div key={dateStr} className="flex-1 flex flex-wrap gap-0.5 px-1 py-1 min-w-0 border-l border-border/15">
+          <div key={dateStr} className="flex-1 flex flex-wrap gap-0.5 px-1 py-1 min-w-0"
+            style={{borderLeft:"1px solid rgba(128,128,128,0.12)"}}>
             {tasks.slice(0,2).map(t=>(
               <button key={t.id} onClick={()=>onTaskSelect(t)}
                 className="flex items-center gap-0.5 max-w-full overflow-hidden">
@@ -319,14 +340,12 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
       {/* Cabeçalho dos dias */}
-      <div className="grid grid-cols-7 shrink-0 border-b border-border/40">
+      <div className="grid grid-cols-7 shrink-0" style={{borderBottom:"1px solid rgba(128,128,128,0.18)"}}>
         {DN.map((d,i)=>{
-          const isWknd = i===0||i===6; // dom=0, sáb=6
+          const isWknd = i===0||i===6;
           return (
-            <div key={d} className={[
-              "text-center py-1.5 text-[10px] font-medium select-none tracking-wide",
-              isWknd?"text-danger/50":"text-text-secondary/50",
-            ].join(" ")}>
+            <div key={d} className="text-center py-2 text-[9.5px] font-medium select-none tracking-widest uppercase"
+              style={{color: isWknd?"rgba(255,59,48,0.40)":"rgba(128,128,128,0.40)"}}>
               {d}
             </div>
           );
@@ -370,10 +389,14 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
                 <div
                   key={dateStr}
                   onClick={()=>onDaySelect(dateStr)}
-                  className={[
-                    "border-r border-b border-border/20 flex flex-col min-h-0 overflow-hidden cursor-pointer transition-colors",
-                    inMonth?"hover:bg-card/50 active:bg-card":"",
-                  ].join(" ")}
+                  className="flex flex-col min-h-0 overflow-hidden cursor-pointer transition-colors"
+                  style={{
+                    borderRight:"1px solid rgba(128,128,128,0.12)",
+                    borderBottom:"1px solid rgba(128,128,128,0.12)",
+                    backgroundColor: isToday?"rgba(79,142,247,0.04)":"transparent",
+                  }}
+                  onMouseEnter={e=>{ if(inMonth) e.currentTarget.style.backgroundColor=isToday?"rgba(79,142,247,0.07)":"rgba(128,128,128,0.04)"; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.backgroundColor=isToday?"rgba(79,142,247,0.04)":"transparent"; }}
                 >
                   {/* Número do dia — alinhado à DIREITA (estilo iOS) */}
                   <div className="pr-1.5 pt-1 pb-0.5 flex justify-end shrink-0">
@@ -452,34 +475,46 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
 
 /* ─── Mini mês (para visão Ano) ──────────────────────────── */
 function MiniMonthGrid({year, month, tasksByDay, today, onDayClick}){
-  const first=new Date(year,month,1), sd=first.getDay();
-  const skip=sd===0?6:sd-1;
+  const first=new Date(year,month,1);
+  const skip=first.getDay(); // domingo=0 → skip 0 (Sunday first, igual ao MonthView)
   const start=new Date(first); start.setDate(1-skip);
   const cells=[];
   const cur=new Date(start);
   for(let i=0;i<42;i++){
-    cells.push({str:localDateStr(cur), d:cur.getDate(), inMonth:cur.getMonth()===month});
+    cells.push({str:localDateStr(cur), d:cur.getDate(), inMonth:cur.getMonth()===month, wd:cur.getDay()});
     cur.setDate(cur.getDate()+1);
     if(i>=34&&cur.getMonth()!==month) break;
   }
   const MNAME=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"][month];
-  const DN2=["S","T","Q","Q","S","S","D"];
+  const DN2=["D","S","T","Q","Q","S","S"]; // dom primeiro
   return (
     <div>
-      <p className="text-xs font-semibold text-text-main mb-1.5 capitalize">{MNAME}</p>
-      <div className="grid grid-cols-7 gap-0">
-        {DN2.map((l,i)=><span key={i} className="text-[7px] text-text-secondary/40 text-center pb-0.5">{l}</span>)}
-        {cells.map(({str,d,inMonth})=>{
+      <p className="text-[11px] font-semibold mb-2 capitalize tracking-tight" style={{color:"rgba(200,200,200,0.85)"}}>{MNAME}</p>
+      <div className="grid grid-cols-7">
+        {DN2.map((l,i)=>(
+          <span key={i} className="text-center pb-1 text-[7.5px] font-medium select-none"
+            style={{color: i===0||i===6 ?"rgba(255,59,48,0.40)":"rgba(128,128,128,0.35)"}}>
+            {l}
+          </span>
+        ))}
+        {cells.map(({str,d,inMonth,wd})=>{
           const isToday=str===today;
           const hasTasks=(tasksByDay[str]??[]).some(t=>!t.completed_at);
+          const isWknd=wd===0||wd===6;
           return (
             <button key={str} onClick={()=>onDayClick(str)}
-              className="flex flex-col items-center mb-0.5">
-              <span className={["w-5 h-5 flex items-center justify-center rounded-full text-[9px] leading-none",
-                isToday?"bg-primary text-white font-bold":inMonth?"text-text-main":"text-text-secondary/20"].join(" ")}>
+              className="flex flex-col items-center pb-0.5 transition-opacity hover:opacity-80">
+              <span className="w-[18px] h-[18px] flex items-center justify-center rounded-full text-[8.5px] leading-none font-medium"
+                style={{
+                  backgroundColor: isToday?"#4F8EF7":"transparent",
+                  color: isToday?"#fff":!inMonth?"rgba(128,128,128,0.20)":isWknd?"rgba(255,59,48,0.55)":"rgba(200,200,200,0.80)",
+                  fontWeight: isToday?700:400,
+                }}>
                 {d}
               </span>
-              {hasTasks&&inMonth&&<div className="w-1 h-1 rounded-full bg-primary/60 mt-[-1px]"/>}
+              {hasTasks&&inMonth&&!isToday&&(
+                <div className="w-[3px] h-[3px] rounded-full mt-[-1px]" style={{backgroundColor:"#4F8EF7",opacity:0.6}}/>
+              )}
             </button>
           );
         })}
@@ -609,43 +644,67 @@ export function Calendar(){
         {/* ── Coluna principal ── */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden px-3 pt-4 pb-2 md:px-5">
 
-          {/* Título (adaptável) + nav + visões */}
+          {/* Título + nav + visões */}
           <div className="shrink-0 mb-3 mr-36">
-            <div className="mb-2">
-              <h1 className={["font-bold text-text-main leading-tight capitalize", view==="year"?"text-4xl":"text-2xl"].join(" ")}>
+            {/* Título */}
+            <div className="mb-3">
+              <h1 className={[
+                "font-semibold leading-none tracking-tight capitalize text-text-main",
+                view==="year"?"text-3xl":"text-xl",
+              ].join(" ")}>
                 {headerTitle}
               </h1>
-              {headerSub && <p className="text-sm text-text-secondary mt-0.5 capitalize">{headerSub}</p>}
+              {headerSub && (
+                <p className="text-[12px] mt-1 capitalize" style={{color:"rgba(128,128,128,0.55)"}}>
+                  {headerSub}
+                </p>
+              )}
             </div>
 
-            {/* Nav + visões numa linha */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-0.5">
+            {/* Nav + view switcher */}
+            <div className="flex items-center gap-3">
+              {/* Navegação */}
+              <div className="flex items-center gap-1">
                 <button onClick={goBack} title="← K"
-                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-card text-text-secondary hover:text-text-main transition-colors">‹</button>
-                <button onClick={goToday} title="T"
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border text-text-secondary hover:border-primary hover:text-primary transition-colors">Hoje</button>
+                  className="w-7 h-7 flex items-center justify-center rounded-full transition-colors text-text-secondary hover:text-text-main hover:bg-card">
+                  <ChevronLeft/>
+                </button>
+                <button onClick={goToday} title="Hoje (T)"
+                  className="text-[11px] font-medium px-3 py-1.5 rounded-full transition-all text-text-secondary hover:text-text-main"
+                  style={{border:"1px solid rgba(128,128,128,0.25)"}}>
+                  Hoje
+                </button>
                 <button onClick={goForward} title="J →"
-                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-card text-text-secondary hover:text-text-main transition-colors">›</button>
+                  className="w-7 h-7 flex items-center justify-center rounded-full transition-colors text-text-secondary hover:text-text-main hover:bg-card">
+                  <ChevronRight/>
+                </button>
               </div>
 
-              <div className="flex gap-0.5 bg-bg rounded-lg p-0.5 border border-border ml-auto">
-                {VIEWS.map(v=>(
-                  <button key={v.id} onClick={()=>setView(v.id)} title={`${v.label} (${v.shortcut})`}
-                    className={["text-[11px] px-2.5 py-1 rounded-md transition-colors whitespace-nowrap",
-                      (v.id===view||(v.id==="day"&&["3day","workweek"].includes(view)))
-                        ?"bg-card shadow-sm text-text-main font-medium"
-                        :"text-text-secondary hover:text-text-main"].join(" ")}>
-                    {v.label}
-                  </button>
-                ))}
+              {/* Segmented control */}
+              <div className="ml-auto flex items-center p-0.5 rounded-lg gap-px"
+                style={{backgroundColor:"rgba(128,128,128,0.10)",border:"1px solid rgba(128,128,128,0.14)"}}>
+                {VIEWS.map(v=>{
+                  const active = v.id===view||(v.id==="day"&&["3day","workweek"].includes(view));
+                  return (
+                    <button key={v.id} onClick={()=>setView(v.id)} title={`${v.label} (${v.shortcut})`}
+                      className="text-[11px] px-3 py-1 rounded-md transition-all whitespace-nowrap font-medium"
+                      style={{
+                        backgroundColor: active?"rgba(255,255,255,0.08)":"transparent",
+                        color: active?"rgba(220,220,220,0.95)":"rgba(128,128,128,0.55)",
+                        boxShadow: active?"0 1px 3px rgba(0,0,0,0.25)":"none",
+                      }}>
+                      {v.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
 
           {/* Área de conteúdo */}
           {isTimeline ? (
-            <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-border overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden"
+              style={{border:"1px solid rgba(128,128,128,0.18)"}}>
               <DayHeaders days={days} tasksByDay={tasksByDay} today={today}/>
               <AllDayRow  days={days} tasksByDay={tasksByDay} onTaskSelect={setSelected}/>
               <TimeGrid
@@ -654,18 +713,21 @@ export function Calendar(){
                 onDoubleClick={handleDoubleClick} gridRef={gridRef}
               />
               {view==="day"&&(
-                <p className="text-[9px] text-text-secondary/30 text-center py-1 shrink-0 select-none">
-                  Duplo clique para nova tarefa · Arrastar para mover
+                <p className="text-[9px] text-center py-1.5 shrink-0 select-none"
+                  style={{color:"rgba(128,128,128,0.25)"}}>
+                  Duplo clique para criar · Arrastar para mover
                 </p>
               )}
             </div>
           ) : view==="month" ? (
-            <div className="flex-1 min-h-0 rounded-xl border border-border overflow-hidden">
+            <div className="flex-1 min-h-0 rounded-xl overflow-hidden"
+              style={{border:"1px solid rgba(128,128,128,0.18)"}}>
               <MonthView anchor={anchor} tasksByDay={tasksByDay} today={today}
                 onDaySelect={onDaySelect} onTaskSelect={setSelected}/>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 rounded-xl border border-border overflow-hidden">
+            <div className="flex-1 min-h-0 rounded-xl overflow-hidden"
+              style={{border:"1px solid rgba(128,128,128,0.18)"}}>
               <YearView anchor={anchor} tasksByDay={tasksByDay} today={today}
                 onDayClick={onDaySelect}/>
             </div>
