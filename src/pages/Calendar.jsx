@@ -288,11 +288,15 @@ function AllDayRow({days, tasksByDay, onTaskSelect}){
 }
 
 /* ─── Visão Mês ──────────────────────────────────────────── */
+const MONTH_SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
 function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
   const ref = new Date(anchor+"T12:00:00");
   const year=ref.getFullYear(), month=ref.getMonth();
-  const first=new Date(year,month,1), sd=first.getDay();
-  const skip = sd===0?6:sd-1;
+
+  // iOS usa domingo como primeira coluna (getDay() 0=dom)
+  const first=new Date(year,month,1);
+  const skip = first.getDay(); // 0=dom → skip 0, 1=seg → skip 1, etc.
   const start=new Date(first); start.setDate(1-skip);
 
   const weeks=[];
@@ -301,29 +305,32 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
     const week=[];
     for(let d=0;d<7;d++){week.push(localDateStr(cur));cur.setDate(cur.getDate()+1);}
     weeks.push(week);
+    // Para quando a semana extra começa em mês seguinte
     if(w>=4&&new Date(week[6]+"T12:00:00").getMonth()!==month) break;
   }
 
-  // cabeçalho seg → dom (segunda começa semana no Brasil)
-  const DN=["seg","ter","qua","qui","sex","sáb","dom"];
+  // Cabeçalho: dom, seg, ter, qua, qui, sex, sáb  (iOS = Sunday first)
+  const DN=["dom.","seg.","ter.","qua.","qui.","sex.","sáb."];
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
-      {/* Cabeçalho dos dias da semana */}
-      <div className="grid grid-cols-7 shrink-0 border-b border-border/50">
+      {/* Cabeçalho dos dias */}
+      <div className="grid grid-cols-7 shrink-0 border-b border-border/40">
         {DN.map((d,i)=>{
-          const isWknd = i>=5; // sáb=5, dom=6
+          const isWknd = i===0||i===6; // dom=0, sáb=6
           return (
-            <div key={d} className={["text-center py-2 text-[10px] font-semibold uppercase tracking-widest select-none",
-              isWknd?"text-danger/50":"text-text-secondary/50"].join(" ")}>
+            <div key={d} className={[
+              "text-center py-1.5 text-[10px] font-medium select-none tracking-wide",
+              isWknd?"text-danger/50":"text-text-secondary/50",
+            ].join(" ")}>
               {d}
             </div>
           );
         })}
       </div>
 
-      {/* Grade de semanas — cada linha ocupa fração igual da altura restante */}
+      {/* Grade — cada semana ocupa 1fr da altura disponível */}
       <div
         className="flex-1 min-h-0 overflow-hidden"
         style={{display:"grid", gridTemplateRows:`repeat(${weeks.length},1fr)`}}
@@ -337,30 +344,24 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
             {week.map(dateStr=>{
               const d      = new Date(dateStr+"T12:00:00");
               const dayNum = d.getDate();
-              const inMonth= d.getMonth()===month;
+              const dayMonth = d.getMonth();
+              const inMonth= dayMonth===month;
               const isToday= dateStr===today;
               const isWknd = d.getDay()===0||d.getDay()===6;
+              // Exibe "1 de jul." quando é o dia 1 de qualquer mês
+              const isFirstOfMonth = dayNum===1;
+              const dayLabel = isFirstOfMonth
+                ? `1 de ${MONTH_SHORT[dayMonth]}.`
+                : String(dayNum);
 
-              // Ordena: não concluídas primeiro, depois concluídas; dentro de cada grupo por hora
-              const allTasks = (tasksByDay[dateStr]??[]).sort((a,b)=>{
+              const allTasks = (tasksByDay[dateStr]??[]).slice().sort((a,b)=>{
                 const ad=a.completed_at?1:0, bd=b.completed_at?1:0;
                 if(ad!==bd) return ad-bd;
                 return (a.scheduled_time??"")<(b.scheduled_time??"")?-1:1;
               });
-
-              // Quantas linhas a célula aguenta? estimamos 4 para células normais
               const MAX=4;
               const visible=allTasks.slice(0,MAX);
               const overflow=allTasks.length-MAX;
-
-              // Cor do número do dia
-              const numCls = isToday
-                ? "bg-primary text-white font-bold"
-                : !inMonth
-                  ? "text-text-secondary/20"
-                  : isWknd
-                    ? "text-danger/60 font-semibold"
-                    : "text-text-main font-semibold";
 
               return (
                 <div
@@ -368,21 +369,28 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
                   onClick={()=>onDaySelect(dateStr)}
                   className={[
                     "border-r border-b border-border/20 flex flex-col min-h-0 overflow-hidden cursor-pointer transition-colors",
-                    inMonth?"hover:bg-card/50":"",
+                    inMonth?"hover:bg-card/50 active:bg-card":"",
                   ].join(" ")}
                 >
-                  {/* Número do dia — topo esquerdo, estilo iOS */}
-                  <div className="px-1.5 pt-1.5 pb-0.5 shrink-0">
+                  {/* Número do dia — alinhado à DIREITA (estilo iOS) */}
+                  <div className="pr-1.5 pt-1 pb-0.5 flex justify-end shrink-0">
                     <span className={[
-                      "inline-flex items-center justify-center w-[22px] h-[22px] rounded-full text-[12px] leading-none",
-                      numCls,
+                      "inline-flex items-center justify-center rounded-full text-[11px] leading-none px-1",
+                      isFirstOfMonth ? "text-[9.5px] h-[20px] min-w-[20px]" : "w-[20px] h-[20px]",
+                      isToday
+                        ? "bg-primary text-white font-bold"
+                        : !inMonth
+                          ? "text-text-secondary/20"
+                          : isWknd
+                            ? "text-danger/70 font-medium"
+                            : "text-text-main font-medium",
                     ].join(" ")}>
-                      {dayNum}
+                      {dayLabel}
                     </span>
                   </div>
 
-                  {/* Lista de tarefas — preenche o resto da célula */}
-                  <div className="flex-1 min-h-0 overflow-hidden px-0.5 pb-1 flex flex-col gap-px">
+                  {/* Tarefas */}
+                  <div className="flex-1 min-h-0 overflow-hidden px-0.5 pb-0.5 flex flex-col gap-px">
                     {visible.map(t=>{
                       const done=!!t.completed_at;
                       const urgent=t.is_urgent&&!done;
@@ -392,36 +400,39 @@ function MonthView({anchor, tasksByDay, today, onDaySelect, onTaskSelect}){
                           key={t.id}
                           onClick={e=>{e.stopPropagation();onTaskSelect(t);}}
                           className={[
-                            "w-full flex items-center gap-1 text-left px-1 py-[1px] rounded transition-colors overflow-hidden shrink-0",
-                            !inMonth?"opacity-30":"",
-                            done?"hover:bg-border/20":"hover:bg-card",
+                            "w-full flex items-center gap-1 text-left px-1 py-[1.5px] rounded transition-colors overflow-hidden shrink-0",
+                            !inMonth?"opacity-25":"",
                           ].join(" ")}
                         >
-                          {/* Bolinha colorida */}
+                          {/* Círculo colorido (iOS usa círculo, não ponto) */}
                           <span
-                            className="shrink-0 w-[6px] h-[6px] rounded-full mt-px"
-                            style={{backgroundColor:dotColor, opacity: done?0.5:1}}
+                            className={`shrink-0 rounded-full border-2`}
+                            style={{
+                              width:10, height:10,
+                              borderColor: dotColor,
+                              backgroundColor: done ? dotColor : "transparent",
+                              opacity: done ? 0.5 : 1,
+                              flexShrink:0,
+                            }}
                           />
                           {/* Título */}
                           <span className={[
-                            "flex-1 min-w-0 text-[10.5px] leading-snug truncate",
-                            done?"line-through text-text-secondary/40":"text-text-main",
+                            "flex-1 min-w-0 text-[10px] leading-snug truncate",
+                            done?"line-through text-text-secondary/35":"text-text-main",
                           ].join(" ")}>
                             {t.title}
                           </span>
-                          {/* Horário */}
+                          {/* Horário à direita */}
                           {t.scheduled_time&&(
-                            <span className="shrink-0 text-[8.5px] tabular-nums text-text-secondary/50 ml-0.5">
+                            <span className="shrink-0 text-[8.5px] tabular-nums text-text-secondary/45 ml-0.5 leading-none">
                               {t.scheduled_time.slice(0,5)}
                             </span>
                           )}
                         </button>
                       );
                     })}
-
-                    {/* Overflow */}
                     {overflow>0&&(
-                      <p className="text-[9px] italic text-text-secondary/40 pl-2 leading-tight shrink-0">
+                      <p className="text-[9px] text-text-secondary/40 pl-2.5 leading-tight shrink-0 select-none">
                         e mais {overflow}
                       </p>
                     )}
@@ -541,7 +552,7 @@ export function Calendar(){
   const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:6}}));
 
   const onDragStart = ({active})=>setDragging(active.data.current?.task??null);
-  const onDragEnd = ({active,over,delta})=>{
+  const onDragEnd = async ({active,over,delta})=>{
     setDragging(null);
     if(!over||!active.data.current) return;
     const task=active.data.current.task;
@@ -551,8 +562,11 @@ export function Calendar(){
     const snapped=snapQ(orig+deltaMin);
     const clamped=Math.max(GRID_START_H*60,Math.min((GRID_END_H-1)*60,snapped));
     const newTime=minutesToTime(clamped);
-    if(newDate!==task.scheduled_date||newTime!==task.scheduled_time)
-      updateTask(task.id,{scheduled_date:newDate,scheduled_time:newTime});
+    if(newDate!==task.scheduled_date||newTime!==task.scheduled_time){
+      const updated = await updateTask(task.id,{scheduled_date:newDate,scheduled_time:newTime});
+      // Atualiza o painel lateral se a tarefa arrastada estiver aberta
+      if(updated && selected?.id===task.id) setSelected(updated);
+    }
   };
 
   /* ── Atalhos ── */
