@@ -308,45 +308,6 @@ function DayHeaders({days, tasksByDay, today}){
   );
 }
 
-/* ─── Linha "dia inteiro" ────────────────────────────────── */
-function AllDayRow({days, tasksByDay, onTaskSelect}){
-  return (
-    <div className="flex shrink-0" style={{minHeight:28,maxHeight:80,borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
-      {/* Rótulo vertical para caber em w-14 sem quebrar */}
-      <div className="w-14 shrink-0 flex items-center justify-center">
-        <span className="select-none text-[9px] font-medium"
-          style={{
-            writingMode:"vertical-rl",
-            textOrientation:"mixed",
-            transform:"rotate(180deg)",
-            color:"rgba(200,200,200,0.30)",
-            letterSpacing:"0.06em",
-          }}>
-          dia inteiro
-        </span>
-      </div>
-      {days.map(dateStr=>{
-        const tasks=(tasksByDay[dateStr]??[]).filter(t=>!t.scheduled_time);
-        return (
-          <div key={dateStr} className="flex-1 flex flex-wrap gap-0.5 px-1 py-1 min-w-0"
-            style={{borderLeft:"1px solid rgba(255,255,255,0.07)"}}>
-            {tasks.slice(0,2).map(t=>(
-              <button key={t.id} onClick={()=>onTaskSelect(t)}
-                className="flex items-center gap-0.5 max-w-full overflow-hidden">
-                <EventCircle done={!!t.completed_at} urgent={t.is_urgent&&!t.completed_at} size={9}/>
-                <span className={`text-[9px] truncate ${t.completed_at?"line-through text-text-secondary/50":"text-text-main"}`}>
-                  {t.title}
-                </span>
-              </button>
-            ))}
-            {tasks.length>2&&<span className="text-[8px] text-text-secondary/50">mais {tasks.length-2}</span>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /* ─── Visão Mês ──────────────────────────────────────────── */
 const MONTH_SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 
@@ -743,7 +704,6 @@ export function Calendar(){
             <div className="flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden"
               style={{border:"1px solid rgba(255,255,255,0.10)"}}>
               <DayHeaders days={days} tasksByDay={tasksByDay} today={today}/>
-              <AllDayRow  days={days} tasksByDay={tasksByDay} onTaskSelect={setSelected}/>
               <TimeGrid
                 days={days} tasksByDay={tasksByDay} today={today}
                 onTaskSelect={setSelected} onTaskToggle={handleToggle}

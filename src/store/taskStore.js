@@ -60,6 +60,7 @@ export const useTaskStore = create((set, get) => ({
   tasks: [],
   subtasks: {},
   loading: false,
+  _creating: false, // guard anti-duplicação
 
   // --- Load ---
   fetchTasks: async () => {
@@ -86,22 +87,28 @@ export const useTaskStore = create((set, get) => ({
 
   // --- Create ---
   createTask: async (fields) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const autoTime = fields.scheduled_date
-      ? { scheduled_time: nextSequentialTime(fields.scheduled_date, get().tasks) }
-      : {};
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert([{ duration_minutes: 30, ...autoTime, ...fields, user_id: user.id }])
-      .select()
-      .single();
-    if (error) {
-      console.error("createTask error:", error);
-      alert("Erro ao criar tarefa: " + error.message + "\n\nVerifique se rodou as migrations no Supabase.");
-      return null;
+    if (get()._creating) return null; // evita duplo-submit
+    set({ _creating: true });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const autoTime = fields.scheduled_date && !fields.scheduled_time
+        ? { scheduled_time: nextSequentialTime(fields.scheduled_date, get().tasks) }
+        : {};
+      const { data, error } = await supabase
+        .from("tasks")
+        .insert([{ duration_minutes: 30, ...autoTime, ...fields, user_id: user.id }])
+        .select()
+        .single();
+      if (error) {
+        console.error("createTask error:", error);
+        alert("Erro ao criar tarefa: " + error.message + "\n\nVerifique se rodou as migrations no Supabase.");
+        return null;
+      }
+      if (data) set((s) => ({ tasks: [data, ...s.tasks] }));
+      return data;
+    } finally {
+      set({ _creating: false });
     }
-    if (data) set((s) => ({ tasks: [data, ...s.tasks] }));
-    return data;
   },
 
   // --- Update ---
@@ -281,6 +288,42 @@ export const useTaskStore = create((set, get) => ({
       onAction: () => get().restoreTask(id),
     });
   },
+
+  // Apaga esta instância + todas as recorrências futuras com mesmo título e padrão
+  deleteRecurrenceFuture: async (id) => {
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    // Busca todas as ocorrências futuras não concluídas com o mesmo título e recorrência
+    const now = new Date().toISOString().split("T")[0];
+    const { data: siblings } = await supabase
+      .from("tasks")
+      .select("id")
+      .eq("title", task.title)
+      .eq("recurrence", task.recurrence)
+      .eq("user_id", task.user_id)
+      .gte("scheduled_date", task.scheduled_date ?? now)
+      .is("completed_at", null)
+      .is("deleted_at", null);
+
+    const idsToDelete = (siblings ?? []).map((s) => s.id);
+    if (idsToDelete.length === 0) {
+      await get().deleteTask(id);
+      return;
+    }
+
+    const deletedAt = new Date().toISOString();
+    await supabase.from("tasks").update({ deleted_at: deletedAt }).in("id", idsToDelete);
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        idsToDelete.includes(t.id) ? { ...t, deleted_at: deletedAt } : t
+      ),
+    }));
+    useUiStore.getState().showToast({
+      message: `${idsToDelete.length} lembrete${idsToDelete.length > 1 ? "s" : ""} na lixeira`,
+    });
+  },
+
   restoreTask: async (id) => get().updateTask(id, { deleted_at: null }),
   permanentDeleteTask: async (id) => {
     await supabase.from("tasks").delete().eq("id", id);

@@ -3,6 +3,7 @@ import { useTaskStore } from "../../store/taskStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAreaStore } from "../../store/areaStore";
 import { DURATION_PRESETS, durationLabel } from "../../store/settingsStore";
+import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 
 function localDateStr(d = new Date()) {
   return (
@@ -29,9 +30,10 @@ function nextMonday() {
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
 
 export function TaskDetail({ task, onClose }) {
-  const { updateTask, deleteTask, archiveTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
+  const { updateTask, deleteTask, deleteRecurrenceFuture, archiveTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, fetchTags, createTag, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
+  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
 
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? "");
@@ -91,9 +93,13 @@ export function TaskDetail({ task, onClose }) {
     setNewSubtask("");
   };
 
-  const handleDelete = async () => {
-    await deleteTask(task.id);
-    onClose();
+  const handleDelete = () => {
+    if (task.recurrence) {
+      setShowRecurrenceModal(true);
+    } else {
+      deleteTask(task.id);
+      onClose();
+    }
   };
 
   const handleArchive = async () => {
@@ -534,6 +540,22 @@ export function TaskDetail({ task, onClose }) {
       {/* Safe area spacer on mobile */}
       <div className="md:hidden shrink-0" style={{ height: "env(safe-area-inset-bottom)" }} />
     </aside>
+
+    {/* Modal de confirmação para exclusão de tarefa recorrente */}
+    {showRecurrenceModal && (
+      <RecurrenceDeleteModal
+        task={task}
+        onDeleteThis={() => {
+          deleteTask(task.id);
+          onClose();
+        }}
+        onDeleteFuture={() => {
+          deleteRecurrenceFuture(task.id);
+          onClose();
+        }}
+        onCancel={() => setShowRecurrenceModal(false)}
+      />
+    )}
     </>
   );
 }

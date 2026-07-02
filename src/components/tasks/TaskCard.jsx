@@ -8,6 +8,7 @@ import { useTagStore } from "../../store/tagStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { durationLabel, DURATION_PRESETS } from "../../store/settingsStore";
+import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 
 // Usa data LOCAL (não UTC) para evitar bug de timezone em fusos negativos (BR = UTC-3)
 function localDateStr(d = new Date()) {
@@ -289,7 +290,8 @@ function TaskMenuPortal({ task, buttonId, onClose }) {
 }
 
 function TaskMenu({ task, onClose }) {
-  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
+  const { deleteTask, deleteRecurrenceFuture, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
+  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -348,9 +350,29 @@ function TaskMenu({ task, onClose }) {
         </button>
       )}
       <div className="h-px bg-border mx-2 my-1" />
-      <button onClick={run(() => deleteTask(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm !text-danger transition-colors">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (task.recurrence) {
+            setShowRecurrenceModal(true);
+          } else {
+            deleteTask(task.id);
+            onClose();
+          }
+        }}
+        className="menu-item w-full text-left px-3 py-2.5 text-sm !text-danger transition-colors"
+      >
         🗑️ Mover para lixeira
       </button>
+
+      {showRecurrenceModal && (
+        <RecurrenceDeleteModal
+          task={task}
+          onDeleteThis={() => { deleteTask(task.id); onClose(); }}
+          onDeleteFuture={() => { deleteRecurrenceFuture(task.id); onClose(); }}
+          onCancel={() => setShowRecurrenceModal(false)}
+        />
+      )}
     </div>
   );
 }
