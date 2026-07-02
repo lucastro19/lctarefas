@@ -31,7 +31,7 @@ function nextMonday() {
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
 
 export function TaskDetail({ task, onClose }) {
-  const { updateTask, deleteTask, archiveTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, deleteSubtask } = useTaskStore();
+  const { updateTask, deleteTask, archiveTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, fetchTags, createTag, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { session } = useAuthStore();
@@ -46,6 +46,8 @@ export function TaskDetail({ task, onClose }) {
   const [durationMinutes, setDurationMinutes] = useState(task.duration_minutes ?? "");
   const [customDuration, setCustomDuration] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
+  const [editingSubtaskId, setEditingSubtaskId] = useState(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("");
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [creatingTag, setCreatingTag] = useState(false);
   const [newTagName, setNewTagName] = useState("");
@@ -53,6 +55,8 @@ export function TaskDetail({ task, onClose }) {
   const [saving, setSaving] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
   const contextPickerRef = useRef(null);
+  const [localAreaId, setLocalAreaId] = useState(task.area_id ?? null);
+  const [localProjectId, setLocalProjectId] = useState(task.project_id ?? null);
 
   const taskSubtasks = subtasks[task.id] ?? [];
   const taskTagList = taskTags[task.id] ?? [];
@@ -112,22 +116,23 @@ export function TaskDetail({ task, onClose }) {
     }
   };
 
-  const handleContextChange = async (e) => {
-    const val = e.target.value;
+  const handleContextChange = async (val) => {
     if (val === "") {
+      setLocalAreaId(null);
+      setLocalProjectId(null);
       await updateTask(task.id, { project_id: null, area_id: null });
     } else if (val.startsWith("area:")) {
-      await updateTask(task.id, { area_id: val.replace("area:", ""), project_id: null });
+      const id = val.replace("area:", "");
+      setLocalAreaId(id);
+      setLocalProjectId(null);
+      await updateTask(task.id, { area_id: id, project_id: null });
     } else if (val.startsWith("project:")) {
-      await updateTask(task.id, { project_id: val.replace("project:", ""), area_id: null });
+      const id = val.replace("project:", "");
+      setLocalProjectId(id);
+      setLocalAreaId(null);
+      await updateTask(task.id, { project_id: id, area_id: null });
     }
   };
-
-  const currentContextValue = task.project_id
-    ? `project:${task.project_id}`
-    : task.area_id
-    ? `area:${task.area_id}`
-    : "";
 
   const availableTags = tags.filter((t) => !taskTagList.find((tt) => tt.id === t.id));
 
@@ -159,7 +164,7 @@ export function TaskDetail({ task, onClose }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => save()}
-          className="w-full font-semibold text-base text-text-main outline-none bg-transparent border-b border-transparent focus:border-border pb-1"
+          className="w-full font-semibold text-xl text-text-main outline-none bg-transparent border-b border-transparent focus:border-border pb-1"
         />
 
         {/* Context (projeto / área) — visual picker */}
@@ -169,15 +174,15 @@ export function TaskDetail({ task, onClose }) {
             onClick={() => setShowContextPicker((v) => !v)}
             className="w-full flex items-center gap-2 text-xs bg-bg border border-border rounded-lg px-3 py-2 outline-none text-left hover:border-primary/50 transition-colors"
           >
-            {task.project_id ? (
+            {localProjectId ? (
               <>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: projects.find((p) => p.id === task.project_id)?.color ?? "#8E8E93" }} />
-                <span className="flex-1 text-text-main truncate">{projects.find((p) => p.id === task.project_id)?.name ?? "Projeto"}</span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: projects.find((p) => p.id === localProjectId)?.color ?? "#8E8E93" }} />
+                <span className="flex-1 text-text-main truncate">{projects.find((p) => p.id === localProjectId)?.name ?? "Projeto"}</span>
               </>
-            ) : task.area_id ? (
+            ) : localAreaId ? (
               <>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: areas.find((a) => a.id === task.area_id)?.color ?? "#8E8E93" }} />
-                <span className="flex-1 text-text-main truncate">{areas.find((a) => a.id === task.area_id)?.name ?? "Área"}</span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: areas.find((a) => a.id === localAreaId)?.color ?? "#8E8E93" }} />
+                <span className="flex-1 text-text-main truncate">{areas.find((a) => a.id === localAreaId)?.name ?? "Área"}</span>
               </>
             ) : (
               <span className="flex-1 text-text-secondary">Inbox (sem contexto)</span>
@@ -188,8 +193,8 @@ export function TaskDetail({ task, onClose }) {
           {showContextPicker && (
             <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 max-h-64 overflow-y-auto">
               <button
-                onClick={() => { handleContextChange({ target: { value: "" } }); setShowContextPicker(false); }}
-                className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg", !task.project_id && !task.area_id ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
+                onClick={() => { handleContextChange(""); setShowContextPicker(false); }}
+                className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg", !localProjectId && !localAreaId ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
               >
                 <span className="w-2 h-2 rounded-full bg-[#8E8E93] shrink-0" />
                 Inbox (sem contexto)
@@ -200,8 +205,8 @@ export function TaskDetail({ task, onClose }) {
                 return (
                   <div key={area.id}>
                     <button
-                      onClick={() => { handleContextChange({ target: { value: `area:${area.id}` } }); setShowContextPicker(false); }}
-                      className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg font-medium", task.area_id === area.id && !task.project_id ? "text-primary" : "text-text-main"].join(" ")}
+                      onClick={() => { handleContextChange(`area:${area.id}`); setShowContextPicker(false); }}
+                      className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg font-medium", localAreaId === area.id && !localProjectId ? "text-primary" : "text-text-main"].join(" ")}
                     >
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
                       {area.name}
@@ -209,8 +214,8 @@ export function TaskDetail({ task, onClose }) {
                     {areaProjects.map((p) => (
                       <button
                         key={p.id}
-                        onClick={() => { handleContextChange({ target: { value: `project:${p.id}` } }); setShowContextPicker(false); }}
-                        className={["w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-xs text-left transition-colors hover:bg-bg", task.project_id === p.id ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
+                        onClick={() => { handleContextChange(`project:${p.id}`); setShowContextPicker(false); }}
+                        className={["w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-xs text-left transition-colors hover:bg-bg", localProjectId === p.id ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
                         {p.name}
@@ -474,14 +479,33 @@ export function TaskDetail({ task, onClose }) {
                   type="checkbox"
                   checked={st.completed}
                   onChange={(e) => toggleSubtask(task.id, st.id, e.target.checked)}
-                  className="accent-success w-4 h-4 rounded cursor-pointer"
+                  className="accent-success w-4 h-4 rounded cursor-pointer shrink-0"
                 />
-                <span className={["text-sm flex-1", st.completed ? "line-through text-text-secondary" : "text-text-main"].join(" ")}>
-                  {st.title}
-                </span>
+                {editingSubtaskId === st.id ? (
+                  <input
+                    autoFocus
+                    value={editingSubtaskTitle}
+                    onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                    onBlur={() => {
+                      if (editingSubtaskTitle.trim()) updateSubtask(task.id, st.id, editingSubtaskTitle.trim());
+                      setEditingSubtaskId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Escape") e.target.blur();
+                    }}
+                    className="text-sm flex-1 bg-transparent outline-none border-b border-primary text-text-main"
+                  />
+                ) : (
+                  <span
+                    onClick={() => { setEditingSubtaskId(st.id); setEditingSubtaskTitle(st.title); }}
+                    className={["text-sm flex-1 cursor-text", st.completed ? "line-through text-text-secondary" : "text-text-main"].join(" ")}
+                  >
+                    {st.title}
+                  </span>
+                )}
                 <button
                   onClick={() => deleteSubtask(task.id, st.id)}
-                  className="text-transparent group-hover:text-text-secondary hover:!text-danger text-xs transition-colors"
+                  className="text-transparent group-hover:text-text-secondary hover:!text-danger text-xs transition-colors shrink-0"
                 >
                   ×
                 </button>

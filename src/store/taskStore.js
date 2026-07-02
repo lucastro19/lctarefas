@@ -141,7 +141,19 @@ export const useTaskStore = create((set, get) => ({
           position: 0,
           user_id: user.id,
         }]).select().single();
-        if (data) set((s) => ({ tasks: [data, ...s.tasks] }));
+        if (data) {
+          set((s) => ({ tasks: [data, ...s.tasks] }));
+          // Herda as tags da tarefa original
+          const { data: tagRows } = await supabase
+            .from("task_tags")
+            .select("tag_id")
+            .eq("task_id", id);
+          if (tagRows?.length) {
+            await supabase.from("task_tags").insert(
+              tagRows.map((r) => ({ task_id: data.id, tag_id: r.tag_id }))
+            );
+          }
+        }
       }
     }
   },
@@ -290,6 +302,18 @@ export const useTaskStore = create((set, get) => ({
         ...s.subtasks,
         [taskId]: (s.subtasks[taskId] ?? []).map((st) =>
           st.id === subtaskId ? { ...st, completed } : st
+        ),
+      },
+    }));
+  },
+
+  updateSubtask: async (taskId, subtaskId, title) => {
+    await supabase.from("subtasks").update({ title }).eq("id", subtaskId);
+    set((s) => ({
+      subtasks: {
+        ...s.subtasks,
+        [taskId]: (s.subtasks[taskId] ?? []).map((st) =>
+          st.id === subtaskId ? { ...st, title } : st
         ),
       },
     }));

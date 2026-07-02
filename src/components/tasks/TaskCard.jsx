@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "../ui/Checkbox";
@@ -281,6 +282,24 @@ function UrgencyButton({ task, updateTask }) {
 }
 
 /* ── Menu contextual ── */
+function TaskMenuPortal({ task, buttonId, onClose }) {
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+
+  useEffect(() => {
+    const btn = document.getElementById(buttonId);
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    }
+  }, [buttonId]);
+
+  return (
+    <div style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 9999 }}>
+      <TaskMenu task={task} onClose={onClose} />
+    </div>
+  );
+}
+
 function TaskMenu({ task, onClose }) {
   const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
   const ref = useRef(null);
@@ -639,16 +658,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const swipeRight = swipeX > 0;
 
   return (
-    <div ref={cardRef} className="relative overflow-hidden rounded-card">
-      {/* Swipe reveal backgrounds */}
-      {swipeActive && (
-        <div className={[
-          "absolute inset-0 flex items-center px-5 rounded-card transition-opacity",
-          swipeRight ? "justify-start bg-success/15" : "justify-end bg-danger/15",
-        ].join(" ")}>
-          <span className="text-xl">{swipeRight ? (task.completed_at ? "↩️" : "✅") : "🗑️"}</span>
-        </div>
-      )}
+    <div ref={cardRef} className="relative rounded-card" style={{ zIndex: showMenu ? 20 : undefined }}>
     <div
       ref={setNodeRef}
       style={{
@@ -662,7 +672,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
       className={[
-        "task-card group relative",
+        "task-card group relative overflow-hidden rounded-card",
         completing ? "opacity-50" : "",
         task.completed_at ? "opacity-40" : "",
         isDragging ? "opacity-30" : "",
@@ -671,6 +681,15 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         isUrgent ? "is-urgent" : "",
       ].join(" ")}
     >
+      {/* Swipe reveal backgrounds */}
+      {swipeActive && (
+        <div className={[
+          "absolute inset-0 flex items-center px-5 rounded-card transition-opacity",
+          swipeRight ? "justify-start bg-success/15" : "justify-end bg-danger/15",
+        ].join(" ")}>
+          <span className="text-xl">{swipeRight ? (task.completed_at ? "↩️" : "✅") : "🗑️"}</span>
+        </div>
+      )}
       <div className="task-card-row">
         {/* Arraste */}
         <div
@@ -901,12 +920,17 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         {/* Menu ··· */}
         <div className="relative shrink-0" onDoubleClick={(e) => e.stopPropagation()}>
           <button
+            ref={(el) => { if (el) el._menuBtn = true; }}
+            id={`menu-btn-${task.id}`}
             onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
             className="text-[#8E8E93] hover:text-[#1C1C1E] dark:text-white/50 dark:hover:text-white/90 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:bg-bg"
           >
             ···
           </button>
-          {showMenu && <TaskMenu task={task} onClose={() => setShowMenu(false)} />}
+          {showMenu && createPortal(
+            <TaskMenuPortal task={task} buttonId={`menu-btn-${task.id}`} onClose={() => setShowMenu(false)} />,
+            document.body
+          )}
         </div>
       </div>
 
