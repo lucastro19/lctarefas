@@ -31,9 +31,21 @@ const IconTrash = () => (
   </svg>
 );
 
+const IconCalendar = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+
 export function BulkActionBar() {
   const { selectedIds, clearAll } = useSelectionStore();
   const { bulkUpdate, bulkMoveToToday } = useTaskStore();
+
+  const tomorrow = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  };
 
   if (selectedIds.length === 0) return null;
 
@@ -49,6 +61,11 @@ export function BulkActionBar() {
       label: "Hoje",
       icon: <IconSun />,
       onClick: async () => { await bulkMoveToToday(selectedIds); clearAll(); },
+    },
+    {
+      label: "Amanhã",
+      icon: <IconCalendar />,
+      onClick: () => run({ scheduled_date: tomorrow(), someday: false, archived_at: null }),
     },
     {
       label: "Depois",

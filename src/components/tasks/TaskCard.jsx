@@ -10,6 +10,7 @@ import { useUiStore } from "../../store/uiStore";
 import { durationLabel, DURATION_PRESETS } from "../../store/settingsStore";
 import { useAreaStore } from "../../store/areaStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
+import { useTemplateStore } from "../../store/templateStore";
 
 // Usa data LOCAL (não UTC) para evitar bug de timezone em fusos negativos (BR = UTC-3)
 function localDateStr(d = new Date()) {
@@ -81,16 +82,20 @@ const REMINDER_OPTIONS = [
   { value: 1440,  label: "1 dia antes" },
 ];
 
-const NOTE_LINK_RE = /(https?:\/\/[^\s<]+|(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)(?:9\s?)?\d{4}[-\s]?\d{4})/g;
+const NOTE_SEGMENT_RE = /(\*\*(.+?)\*\*|_(.+?)_|`([^`]+)`|https?:\/\/[^\s<]+|(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)(?:9\s?)?\d{4}[-\s]?\d{4})/g;
 
 function parseNotes(text) {
   const parts = [];
   let last = 0, m;
-  NOTE_LINK_RE.lastIndex = 0;
-  while ((m = NOTE_LINK_RE.exec(text)) !== null) {
+  NOTE_SEGMENT_RE.lastIndex = 0;
+  while ((m = NOTE_SEGMENT_RE.exec(text)) !== null) {
     if (m.index > last) parts.push({ type: "text", value: text.slice(last, m.index) });
     const val = m[0];
-    parts.push({ type: val.startsWith("http") ? "url" : "phone", value: val });
+    if (val.startsWith("**")) parts.push({ type: "bold", value: m[2] });
+    else if (val.startsWith("_")) parts.push({ type: "italic", value: m[3] });
+    else if (val.startsWith("`")) parts.push({ type: "code", value: m[4] });
+    else if (val.startsWith("http")) parts.push({ type: "url", value: val });
+    else parts.push({ type: "phone", value: val });
     last = m.index + val.length;
   }
   if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
@@ -276,6 +281,69 @@ function TimeField({ value, onChange }) {
   );
 }
 
+const PRIORITY_CONFIG = {
+  high:   { label: "Alta",   color: "#FF3B30", dot: "🔴" },
+  medium: { label: "Média",  color: "#FF9500", dot: "🟡" },
+  low:    { label: "Baixa",  color: "#34C759", dot: "🟢" },
+};
+
+/* ── Botão de prioridade ── */
+function PriorityButton({ task, updateTask }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const btnId = `priority-btn-${task.id}`;
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const current = task.priority ? PRIORITY_CONFIG[task.priority] : null;
+
+  const pos = () => {
+    const el = document.getElementById(btnId);
+    if (!el) return { top: 0, left: 0 };
+    const r = el.getBoundingClientRect();
+    return { top: r.bottom + 4, left: r.left };
+  };
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        id={btnId}
+        onMouseDown={(e) => { e.preventDefault(); setOpen((v) => !v); }}
+        title="Prioridade"
+        className={["text-[13px] transition-all leading-none", current ? "" : "text-text-secondary hover:text-warning opacity-60 hover:opacity-100"].join(" ")}
+        style={current ? { color: current.color } : {}}
+      >
+        {current ? current.dot : "⚑"}
+      </button>
+      {open && createPortal(
+        <div style={{ position: "fixed", ...pos(), zIndex: 9999 }}
+          className="bg-card border border-border rounded-xl shadow-xl py-1.5 min-w-[160px]">
+          <button onMouseDown={(e) => { e.preventDefault(); updateTask(task.id, { priority: null }); setOpen(false); }}
+            className="menu-item w-full text-left px-3 py-2 text-xs flex items-center gap-2">
+            <span className={["w-3 text-center shrink-0", !task.priority ? "opacity-100 text-primary" : "opacity-0"].join(" ")}>✓</span>
+            <span className="text-text-secondary">⚑ Sem prioridade</span>
+          </button>
+          <div className="h-px bg-border mx-2 my-0.5" />
+          {(["high","medium","low"]).map((p) => (
+            <button key={p} onMouseDown={(e) => { e.preventDefault(); updateTask(task.id, { priority: p }); setOpen(false); }}
+              className="menu-item w-full text-left px-3 py-2 text-xs flex items-center gap-2">
+              <span className={["w-3 text-center shrink-0", task.priority === p ? "opacity-100 text-primary" : "opacity-0"].join(" ")}>✓</span>
+              <span style={{ color: PRIORITY_CONFIG[p].color }}>{PRIORITY_CONFIG[p].dot} {PRIORITY_CONFIG[p].label}</span>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 /* ── Botão de urgência com dropdown ── */
 function UrgencyButton({ task, updateTask }) {
   const [open, setOpen] = useState(false);
@@ -437,6 +505,7 @@ function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos
 
 function TaskMenu({ task, onClose, onRecurrenceDelete }) {
   const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
+  const { saveTemplate } = useTemplateStore();
   const ref = useRef(null);
 
   useEffect(() => {
@@ -484,6 +553,9 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
       <div className="h-px bg-border mx-2 my-1" />
       <button onClick={run(() => duplicateTask(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
         📋 Duplicar tarefa
+      </button>
+      <button onClick={run(() => { saveTemplate(task); })} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
+        ⭐ Salvar como modelo
       </button>
       {isArchived ? (
         <button onClick={run(() => unarchiveTask(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
@@ -775,7 +847,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
-    contextLabel || collapsedTags.length > 0;
+    contextLabel || collapsedTags.length > 0 || task.priority;
 
   const handleTouchStart = (e) => {
     swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -971,6 +1043,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   value={time}
                   onChange={(v) => { setTime(v); updateTask(task.id, { scheduled_time: v || null }); }}
                 />
+                <PriorityButton task={task} updateTask={updateTask} />
                 <UrgencyButton task={task} updateTask={updateTask} />
                 {time && (
                   <ReminderField
@@ -1027,12 +1100,15 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 }}
                 onDoubleClick={(e) => e.stopPropagation()}
                 className={[
-                  "text-sm leading-snug",
+                  "text-sm leading-snug flex items-baseline gap-1.5",
                   task.completed_at
                     ? "line-through text-text-secondary cursor-default"
                     : "text-text-main cursor-text",
                 ].join(" ")}
               >
+                {task.priority && !task.completed_at && (
+                  <span className="text-[10px] shrink-0 leading-none" style={{ color: PRIORITY_CONFIG[task.priority].color }}>⚑</span>
+                )}
                 {task.title}
               </p>
 
@@ -1048,8 +1124,12 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   className="text-xs text-text-secondary mt-0.5 leading-relaxed whitespace-pre-wrap break-words cursor-text"
                 >
                   {parseNotes(task.notes).map((part, i) =>
-                    part.type === "text" ? (
-                      <span key={i}>{part.value}</span>
+                    part.type === "bold" ? (
+                      <strong key={i} className="font-semibold text-text-main">{part.value}</strong>
+                    ) : part.type === "italic" ? (
+                      <em key={i} className="italic">{part.value}</em>
+                    ) : part.type === "code" ? (
+                      <code key={i} className="font-mono text-[10px] bg-bg px-1 py-0.5 rounded border border-border">{part.value}</code>
                     ) : part.type === "url" ? (
                       <a
                         key={i}
@@ -1059,13 +1139,15 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                         onClick={(e) => e.stopPropagation()}
                         className="text-primary underline underline-offset-2 hover:opacity-75 transition-opacity break-all"
                       >{part.value}</a>
-                    ) : (
+                    ) : part.type === "phone" ? (
                       <a
                         key={i}
                         href={`tel:${part.value.replace(/\D/g, "")}`}
                         onClick={(e) => e.stopPropagation()}
                         className="text-primary underline underline-offset-2 hover:opacity-75 transition-opacity"
                       >{part.value}</a>
+                    ) : (
+                      <span key={i}>{part.value}</span>
                     )
                   )}
                 </p>

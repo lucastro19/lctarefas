@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { useAreaStore } from "../../store/areaStore";
+import { parseNaturalDate, formatDateHint } from "../../utils/nlpDate";
 
 function localDateStr() {
   const d = new Date();
@@ -24,15 +25,19 @@ export function QuickEntry({ onClose }) {
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
+  const nlp = useMemo(() => (!date ? parseNaturalDate(title) : null), [title, date]);
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
-    const t = title.trim();
+    const t = (nlp ? nlp.cleanTitle || title : title).trim();
     if (!t) return;
 
     const fields = {};
     if (contextValue.startsWith("area:")) fields.area_id = contextValue.slice(5);
     else if (contextValue.startsWith("project:")) fields.project_id = contextValue.slice(8);
     if (date) fields.scheduled_date = date;
+    else if (nlp?.dateStr) fields.scheduled_date = nlp.dateStr;
+    if (nlp?.timeStr) fields.scheduled_time = nlp.timeStr;
 
     await createTask({ title: t, ...fields });
     onClose();
@@ -60,9 +65,16 @@ export function QuickEntry({ onClose }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="O que precisa ser feito?"
+            placeholder="O que precisa ser feito? (ex: amanhã às 9h)"
             className="w-full text-base font-medium text-text-main outline-none bg-transparent placeholder:text-text-secondary/40"
           />
+          {nlp && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-md font-medium">
+                📅 {formatDateHint(nlp.dateStr)}{nlp.timeStr ? ` às ${nlp.timeStr}` : ""}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 px-4 pb-3 pt-1 border-t border-border mt-3">

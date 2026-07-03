@@ -1,17 +1,31 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTaskStore } from "../../store/taskStore";
+import { useTemplateStore } from "../../store/templateStore";
+import { parseNaturalDate, formatDateHint } from "../../utils/nlpDate";
 
 export function NewTaskInput({ defaultFields = {} }) {
   const [value, setValue] = useState("");
   const [active, setActive] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const { createTask } = useTaskStore();
+  const { templates, deleteTemplate } = useTemplateStore();
+
+  const nlp = useMemo(() => parseNaturalDate(value), [value]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const title = value.trim();
+    const title = nlp ? nlp.cleanTitle || value.trim() : value.trim();
     if (!title) return;
-    await createTask({ title, ...defaultFields });
+    const extra = {};
+    if (nlp?.dateStr) extra.scheduled_date = nlp.dateStr;
+    if (nlp?.timeStr) extra.scheduled_time = nlp.timeStr;
+    await createTask({ title, ...defaultFields, ...extra });
     setValue("");
+  };
+
+  const applyTemplate = (tpl) => {
+    setValue(tpl.fields.title);
+    setShowTemplates(false);
   };
 
   if (!active) {
@@ -39,25 +53,71 @@ export function NewTaskInput({ defaultFields = {} }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => { if (!value.trim()) setActive(false); }}
-        placeholder="Nova tarefa…"
+        placeholder="Nova tarefa… (ex: Reunião amanhã às 14h)"
         className="w-full text-sm text-text-main outline-none bg-transparent placeholder:text-text-secondary dark:placeholder:text-white/30"
         onKeyDown={(e) => e.key === "Escape" && setActive(false)}
       />
-      <div className="flex items-center justify-end gap-2 mt-2">
-        <button
-          type="button"
-          onClick={() => setActive(false)}
-          className="text-xs text-[#8E8E93] hover:text-text-main px-2 py-1 transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          disabled={!value.trim()}
-          className="text-xs bg-primary text-white px-3 py-1 rounded-lg disabled:opacity-40 hover:bg-primary/90 transition-colors"
-        >
-          Adicionar
-        </button>
+      {nlp && (
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-md font-medium">
+            📅 {formatDateHint(nlp.dateStr)}{nlp.timeStr ? ` às ${nlp.timeStr}` : ""}
+          </span>
+          <span className="text-[10px] text-text-secondary">· "{nlp.cleanTitle || value.trim()}"</span>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-2 mt-2">
+        <div className="flex items-center gap-1">
+          {templates.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTemplates((v) => !v)}
+                className="text-xs text-text-secondary hover:text-primary px-2 py-1 transition-colors"
+                title="Modelos"
+              >
+                ⭐ Modelos
+              </button>
+              {showTemplates && (
+                <div className="absolute bottom-full left-0 mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[180px]">
+                  {templates.map((tpl) => (
+                    <div key={tpl.id} className="flex items-center gap-1 px-1">
+                      <button
+                        type="button"
+                        onClick={() => applyTemplate(tpl)}
+                        className="flex-1 text-left px-2 py-2 text-xs text-text-main hover:bg-bg rounded-lg transition-colors truncate"
+                      >
+                        {tpl.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTemplate(tpl.id)}
+                        className="text-[10px] text-text-secondary hover:text-danger px-1 transition-colors shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActive(false)}
+            className="text-xs text-[#8E8E93] hover:text-text-main px-2 py-1 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={!value.trim()}
+            className="text-xs bg-primary text-white px-3 py-1 rounded-lg disabled:opacity-40 hover:bg-primary/90 transition-colors"
+          >
+            Adicionar
+          </button>
+        </div>
       </div>
     </form>
   );

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSettingsStore, DURATION_PRESETS } from "../../store/settingsStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAuthStore } from "../../store/authStore";
+import { useTaskStore } from "../../store/taskStore";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getSubscriptionStatus } from "../../lib/pushNotifications";
 
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
@@ -9,7 +10,7 @@ const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF5
 const THEMES = [
   { value: "light", label: "☀️ Claro" },
   { value: "dark",  label: "🌙 Escuro" },
-  { value: "system",label: "💻 Sistema" },
+  { value: "auto",  label: "💻 Auto" },
 ];
 
 const ROUTE_OPTIONS = [
@@ -25,6 +26,7 @@ const ROUTE_OPTIONS = [
 
 export function SettingsModal({ onClose }) {
   const { dayStart, defaultDurationMinutes, theme, tabBarIds, setDayStart, setDefaultDuration, setTheme, setTabBarIds } = useSettingsStore();
+  const { tasks } = useTaskStore();
   const { tags, createTag, updateTag, deleteTag, fetchTags } = useTagStore();
   const [editingTagId, setEditingTagId] = useState(null);
   const [editingTagName, setEditingTagName] = useState("");
@@ -86,6 +88,29 @@ export function SettingsModal({ onClose }) {
     } finally {
       setPushLoading(false);
     }
+  };
+
+  const exportJSON = () => {
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lctarefas-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCSV = () => {
+    const cols = ["id", "title", "notes", "scheduled_date", "scheduled_time", "priority", "completed_at", "deleted_at", "someday"];
+    const rows = tasks.map((t) => cols.map((c) => JSON.stringify(t[c] ?? "")).join(","));
+    const csv = [cols.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lctarefas-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const toggle = (id) => {
@@ -398,6 +423,28 @@ export function SettingsModal({ onClose }) {
                   })}
                 </>
               )}
+            </div>
+          </div>
+
+          {/* Exportar dados */}
+          <div className="border-t border-border pt-4">
+            <label className="text-xs font-medium text-text-secondary block mb-2">📤 Exportar dados</label>
+            <p className="text-[11px] text-text-secondary mb-3 leading-relaxed">
+              Faça backup de todas as suas tarefas ({tasks.length} no total).
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={exportJSON}
+                className="text-xs py-2 rounded-lg border border-primary text-primary hover:bg-primary/5 transition-colors font-medium"
+              >
+                ⬇ JSON
+              </button>
+              <button
+                onClick={exportCSV}
+                className="text-xs py-2 rounded-lg border border-primary text-primary hover:bg-primary/5 transition-colors font-medium"
+              >
+                ⬇ CSV
+              </button>
             </div>
           </div>
 

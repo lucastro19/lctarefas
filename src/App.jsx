@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { useSelectionStore } from "./store/selectionStore";
@@ -25,6 +25,23 @@ import { QuickEntry } from "./components/quickentry/QuickEntry";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { requestNotificationPermission, scheduleTaskNotifications } from "./services/notifications";
 
+function OfflineBanner() {
+  const [offline, setOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  if (!offline) return null;
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[9999] bg-[#FF9500] text-white text-xs font-medium text-center py-1.5 px-4">
+      Sem conexão — dados podem estar desatualizados
+    </div>
+  );
+}
+
 function AppRoutes() {
   const { user, loading, init } = useAuthStore();
   const { tasks, fetchTasks } = useTaskStore();
@@ -36,7 +53,14 @@ function AppRoutes() {
 
   const { toggleFocusMode, showQuickEntry, closeQuickEntry, toggleQuickEntry, showSearch, openSearch, closeSearch } = useUiStore();
 
-  useEffect(() => { applyTheme(theme); }, [theme]);
+  useEffect(() => {
+    applyTheme(theme);
+    if (theme !== "auto") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => applyTheme("auto");
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [theme]);
   useEffect(() => { clearAll(); }, [location.pathname]);
   useEffect(() => { init(); }, []);
 
@@ -132,6 +156,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
+      <OfflineBanner />
       <AppRoutes />
     </BrowserRouter>
   );

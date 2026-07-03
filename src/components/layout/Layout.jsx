@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { Sidebar } from "./Sidebar";
@@ -13,6 +14,7 @@ import { TaskDetail } from "../tasks/TaskDetail";
 const todayStr = () => new Date().toISOString().split("T")[0];
 
 export function Layout({ children }) {
+  const location = useLocation();
   const [activeTask, setActiveTask] = useState(null);
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -139,7 +141,7 @@ export function Layout({ children }) {
             <span className="text-sm leading-none">{focusMode ? "⊞" : "⊡"}</span>
             <span>{focusMode ? "Sair do foco" : "Foco"}</span>
           </button>
-          {children}
+          <div key={location.pathname} className="page-enter">{children}</div>
         </main>
         {pendingTask && (
           <div className="fixed right-0 top-0 h-full z-40 shadow-2xl">

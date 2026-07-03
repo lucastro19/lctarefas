@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTaskStore } from "../store/taskStore";
+import { useAreaStore } from "../store/areaStore";
 
 const dateStr = (d) => d.toISOString().split("T")[0];
 
@@ -73,9 +74,97 @@ function WeekChart({ days, groups }) {
   );
 }
 
+const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function AdvancedStats({ tasks, groups, areas }) {
+  // Best weekday
+  const byWeekday = Array(7).fill(0);
+  tasks.forEach((t) => { byWeekday[new Date(t.completed_at).getDay()]++; });
+  const bestDay = byWeekday.indexOf(Math.max(...byWeekday));
+  const maxWd = Math.max(...byWeekday, 1);
+
+  // Average per active day
+  const activeDays = Object.keys(groups).length;
+  const avg = activeDays > 0 ? (tasks.length / activeDays).toFixed(1) : "—";
+
+  // Completion rate vs total created (approximation: completed / (completed + active))
+  const { getInbox, getToday, getSomeday } = useTaskStore.getState();
+  const active = getInbox().length + getToday().length + getSomeday().length;
+  const total = tasks.length + active;
+  const rate = total > 0 ? Math.round((tasks.length / total) * 100) : 0;
+
+  // By area
+  const byArea = {};
+  tasks.forEach((t) => {
+    if (!t.area_id) return;
+    byArea[t.area_id] = (byArea[t.area_id] ?? 0) + 1;
+  });
+  const areaEntries = Object.entries(byArea)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id, cnt]) => ({ area: areas.find((a) => a.id === id), cnt }))
+    .filter((e) => e.area);
+
+  return (
+    <div className="space-y-3 mb-6">
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard label="Média por dia" value={avg} sub="tarefas/dia ativo" />
+        <StatCard label="Taxa de conclusão" value={`${rate}%`} sub={`${tasks.length} de ${total}`} />
+      </div>
+
+      {/* Best weekday bar chart */}
+      <div className="bg-card border border-border rounded-card px-4 py-4">
+        <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary mb-3">Por dia da semana</p>
+        <div className="flex items-end gap-1.5 h-14">
+          {WEEKDAY_LABELS.map((label, i) => {
+            const count = byWeekday[i];
+            const h = count === 0 ? 4 : Math.max(8, Math.round((count / maxWd) * 100));
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-[9px] text-text-secondary">{count || ""}</span>
+                <div
+                  className={["rounded-sm transition-all", i === bestDay && count > 0 ? "bg-success" : "bg-primary/30"].join(" ")}
+                  style={{ height: `${h}%`, width: "100%" }}
+                />
+                <span className={["text-[9px]", i === bestDay && count > 0 ? "text-success font-semibold" : "text-text-secondary"].join(" ")}>{label}</span>
+              </div>
+            );
+          })}
+        </div>
+        {byWeekday[bestDay] > 0 && (
+          <p className="text-[11px] text-text-secondary mt-2">
+            Você é mais produtivo às <span className="font-semibold text-success">{WEEKDAY_LABELS[bestDay]}s</span> 🏆
+          </p>
+        )}
+      </div>
+
+      {/* By area */}
+      {areaEntries.length > 0 && (
+        <div className="bg-card border border-border rounded-card px-4 py-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary mb-3">Por área</p>
+          <div className="space-y-2">
+            {areaEntries.map(({ area, cnt }) => (
+              <div key={area.id} className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
+                <span className="text-xs text-text-main flex-1 truncate">{area.name}</span>
+                <span className="text-xs font-medium text-text-secondary shrink-0">{cnt}</span>
+                <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden shrink-0">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((cnt / tasks.length) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Logbook() {
   const { getAllCompleted, deleteTask, permanentDeleteTask } = useTaskStore();
+  const { areas } = useAreaStore();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const tasks = getAllCompleted();
 
   const groups = tasks.reduce((acc, task) => {
@@ -140,6 +229,14 @@ export function Logbook() {
             <StatCard label="Sequência" value={streak > 0 ? `${streak}d` : "—"} sub={streak > 0 ? "dias consecutivos" : "nenhum dia ainda"} />
           </div>
           <WeekChart days={last7} groups={groups} />
+
+          <button
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="w-full text-xs text-text-secondary hover:text-primary transition-colors py-1 text-center"
+          >
+            {showAdvanced ? "▲ Menos estatísticas" : "▼ Estatísticas avançadas"}
+          </button>
+          {showAdvanced && <AdvancedStats tasks={tasks} groups={groups} areas={areas} />}
         </div>
       )}
 

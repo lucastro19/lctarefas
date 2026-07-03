@@ -362,6 +362,21 @@ export function TaskDetail({ task, onClose }) {
           </select>
         </div>
 
+        {/* Prioridade */}
+        <div>
+          <label className="text-xs text-text-secondary font-medium block mb-1">⚑ Prioridade</label>
+          <select
+            defaultValue={task.priority ?? ""}
+            onChange={(e) => updateTask(task.id, { priority: e.target.value || null })}
+            className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+          >
+            <option value="">Sem prioridade</option>
+            <option value="high">🔴 Alta</option>
+            <option value="medium">🟡 Média</option>
+            <option value="low">🟢 Baixa</option>
+          </select>
+        </div>
+
         {/* Lembrete com antecedência */}
         {scheduledTime && (
           <div>
