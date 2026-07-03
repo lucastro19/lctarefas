@@ -42,6 +42,7 @@ export function TaskDetail({ task, onClose }) {
   const [deadline, setDeadline] = useState(task.deadline ?? "");
   const [someday, setSomeday] = useState(task.someday);
   const [isUrgent, setIsUrgent] = useState(!!task.is_urgent);
+  const [reminderMinutes, setReminderMinutes] = useState(task.reminder_minutes ?? null);
   const [durationMinutes, setDurationMinutes] = useState(task.duration_minutes ?? "");
   const [customDuration, setCustomDuration] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
@@ -360,6 +361,30 @@ export function TaskDetail({ task, onClose }) {
             <option value="monthly">Mensalmente</option>
           </select>
         </div>
+
+        {/* Lembrete com antecedência */}
+        {scheduledTime && (
+          <div>
+            <label className="text-xs text-text-secondary font-medium block mb-1">🔔 Lembrete</label>
+            <select
+              value={reminderMinutes ?? ""}
+              onChange={(e) => {
+                const v = e.target.value === "" ? null : Number(e.target.value);
+                setReminderMinutes(v);
+                updateTask(task.id, { reminder_minutes: v });
+              }}
+              className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+            >
+              <option value="">Sem lembrete</option>
+              <option value="5">5 min antes</option>
+              <option value="15">15 min antes</option>
+              <option value="30">30 min antes</option>
+              <option value="60">1 hora antes</option>
+              <option value="120">2 horas antes</option>
+              <option value="1440">1 dia antes</option>
+            </select>
+          </div>
+        )}
 
         {/* Urgente toggle */}
         <label className="flex items-center gap-3 cursor-pointer">

@@ -65,12 +65,37 @@ const RECURRENCE_LABELS = {
   yearly: "Anualmente",
 };
 
-// Todos os slots de 30 em 30 min
-const TIME_SLOTS = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2);
-  const m = i % 2 === 0 ? "00" : "30";
-  return `${String(h).padStart(2, "0")}:${m}`;
+const TIME_SLOTS = Array.from({ length: 96 }, (_, i) => {
+  const h = Math.floor(i / 4);
+  const m = (i % 4) * 15;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 });
+
+const REMINDER_OPTIONS = [
+  { value: null,  label: "Sem lembrete" },
+  { value: 5,     label: "5 min antes" },
+  { value: 15,    label: "15 min antes" },
+  { value: 30,    label: "30 min antes" },
+  { value: 60,    label: "1 hora antes" },
+  { value: 120,   label: "2 horas antes" },
+  { value: 1440,  label: "1 dia antes" },
+];
+
+const NOTE_LINK_RE = /(https?:\/\/[^\s<]+|(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)(?:9\s?)?\d{4}[-\s]?\d{4})/g;
+
+function parseNotes(text) {
+  const parts = [];
+  let last = 0, m;
+  NOTE_LINK_RE.lastIndex = 0;
+  while ((m = NOTE_LINK_RE.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: "text", value: text.slice(last, m.index) });
+    const val = m[0];
+    parts.push({ type: val.startsWith("http") ? "url" : "phone", value: val });
+    last = m.index + val.length;
+  }
+  if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
+  return parts;
+}
 
 /* ── Campo de data: clique abre calendário nativo ── */
 function DateField({ value, onChange }) {
@@ -115,16 +140,19 @@ function DateField({ value, onChange }) {
   );
 }
 
-/* ── Campo de hora: texto digitável + dropdown de slots ── */
+/* ── Campo de hora: dois painéis hora | minuto ── */
 function TimeField({ value, onChange }) {
   const [input, setInput] = useState(value || "");
   const [open, setOpen] = useState(false);
+  const [selHour, setSelHour] = useState(value ? value.split(":")[0] : null);
   const wrapRef = useRef(null);
-  const listRef = useRef(null);
+  const hourListRef = useRef(null);
 
-  useEffect(() => { setInput(value || ""); }, [value]);
+  useEffect(() => {
+    setInput(value || "");
+    setSelHour(value ? value.split(":")[0] : null);
+  }, [value]);
 
-  // Fecha ao clicar fora
   useEffect(() => {
     const handler = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
@@ -133,32 +161,35 @@ function TimeField({ value, onChange }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Scroll para o horário atual quando abre
+  // Scroll para hora atual ao abrir
   useEffect(() => {
-    if (!open || !listRef.current) return;
-    const idx = TIME_SLOTS.findIndex((t) => t === value);
-    if (idx > -1) {
-      const item = listRef.current.children[idx];
-      item?.scrollIntoView({ block: "nearest" });
-    }
+    if (!open || !hourListRef.current) return;
+    const h = value ? value.split(":")[0] : String(new Date().getHours()).padStart(2, "0");
+    const idx = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).indexOf(h);
+    if (idx > -1) hourListRef.current.children[idx]?.scrollIntoView({ block: "center" });
   }, [open]);
 
-  const handleChange = (e) => {
+  const handleTextChange = (e) => {
     let v = e.target.value.replace(/[^0-9:]/g, "");
     if (v.length === 2 && !v.includes(":") && input.length < 2) v = v + ":";
     setInput(v);
     if (/^\d{2}:\d{2}$/.test(v)) {
       const [h, m] = v.split(":").map(Number);
-      if (h < 24 && m < 60) onChange(v);
-    } else if (!v) {
-      onChange("");
-    }
+      if (h < 24 && m < 60) { onChange(v); setSelHour(String(h).padStart(2, "0")); }
+    } else if (!v) { onChange(""); }
   };
 
-  const select = (t) => {
-    setInput(t);
-    onChange(t);
-    setOpen(false);
+  const pickMinute = (m) => {
+    const t = `${selHour}:${m}`;
+    setInput(t); onChange(t); setOpen(false);
+  };
+
+  const pos = () => {
+    if (!wrapRef.current) return { top: 0, left: 0 };
+    const r = wrapRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const top = spaceBelow > 200 ? r.bottom + 4 : r.top - 208;
+    return { top, left: r.left };
   };
 
   return (
@@ -170,7 +201,7 @@ function TimeField({ value, onChange }) {
       <input
         type="text"
         value={input}
-        onChange={handleChange}
+        onChange={handleTextChange}
         onFocus={() => setOpen(true)}
         placeholder="00:00"
         maxLength={5}
@@ -184,26 +215,60 @@ function TimeField({ value, onChange }) {
       {value && (
         <button
           tabIndex={-1}
-          onClick={() => { setInput(""); onChange(""); }}
+          onClick={() => { setInput(""); onChange(""); setSelHour(null); }}
           className="text-text-secondary hover:text-danger transition-colors text-[10px] leading-none px-0.5"
         >×</button>
       )}
 
       {open && createPortal(
         <div
-          ref={listRef}
-          style={{ position: "fixed", top: (() => { const el = wrapRef.current; if (!el) return 0; const r = el.getBoundingClientRect(); return r.bottom + 4; })(), left: (() => { const el = wrapRef.current; if (!el) return 0; return el.getBoundingClientRect().left; })(), zIndex: 9999 }}
-          className="bg-card border border-border rounded-lg shadow-md py-1 max-h-44 overflow-y-auto min-w-[72px]"
+          style={{ position: "fixed", ...pos(), zIndex: 9999 }}
+          className="flex bg-card border border-border rounded-xl shadow-xl overflow-hidden"
+          style={{ position: "fixed", ...pos(), zIndex: 9999, width: 148 }}
         >
-          {TIME_SLOTS.map((t) => (
-            <button
-              key={t}
-              onMouseDown={(e) => { e.preventDefault(); select(t); }}
-              className={["menu-item w-full text-left px-3 py-1 text-xs", t === value ? "!text-primary font-medium" : ""].join(" ")}
-            >
-              {t}
-            </button>
-          ))}
+          {/* Coluna horas */}
+          <div ref={hourListRef} className="w-16 max-h-52 overflow-y-auto border-r border-border py-1">
+            {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+              <button
+                key={h}
+                onMouseDown={(e) => { e.preventDefault(); setSelHour(h); }}
+                className={[
+                  "w-full text-center py-1.5 text-xs transition-colors",
+                  h === selHour
+                    ? "bg-primary/15 text-primary font-semibold"
+                    : "hover:bg-bg text-text-secondary",
+                ].join(" ")}
+              >
+                {h}h
+              </button>
+            ))}
+          </div>
+          {/* Coluna minutos */}
+          <div className="flex-1 flex flex-col justify-center gap-1 p-2">
+            {selHour ? (
+              ["00", "15", "30", "45"].map((m) => {
+                const t = `${selHour}:${m}`;
+                return (
+                  <button
+                    key={m}
+                    onMouseDown={(e) => { e.preventDefault(); pickMinute(m); }}
+                    className={[
+                      "w-full text-center py-1.5 rounded-lg text-xs font-medium transition-colors",
+                      t === value
+                        ? "bg-primary text-white"
+                        : "hover:bg-bg text-text-secondary",
+                    ].join(" ")}
+                  >
+                    :{m}
+                  </button>
+                );
+              })
+            ) : (
+              <p className="text-[10px] text-text-secondary text-center px-1 leading-tight">
+                Escolha a hora
+              </p>
+            )}
+          </div>
         </div>,
         document.body
       )}
@@ -266,6 +331,73 @@ function UrgencyButton({ task, updateTask }) {
             <span className={["w-3 text-danger text-center", task.is_urgent ? "opacity-100" : "opacity-0"].join(" ")}>✓</span>
             <span className="text-danger font-medium">🔔 Marcar como Urgente</span>
           </button>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+/* ── Campo de lembrete com antecedência ── */
+function ReminderField({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const btnId = `reminder-btn-${Math.random().toString(36).slice(2)}`;
+  const refId = useRef(btnId);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const current = REMINDER_OPTIONS.find((o) => o.value === value) ?? REMINDER_OPTIONS[0];
+
+  const pos = () => {
+    const el = document.getElementById(refId.current);
+    if (!el) return { top: 0, left: 0 };
+    const r = el.getBoundingClientRect();
+    return { top: r.bottom + 4, left: r.left };
+  };
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        id={refId.current}
+        onMouseDown={(e) => { e.preventDefault(); setOpen((v) => !v); }}
+        className={[
+          "inline-flex items-center gap-1 rounded-full text-xs transition-colors px-2 py-0.5",
+          value != null
+            ? "meta-chip-filled text-primary font-medium"
+            : "text-[#AEAEB2] dark:text-[#636366] hover:text-text-secondary",
+        ].join(" ")}
+        title="Lembrete com antecedência"
+      >
+        <span className="text-[11px]">🔔</span>
+        {value != null ? current.label : "Lembrete"}
+      </button>
+
+      {open && createPortal(
+        <div
+          style={{ position: "fixed", ...pos(), zIndex: 9999 }}
+          className="bg-card border border-border rounded-xl shadow-xl py-1.5 min-w-[170px]"
+        >
+          {REMINDER_OPTIONS.map((opt) => (
+            <button
+              key={String(opt.value)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className="menu-item w-full text-left px-3 py-2 text-xs flex items-center gap-2"
+            >
+              <span className={["w-3 text-primary text-center shrink-0", opt.value === value ? "opacity-100" : "opacity-0"].join(" ")}>✓</span>
+              {opt.label}
+            </button>
+          ))}
         </div>,
         document.body
       )}
@@ -389,12 +521,14 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [date, setDate] = useState(task.scheduled_date ?? "");
   const [time, setTime] = useState(task.scheduled_time ?? "");
   const [duration, setDuration] = useState(task.duration_minutes ?? "");
+  const [reminder, setReminder] = useState(task.reminder_minutes ?? null);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
 
   const titleInputRef = useRef(null);
   const notesRef = useRef(null);
   const tagPickerRef = useRef(null);
+  const tagBtnRef = useRef(null);
   const collapseRef = useRef(null);
   const pendingCursorRef = useRef(null);
   const longPressRef = useRef(null);
@@ -429,8 +563,9 @@ export function TaskCard({ task, subtasks = [], onClick }) {
       setDate(task.scheduled_date ?? "");
       setTime(task.scheduled_time ?? "");
       setDuration(task.duration_minutes ?? "");
+      setReminder(task.reminder_minutes ?? null);
     }
-  }, [task.title, task.notes, task.scheduled_date, task.scheduled_time, task.duration_minutes, expanded]);
+  }, [task.title, task.notes, task.scheduled_date, task.scheduled_time, task.duration_minutes, task.reminder_minutes, expanded]);
 
   useEffect(() => { if (expanded) fetchTaskTags(task.id); }, [expanded, task.id]);
 
@@ -771,26 +906,36 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                     {tag.name} ×
                   </button>
                 ))}
-                <div className="relative" ref={tagPickerRef}>
+                <div ref={tagPickerRef}>
                   <button
+                    ref={tagBtnRef}
                     onClick={() => setShowTagPicker((v) => !v)}
                     className="text-[11px] text-[#AEAEB2] dark:text-[#636366] hover:text-text-secondary transition-colors"
                   >
                     + Adicionar Etiqueta
                   </button>
-                  {showTagPicker && available.length > 0 && (
-                    <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-md z-50 py-1 min-w-[130px]">
+                  {showTagPicker && available.length > 0 && createPortal(
+                    <div
+                      style={{
+                        position: "fixed",
+                        top: (tagBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                        left: tagBtnRef.current?.getBoundingClientRect().left ?? 0,
+                        zIndex: 9999,
+                      }}
+                      className="bg-card border border-border rounded-xl shadow-xl py-1.5 min-w-[150px]"
+                    >
                       {available.map((tag) => (
                         <button
                           key={tag.id}
-                          onClick={() => { addTagToTask(task.id, tag.id); setShowTagPicker(false); }}
-                          className="menu-item flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs"
+                          onMouseDown={(e) => { e.preventDefault(); addTagToTask(task.id, tag.id); setShowTagPicker(false); }}
+                          className="menu-item flex items-center gap-2 w-full text-left px-3 py-2 text-xs"
                         >
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
                           {tag.name}
                         </button>
                       ))}
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
               </div>
@@ -806,6 +951,12 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onChange={(v) => { setTime(v); updateTask(task.id, { scheduled_time: v || null }); }}
                 />
                 <UrgencyButton task={task} updateTask={updateTask} />
+                {time && (
+                  <ReminderField
+                    value={reminder}
+                    onChange={(v) => { setReminder(v); updateTask(task.id, { reminder_minutes: v }); }}
+                  />
+                )}
                 <select
                   value={duration}
                   onChange={(e) => {
@@ -867,6 +1018,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
               {task.notes && (
                 <p
                   onClick={(e) => {
+                    if (e.target.tagName === "A") return;
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
                     if (!task.completed_at) expandTask("notes");
@@ -874,7 +1026,27 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onDoubleClick={(e) => e.stopPropagation()}
                   className="text-xs text-text-secondary mt-0.5 leading-relaxed whitespace-pre-wrap break-words cursor-text"
                 >
-                  {task.notes}
+                  {parseNotes(task.notes).map((part, i) =>
+                    part.type === "text" ? (
+                      <span key={i}>{part.value}</span>
+                    ) : part.type === "url" ? (
+                      <a
+                        key={i}
+                        href={part.value}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-primary underline underline-offset-2 hover:opacity-75 transition-opacity break-all"
+                      >{part.value}</a>
+                    ) : (
+                      <a
+                        key={i}
+                        href={`tel:${part.value.replace(/\D/g, "")}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-primary underline underline-offset-2 hover:opacity-75 transition-opacity"
+                      >{part.value}</a>
+                    )
+                  )}
                 </p>
               )}
 
