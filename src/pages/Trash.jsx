@@ -132,7 +132,7 @@ export function Trash() {
     <div className="px-4 py-6 md:px-8 md:py-8">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-text-main mb-1">Lixeira</h1>
+          <h1 className="hidden md:block text-2xl font-semibold text-text-main mb-1">Lixeira</h1>
           <p className="text-sm text-text-secondary">
             {loading ? "Carregando…" : `${total} item${total !== 1 ? "s" : ""} nos últimos 30 dias`}
           </p>

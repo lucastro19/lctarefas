@@ -46,7 +46,7 @@ export function Archive() {
 
   return (
     <div className="px-4 py-6 md:px-8 md:py-8">
-      <h1 className="text-2xl font-semibold text-text-main mb-1">Arquivo</h1>
+      <h1 className="hidden md:block text-2xl font-semibold text-text-main mb-1">Arquivo</h1>
       <p className="text-sm text-text-secondary mb-6">
         {loading ? "Carregando…" : `${total} item${total !== 1 ? "s" : ""} arquivado${total !== 1 ? "s" : ""}`}
       </p>

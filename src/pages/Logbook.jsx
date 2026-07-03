@@ -97,7 +97,7 @@ export function Logbook() {
   return (
     <div className="px-4 py-6 md:px-8 md:py-8 max-w-2xl">
       <div className="flex items-start justify-between mb-1 gap-4">
-        <h1 className="text-2xl font-semibold text-text-main">Histórico</h1>
+        <h1 className="hidden md:block text-2xl font-semibold text-text-main">Histórico</h1>
         {tasks.length > 0 && (
           confirmClear ? (
             <div className="flex items-center gap-2 shrink-0">
