@@ -592,7 +592,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const { tags, taskTags, fetchTaskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { toggle, isSelected, selectedIds } = useSelectionStore();
-  const { expandedTaskId, setExpandedTaskId } = useUiStore();
+  const { expandedTaskId, setExpandedTaskId, showToast, dismissToast } = useUiStore();
 
   const [completing, setCompleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -608,6 +608,8 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [reminder, setReminder] = useState(task.reminder_minutes ?? null);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
+  const swipingRef = useRef(false); // true quando comprometido com gesto horizontal
+  const hapticFiredRef = useRef(false);
 
   const titleInputRef = useRef(null);
   const notesRef = useRef(null);
@@ -692,6 +694,17 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Listener non-passive separado só para cancelar scroll vertical durante swipe horizontal
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const preventScroll = (e) => {
+      if (swipingRef.current) e.preventDefault();
+    };
+    el.addEventListener("touchmove", preventScroll, { passive: false });
+    return () => el.removeEventListener("touchmove", preventScroll);
   }, []);
 
   // Esc → salva e recolhe
@@ -832,8 +845,21 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const doComplete = async (checked) => {
     setCompleting(true);
     setConfirmComplete(false);
-    if (checked) await completeTask(task.id);
-    else await uncompleteTask(task.id);
+    if (checked) {
+      await completeTask(task.id);
+      // Toast com Desfazer — desfaz a conclusão se clicado dentro do timeout
+      const toastId = showToast({
+        message: `✓ "${task.title.slice(0, 28)}${task.title.length > 28 ? "…" : ""}" concluída`,
+        action: "Desfazer",
+        onAction: async () => {
+          dismissToast(toastId);
+          await uncompleteTask(task.id);
+        },
+        duration: 5000,
+      });
+    } else {
+      await uncompleteTask(task.id);
+    }
     setCompleting(false);
   };
 
@@ -849,8 +875,12 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
     contextLabel || collapsedTags.length > 0 || task.priority;
 
+  const SWIPE_THRESHOLD = 80;
+
   const handleTouchStart = (e) => {
     swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    swipingRef.current = false;
+    hapticFiredRef.current = false;
     if (anySelected) return;
     longPressRef.current = setTimeout(() => {
       toggle(task.id);
@@ -862,37 +892,51 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     if (!swipeStartRef.current) return;
     const dx = e.touches[0].clientX - swipeStartRef.current.x;
     const dy = e.touches[0].clientY - swipeStartRef.current.y;
-    // Cancel long press if moved
     clearTimeout(longPressRef.current);
-    // Only handle horizontal swipe (ignore if mostly vertical)
-    if (Math.abs(dy) > Math.abs(dx) * 1.5) return;
+
+    // Se ainda não comprometeu: decide se é horizontal ou vertical
+    if (!swipingRef.current) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; // movimento pequeno demais
+      if (Math.abs(dy) > Math.abs(dx)) return; // vertical — deixa o scroll agir
+      swipingRef.current = true;
+    }
+
     if (expanded || anySelected) return;
-    const clamped = Math.max(-100, Math.min(100, dx));
+
+    const clamped = Math.max(-120, Math.min(120, dx));
     setSwipeX(clamped);
+
+    // Haptic ao cruzar o threshold (uma vez por gesto)
+    if (!hapticFiredRef.current && Math.abs(clamped) >= SWIPE_THRESHOLD) {
+      navigator.vibrate?.(10);
+      hapticFiredRef.current = true;
+    }
+    if (Math.abs(clamped) < SWIPE_THRESHOLD) {
+      hapticFiredRef.current = false;
+    }
   };
 
   const handleTouchEnd = () => {
     clearTimeout(longPressRef.current);
-    const THRESHOLD = 72;
-    if (swipeX > THRESHOLD && !task.completed_at) {
-      handleCheck(true);
-    } else if (swipeX > THRESHOLD && task.completed_at) {
-      handleCheck(false);
-    } else if (swipeX < -THRESHOLD) {
-      setShowMenu(true); // Abre menu de ações em vez de deletar direto
+    if (swipeX > SWIPE_THRESHOLD) {
+      handleCheck(!task.completed_at); // concluir ou desfazer
+    } else if (swipeX < -SWIPE_THRESHOLD) {
+      deleteTask(task.id); // lixeira direta
     }
     setSwipeX(0);
     swipeStartRef.current = null;
+    swipingRef.current = false;
   };
 
   const swipeActive = Math.abs(swipeX) > 8;
   const swipeRight = swipeX > 0;
+  const swipePct = Math.min(Math.abs(swipeX) / SWIPE_THRESHOLD, 1); // 0→1 até o threshold
 
   return (
     <>
     <div
       ref={cardRef}
-      className="relative rounded-card"
+      className="relative rounded-card overflow-hidden"
       style={{ zIndex: showMenu ? 20 : undefined }}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -900,13 +944,34 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         setShowMenu(true);
       }}
     >
+      {/* Swipe reveal backgrounds — ficam ATRÁS do card, revelados pelo slide */}
+      {swipeActive && (
+        <div
+          className={[
+            "absolute inset-0 flex items-center px-5 rounded-card",
+            swipeRight ? "justify-start" : "justify-end",
+          ].join(" ")}
+          style={{
+            backgroundColor: swipeRight
+              ? `rgba(52,199,89,${0.15 + swipePct * 0.55})`  // verde progressivo
+              : `rgba(255,59,48,${0.15 + swipePct * 0.55})`, // vermelho progressivo
+          }}
+        >
+          <span
+            className="transition-transform"
+            style={{ fontSize: `${16 + swipePct * 8}px`, transform: `scale(${0.8 + swipePct * 0.4})` }}
+          >
+            {swipeRight ? (task.completed_at ? "↩️" : "✅") : "🗑️"}
+          </span>
+        </div>
+      )}
     <div
       ref={setNodeRef}
       style={{
         transform: swipeX !== 0
           ? `translateX(${swipeX}px)`
           : CSS.Transform.toString(transform),
-        transition: swipeX !== 0 ? "none" : transition,
+        transition: swipeX !== 0 ? "none" : `${transition}, transform 0.25s cubic-bezier(.25,.8,.25,1)`,
       }}
       onDoubleClick={() => onClick?.()}
       onTouchStart={handleTouchStart}
@@ -922,15 +987,6 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         isUrgent ? "is-urgent" : "",
       ].join(" ")}
     >
-      {/* Swipe reveal backgrounds */}
-      {swipeActive && (
-        <div className={[
-          "absolute inset-0 flex items-center px-5 rounded-card transition-opacity",
-          swipeRight ? "justify-start bg-success/15" : "justify-end bg-danger/15",
-        ].join(" ")}>
-          <span className="text-xl">{swipeRight ? (task.completed_at ? "↩️" : "✅") : "🗑️"}</span>
-        </div>
-      )}
       <div className="task-card-row">
         {/* Arraste */}
         <div
