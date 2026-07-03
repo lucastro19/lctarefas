@@ -419,9 +419,12 @@ export const useTaskStore = create((set, get) => ({
 
   getCompletedToday: () => {
     const t = today();
-    return get().tasks.filter(
-      (task) => task.completed_at && task.scheduled_date && task.scheduled_date <= t && !task.deleted_at && !task.archived_at
-    );
+    return get().tasks.filter((task) => {
+      if (!task.completed_at || task.deleted_at || task.archived_at) return false;
+      // concluída hoje (compara só a parte da data do ISO string)
+      const completedDate = task.completed_at.slice(0, 10);
+      return completedDate === t;
+    });
   },
 
   getCompletedSomeday: () =>
