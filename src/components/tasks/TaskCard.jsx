@@ -588,7 +588,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
 
 /* ── Componente principal ── */
 export function TaskCard({ task, subtasks = [], onClick }) {
-  const { completeTask, uncompleteTask, updateTask, deleteTask, deleteRecurrenceFuture } = useTaskStore();
+  const { completeTask, uncompleteTask, updateTask, deleteTask, deleteRecurrenceFuture, toggleSubtask, addSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { toggle, isSelected, selectedIds } = useSelectionStore();
@@ -1089,6 +1089,25 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 </div>
               </div>
 
+              {/* Mini checklist de subtarefas */}
+              {subtasks.length > 0 && (
+                <div className="mt-2 space-y-0.5" onClick={(e) => e.stopPropagation()}>
+                  {subtasks.map((st) => (
+                    <label key={st.id} className="flex items-center gap-2 cursor-pointer group/st">
+                      <input
+                        type="checkbox"
+                        checked={st.completed}
+                        onChange={(e) => toggleSubtask(task.id, st.id, e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-success shrink-0"
+                      />
+                      <span className={["text-xs transition-colors", st.completed ? "line-through text-text-secondary" : "text-text-main"].join(" ")}>
+                        {st.title}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
               {/* Linha de meta: data · hora · urgência · duração */}
               <div className="flex items-center gap-2 flex-wrap mt-1" onClick={(e) => e.stopPropagation()}>
                 <DateField
@@ -1252,7 +1271,15 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                     <span className="text-xs text-text-secondary">{durationLabel(task.duration_minutes)}</span>
                   )}
                   {subtaskTotal > 0 && (
-                    <span className="text-xs text-text-secondary">{subtaskDone}/{subtaskTotal}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-16 h-1 bg-border rounded-full overflow-hidden shrink-0">
+                        <span
+                          className="block h-full rounded-full bg-success transition-all"
+                          style={{ width: `${Math.round((subtaskDone / subtaskTotal) * 100)}%` }}
+                        />
+                      </span>
+                      <span className="text-[10px] text-text-secondary tabular-nums">{subtaskDone}/{subtaskTotal}</span>
+                    </span>
                   )}
                   {contextLabel && (
                     <span

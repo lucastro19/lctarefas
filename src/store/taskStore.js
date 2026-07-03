@@ -389,12 +389,12 @@ export const useTaskStore = create((set, get) => ({
       (t) => t.scheduled_date && t.scheduled_date <= today() && active(t)
     ),
 
-  getUpcoming: () =>
+  getUpcoming: (days = 7) =>
     get().tasks.filter(
       (t) =>
         t.scheduled_date &&
         t.scheduled_date > today() &&
-        t.scheduled_date <= inDays(7) &&
+        t.scheduled_date <= inDays(days) &&
         active(t)
     ),
 

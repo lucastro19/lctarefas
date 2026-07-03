@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { useSelectionStore } from "./store/selectionStore";
@@ -9,21 +9,31 @@ import { useAreaStore } from "./store/areaStore";
 import { useTagStore } from "./store/tagStore";
 import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
+// Páginas críticas (carregadas imediatamente)
 import { Inbox } from "./pages/Inbox";
 import { Today } from "./pages/Today";
 import { Upcoming } from "./pages/Upcoming";
 import { Someday } from "./pages/Someday";
-import { Trash } from "./pages/Trash";
-import { AreaPage } from "./pages/AreaPage";
-import { ProjectPage } from "./pages/ProjectPage";
-import { Archive } from "./pages/Archive";
-import { Logbook } from "./pages/Logbook";
-import { TagPage } from "./pages/TagPage";
-import { Calendar } from "./pages/Calendar";
+// Páginas secundárias (lazy — carregadas só quando o usuário navegar)
+const Trash      = lazy(() => import("./pages/Trash").then((m) => ({ default: m.Trash })));
+const AreaPage   = lazy(() => import("./pages/AreaPage").then((m) => ({ default: m.AreaPage })));
+const ProjectPage= lazy(() => import("./pages/ProjectPage").then((m) => ({ default: m.ProjectPage })));
+const Archive    = lazy(() => import("./pages/Archive").then((m) => ({ default: m.Archive })));
+const Logbook    = lazy(() => import("./pages/Logbook").then((m) => ({ default: m.Logbook })));
+const TagPage    = lazy(() => import("./pages/TagPage").then((m) => ({ default: m.TagPage })));
+const Calendar   = lazy(() => import("./pages/Calendar").then((m) => ({ default: m.Calendar })));
 import { SearchModal } from "./components/search/SearchModal";
 import { QuickEntry } from "./components/quickentry/QuickEntry";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { requestNotificationPermission, scheduleTaskNotifications } from "./services/notifications";
+
+function PageSpinner() {
+  return (
+    <div className="flex-1 flex items-center justify-center py-16">
+      <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    </div>
+  );
+}
 
 function OfflineBanner() {
   const [offline, setOffline] = useState(!navigator.onLine);
@@ -130,20 +140,22 @@ function AppRoutes() {
   return (
     <>
       <Layout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/today" replace />} />
-          <Route path="/inbox" element={<Inbox />} />
-          <Route path="/today" element={<Today />} />
-          <Route path="/upcoming" element={<Upcoming />} />
-          <Route path="/someday" element={<Someday />} />
-          <Route path="/trash" element={<Trash />} />
-          <Route path="/area/:id" element={<AreaPage />} />
-          <Route path="/project/:id" element={<ProjectPage />} />
-          <Route path="/archive" element={<Archive />} />
-          <Route path="/logbook" element={<Logbook />} />
-          <Route path="/tag/:id" element={<TagPage />} />
-          <Route path="/calendar" element={<Calendar />} />
-        </Routes>
+        <Suspense fallback={<PageSpinner />}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/today" replace />} />
+            <Route path="/inbox" element={<Inbox />} />
+            <Route path="/today" element={<Today />} />
+            <Route path="/upcoming" element={<Upcoming />} />
+            <Route path="/someday" element={<Someday />} />
+            <Route path="/trash" element={<Trash />} />
+            <Route path="/area/:id" element={<AreaPage />} />
+            <Route path="/project/:id" element={<ProjectPage />} />
+            <Route path="/archive" element={<Archive />} />
+            <Route path="/logbook" element={<Logbook />} />
+            <Route path="/tag/:id" element={<TagPage />} />
+            <Route path="/calendar" element={<Calendar />} />
+          </Routes>
+        </Suspense>
       </Layout>
 
       {showSearch && <SearchModal onClose={closeSearch} />}
