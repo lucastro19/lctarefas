@@ -532,6 +532,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
   const { saveTemplate } = useTemplateStore();
   const ref = useRef(null);
   const [showDateSub, setShowDateSub] = useState(false);
+  const dateRowRef = useRef(null);
 
   useEffect(() => {
     const handler = (e) => {
@@ -583,35 +584,53 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
     },
   ];
 
+  // Calcula se o submenu deve abrir para esquerda ou direita
+  const subMenuStyle = (() => {
+    if (!dateRowRef.current) return { left: "100%", top: 0 };
+    const r = dateRowRef.current.getBoundingClientRect();
+    const subW = 190;
+    const openLeft = r.right + subW > window.innerWidth - 8;
+    return openLeft
+      ? { right: "100%", top: 0 }
+      : { left: "100%", top: 0 };
+  })();
+
   return (
     <div
       ref={ref}
       onClick={(e) => e.stopPropagation()}
       className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[200px]"
     >
-      {/* Data Limite — submenu inline */}
-      <button
-        onClick={(e) => { e.stopPropagation(); setShowDateSub((v) => !v); }}
-        className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between"
+      {/* Data Limite — submenu lateral ao hover */}
+      <div
+        ref={dateRowRef}
+        className="relative"
+        onMouseEnter={() => setShowDateSub(true)}
+        onMouseLeave={() => setShowDateSub(false)}
       >
-        <span>📅 Data Limite</span>
-        <span className="text-text-secondary text-xs ml-2">{showDateSub ? "▾" : "▸"}</span>
-      </button>
-
-      {showDateSub && (
-        <div className="mx-2 mb-1 rounded-lg border border-border overflow-hidden">
-          {DATE_OPTIONS.map((opt) => (
-            <button
-              key={opt.label}
-              onClick={run(opt.apply)}
-              className="menu-item w-full text-left px-3 py-2 text-xs transition-colors flex items-center gap-2"
-            >
-              <span>{opt.icon}</span>
-              <span>{opt.label}</span>
-            </button>
-          ))}
+        <div className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between cursor-default select-none">
+          <span>📅 Data Limite</span>
+          <span className="text-text-secondary text-xs ml-2">▸</span>
         </div>
-      )}
+
+        {showDateSub && (
+          <div
+            className="absolute bg-card border border-border rounded-xl shadow-xl py-1.5 z-[9999]"
+            style={{ ...subMenuStyle, minWidth: 190 }}
+          >
+            {DATE_OPTIONS.map((opt) => (
+              <button
+                key={opt.label}
+                onClick={run(opt.apply)}
+                className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+              >
+                <span>{opt.icon}</span>
+                <span>{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {!isSomeday && (
         <button onClick={run(() => moveToSomeday(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
