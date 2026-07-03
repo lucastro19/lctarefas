@@ -107,7 +107,7 @@ function AppRoutes() {
     <>
       <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/inbox" replace />} />
+          <Route path="/" element={<Navigate to="/today" replace />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/today" element={<Today />} />
           <Route path="/upcoming" element={<Upcoming />} />

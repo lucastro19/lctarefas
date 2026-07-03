@@ -112,7 +112,7 @@ export function Layout({ children }) {
         {!focusMode && <Sidebar />}
         <main
           ref={mainRef}
-          className="flex-1 overflow-y-auto relative pb-16 md:pb-0"
+          className="flex-1 overflow-y-auto relative pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0"
           onTouchStart={onPullStart}
           onTouchMove={onPullMove}
           onTouchEnd={onPullEnd}

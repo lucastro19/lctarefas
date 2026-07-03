@@ -406,16 +406,27 @@ function ReminderField({ value, onChange }) {
 }
 
 /* ── Menu contextual ── */
-function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete }) {
+function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos }) {
   const [pos, setPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
-    const btn = document.getElementById(buttonId);
-    if (btn) {
-      const r = btn.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    if (cursorPos) {
+      // Botão direito: abre nas coordenadas do cursor, flip se sair da tela
+      const menuW = 200;
+      const menuH = 280;
+      const left = Math.min(cursorPos.x, window.innerWidth - menuW - 8);
+      const top = cursorPos.y + menuH > window.innerHeight
+        ? cursorPos.y - menuH
+        : cursorPos.y;
+      setPos({ top, right: window.innerWidth - left - menuW });
+    } else {
+      const btn = document.getElementById(buttonId);
+      if (btn) {
+        const r = btn.getBoundingClientRect();
+        setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+      }
     }
-  }, [buttonId]);
+  }, [buttonId, cursorPos]);
 
   return (
     <div style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 9999 }}>
@@ -514,6 +525,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [completing, setCompleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
+  const [contextPos, setContextPos] = useState(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [focusField, setFocusField] = useState("title");
   const [titleDraft, setTitleDraft] = useState(task.title);
@@ -806,7 +818,16 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
   return (
     <>
-    <div ref={cardRef} className="relative rounded-card" style={{ zIndex: showMenu ? 20 : undefined }}>
+    <div
+      ref={cardRef}
+      className="relative rounded-card"
+      style={{ zIndex: showMenu ? 20 : undefined }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setContextPos({ x: e.clientX, y: e.clientY });
+        setShowMenu(true);
+      }}
+    >
     <div
       ref={setNodeRef}
       style={{
@@ -1138,8 +1159,9 @@ export function TaskCard({ task, subtasks = [], onClick }) {
             <TaskMenuPortal
               task={task}
               buttonId={`menu-btn-${task.id}`}
-              onClose={() => setShowMenu(false)}
+              onClose={() => { setShowMenu(false); setContextPos(null); }}
               onRecurrenceDelete={() => setShowRecurrenceModal(true)}
+              cursorPos={contextPos}
             />,
             document.body
           )}
