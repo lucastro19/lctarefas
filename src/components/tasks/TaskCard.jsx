@@ -527,12 +527,44 @@ function nextWeekday(weekday) {
   return dateStr(d);
 }
 
+// Linha de menu com flyout lateral ao hover
+function FlyoutRow({ label, rowRef, open, onEnter, onLeave, children }) {
+  const side = (() => {
+    if (!rowRef.current) return { left: "100%", top: 0 };
+    const r = rowRef.current.getBoundingClientRect();
+    return r.right + 210 > window.innerWidth - 8
+      ? { right: "100%", top: 0 }
+      : { left: "100%", top: 0 };
+  })();
+
+  return (
+    <div ref={rowRef} className="relative" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <div className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between cursor-default select-none">
+        <span>{label}</span>
+        <span className="text-text-secondary text-xs ml-2">▸</span>
+      </div>
+      {open && (
+        <div
+          className="absolute bg-card border border-border rounded-xl shadow-xl py-1.5 z-[9999]"
+          style={{ ...side, minWidth: 200 }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TaskMenu({ task, onClose, onRecurrenceDelete }) {
   const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
+  const { tags, taskTags, addTagToTask, removeTagFromTask } = useTagStore();
+  const { areas, projects } = useAreaStore();
   const { saveTemplate } = useTemplateStore();
   const ref = useRef(null);
-  const [showDateSub, setShowDateSub] = useState(false);
+  const [openSub, setOpenSub] = useState(null); // "date" | "tags" | "areas"
   const dateRowRef = useRef(null);
+  const tagsRowRef = useRef(null);
+  const areasRowRef = useRef(null);
 
   useEffect(() => {
     const handler = (e) => {
@@ -549,6 +581,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
   const run = (fn) => async (e) => { e?.stopPropagation(); await fn(); onClose(); };
   const isSomeday = task.someday;
   const isArchived = !!task.archived_at;
+  const activeTags = taskTags[task.id] ?? [];
 
   const DATE_OPTIONS = [
     {
@@ -584,53 +617,121 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
     },
   ];
 
-  // Calcula se o submenu deve abrir para esquerda ou direita
-  const subMenuStyle = (() => {
-    if (!dateRowRef.current) return { left: "100%", top: 0 };
-    const r = dateRowRef.current.getBoundingClientRect();
-    const subW = 190;
-    const openLeft = r.right + subW > window.innerWidth - 8;
-    return openLeft
-      ? { right: "100%", top: 0 }
-      : { left: "100%", top: 0 };
-  })();
-
   return (
     <div
       ref={ref}
       onClick={(e) => e.stopPropagation()}
       className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[200px]"
     >
-      {/* Data Limite — submenu lateral ao hover */}
-      <div
-        ref={dateRowRef}
-        className="relative"
-        onMouseEnter={() => setShowDateSub(true)}
-        onMouseLeave={() => setShowDateSub(false)}
+      {/* Data Limite */}
+      <FlyoutRow
+        label="📅 Data Limite"
+        rowRef={dateRowRef}
+        open={openSub === "date"}
+        onEnter={() => setOpenSub("date")}
+        onLeave={() => setOpenSub(null)}
       >
-        <div className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between cursor-default select-none">
-          <span>📅 Data Limite</span>
-          <span className="text-text-secondary text-xs ml-2">▸</span>
-        </div>
-
-        {showDateSub && (
-          <div
-            className="absolute bg-card border border-border rounded-xl shadow-xl py-1.5 z-[9999]"
-            style={{ ...subMenuStyle, minWidth: 190 }}
+        {DATE_OPTIONS.map((opt) => (
+          <button
+            key={opt.label}
+            onClick={run(opt.apply)}
+            className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
           >
-            {DATE_OPTIONS.map((opt) => (
+            <span>{opt.icon}</span>
+            <span>{opt.label}</span>
+          </button>
+        ))}
+      </FlyoutRow>
+
+      {/* Etiquetas */}
+      <FlyoutRow
+        label="🏷️ Etiquetas"
+        rowRef={tagsRowRef}
+        open={openSub === "tags"}
+        onEnter={() => setOpenSub("tags")}
+        onLeave={() => setOpenSub(null)}
+      >
+        {tags.length === 0 && (
+          <p className="px-3 py-2 text-xs text-text-secondary">Nenhuma etiqueta criada</p>
+        )}
+        {tags.map((tag) => {
+          const active = activeTags.some((t) => t.id === tag.id);
+          return (
+            <button
+              key={tag.id}
+              onClick={async (e) => {
+                e.stopPropagation();
+                active ? await removeTagFromTask(task.id, tag.id) : await addTagToTask(task.id, tag.id);
+              }}
+              className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: tag.color ?? "#8E8E93" }}
+              />
+              <span className="flex-1">{tag.name}</span>
+              {active && <span className="text-primary text-xs">✓</span>}
+            </button>
+          );
+        })}
+      </FlyoutRow>
+
+      {/* Áreas & Projetos */}
+      <FlyoutRow
+        label="📁 Áreas"
+        rowRef={areasRowRef}
+        open={openSub === "areas"}
+        onEnter={() => setOpenSub("areas")}
+        onLeave={() => setOpenSub(null)}
+      >
+        {/* Sem área */}
+        <button
+          onClick={run(() => updateTask(task.id, { area_id: null, project_id: null }))}
+          className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+        >
+          <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-border" />
+          <span className="flex-1 text-text-secondary">Sem área</span>
+          {!task.area_id && !task.project_id && <span className="text-primary text-xs">✓</span>}
+        </button>
+        <div className="h-px bg-border mx-2 my-1" />
+        {areas.length === 0 && (
+          <p className="px-3 py-2 text-xs text-text-secondary">Nenhuma área criada</p>
+        )}
+        {areas.map((area) => {
+          const areaProjects = projects.filter((p) => p.area_id === area.id);
+          return (
+            <div key={area.id}>
+              {/* Área */}
               <button
-                key={opt.label}
-                onClick={run(opt.apply)}
+                onClick={run(() => updateTask(task.id, { area_id: area.id, project_id: null }))}
                 className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
               >
-                <span>{opt.icon}</span>
-                <span>{opt.label}</span>
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: area.color ?? "#8E8E93" }}
+                />
+                <span className="flex-1 font-medium">{area.name}</span>
+                {task.area_id === area.id && !task.project_id && <span className="text-primary text-xs">✓</span>}
               </button>
-            ))}
-          </div>
-        )}
-      </div>
+              {/* Projetos da área */}
+              {areaProjects.map((proj) => (
+                <button
+                  key={proj.id}
+                  onClick={run(() => updateTask(task.id, { project_id: proj.id, area_id: area.id }))}
+                  className="menu-item w-full text-left pl-7 pr-3 py-2 text-sm transition-colors flex items-center gap-2"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: proj.color ?? "#8E8E93" }}
+                  />
+                  <span className="flex-1 text-text-secondary">{proj.name}</span>
+                  {task.project_id === proj.id && <span className="text-primary text-xs">✓</span>}
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </FlyoutRow>
 
       {!isSomeday && (
         <button onClick={run(() => moveToSomeday(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
