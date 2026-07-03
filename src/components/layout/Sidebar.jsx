@@ -60,13 +60,40 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
 
   return (
     <aside className={className}>
-      {/* Logo */}
-      <div className="px-4 py-4 border-b border-border">
-        <div className="flex items-center gap-2.5">
-          <img src="/lc-logo.png" alt="LC" className="w-8 h-8 shrink-0 object-contain" />
-          <div className="flex items-baseline gap-1 leading-none">
-            <span className="font-bold text-sm text-[#2563EB]">LC</span>
-            <span className="font-semibold text-sm text-text-main">Tarefas</span>
+      {/* Cabeçalho: marca + usuário */}
+      <div className="border-b border-border shrink-0">
+        {/* Linha da marca */}
+        <div className="px-4 pt-5 pb-3 flex items-center gap-3">
+          <img src="/lc-logo.png" alt="LC" className="w-9 h-9 shrink-0 object-contain" />
+          <div className="leading-none">
+            <span className="font-bold text-base text-[#2563EB]">LC</span>
+            <span className="font-semibold text-base text-text-main">Tarefas</span>
+          </div>
+        </div>
+
+        {/* Divisor */}
+        <div className="mx-4 border-t border-border" />
+
+        {/* Linha do usuário */}
+        <div className="px-4 py-3 flex items-center gap-3">
+          {user?.user_metadata?.avatar_url ? (
+            <img
+              src={user.user_metadata.avatar_url}
+              className="w-8 h-8 rounded-full shrink-0 ring-2 ring-border"
+              alt=""
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold shrink-0">
+              {(user?.user_metadata?.full_name ?? user?.email ?? "?")[0].toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-text-main truncate leading-tight">
+              {user?.user_metadata?.full_name ?? "Usuário"}
+            </p>
+            <p className="text-[11px] text-text-secondary truncate leading-tight mt-0.5">
+              {user?.email}
+            </p>
           </div>
         </div>
       </div>
@@ -164,33 +191,23 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
         </button>
       </div>
 
-      {/* User + Settings */}
-      <div className="px-3 py-3 border-t border-border">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={signOut}
-            className="flex items-center gap-2 flex-1 px-2 py-1.5 rounded-lg hover:bg-card transition-all group min-w-0"
-          >
-            {user?.user_metadata?.avatar_url ? (
-              <img src={user.user_metadata.avatar_url} className="w-6 h-6 rounded-full shrink-0" alt="" />
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                {user?.email?.[0]?.toUpperCase()}
-              </div>
-            )}
-            <span className="text-xs text-text-secondary truncate flex-1 text-left">
-              {user?.user_metadata?.full_name ?? user?.email}
-            </span>
-            <span className="text-text-secondary text-xs opacity-0 group-hover:opacity-100 shrink-0">Sair</span>
-          </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-1.5 rounded-lg hover:bg-card text-text-secondary hover:text-text-main transition-all shrink-0"
-            title="Configurações"
-          >
-            ⚙️
-          </button>
-        </div>
+      {/* Rodapé: configurações + sair */}
+      <div className="px-3 py-2 border-t border-border flex items-center gap-1">
+        <button
+          onClick={() => setShowSettings(true)}
+          className="flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-text-secondary hover:text-text-main hover:bg-card transition-all"
+          title="Configurações"
+        >
+          <span>⚙️</span>
+          <span>Configurações</span>
+        </button>
+        <button
+          onClick={signOut}
+          className="px-2 py-1.5 rounded-lg text-xs text-text-secondary hover:text-danger hover:bg-card transition-all"
+          title="Sair"
+        >
+          Sair
+        </button>
       </div>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
