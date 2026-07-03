@@ -57,6 +57,18 @@ function isOverdue(date) {
   return date && date < todayStr();
 }
 
+function deadlineUrgency(dateStr) {
+  if (!dateStr) return null;
+  const today = localDateStr();
+  if (dateStr < today) return { level: "overdue", label: "Venceu!", color: "#FF3B30", pulse: true };
+  if (dateStr === today) return { level: "today", label: "Vence hoje", color: "#FF3B30", pulse: true };
+  const diff = Math.round((new Date(dateStr + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
+  if (diff === 1) return { level: "tomorrow", label: "Vence amanhã", color: "#FF9500", pulse: false };
+  if (diff <= 3) return { level: "soon", label: `Vence em ${diff} dias`, color: "#FF9500", pulse: false };
+  if (diff <= 7) return { level: "week", label: `Vence em ${diff} dias`, color: "#FFCC00", pulse: false };
+  return null; // mais de 7 dias → mostra só a data normal
+}
+
 const RECURRENCE_LABELS = {
   daily: "Diariamente",
   weekdays: "Dias úteis",
@@ -1259,14 +1271,22 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                       <span>↺</span>{RECURRENCE_LABELS[task.recurrence] ?? task.recurrence}
                     </span>
                   )}
-                  {task.deadline && (
-                    <span className={[
-                      "text-xs flex items-center gap-0.5",
-                      isOverdue(task.deadline) ? "text-danger font-medium" : "text-text-secondary",
-                    ].join(" ")}>
-                      <span>🚨</span>{formatDate(task.deadline)}
-                    </span>
-                  )}
+                  {task.deadline && !task.completed_at && (() => {
+                    const urg = deadlineUrgency(task.deadline);
+                    if (urg) return (
+                      <span
+                        className={["text-[10px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded-full", urg.pulse ? "animate-pulse" : ""].join(" ")}
+                        style={{ color: urg.color, backgroundColor: urg.color + "22" }}
+                      >
+                        🚨 {urg.label}
+                      </span>
+                    );
+                    return (
+                      <span className="text-xs text-text-secondary flex items-center gap-0.5">
+                        <span>🚨</span>{formatDate(task.deadline)}
+                      </span>
+                    );
+                  })()}
                   {task.duration_minutes && (
                     <span className="text-xs text-text-secondary">{durationLabel(task.duration_minutes)}</span>
                   )}
