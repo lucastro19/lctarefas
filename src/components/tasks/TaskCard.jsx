@@ -515,10 +515,23 @@ function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos
   );
 }
 
+function dateStr(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+
+function nextWeekday(weekday) {
+  // weekday: 0=dom, 1=seg, 6=sab
+  const d = new Date();
+  const diff = (weekday - d.getDay() + 7) % 7 || 7;
+  d.setDate(d.getDate() + diff);
+  return dateStr(d);
+}
+
 function TaskMenu({ task, onClose, onRecurrenceDelete }) {
   const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
   const { saveTemplate } = useTemplateStore();
   const ref = useRef(null);
+  const [showDateSub, setShowDateSub] = useState(false);
 
   useEffect(() => {
     const handler = (e) => {
@@ -532,31 +545,74 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
     };
   }, [onClose]);
 
-  const tomorrow = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
-  };
-
   const run = (fn) => async (e) => { e?.stopPropagation(); await fn(); onClose(); };
-  const isToday = task.scheduled_date === todayStr();
   const isSomeday = task.someday;
   const isArchived = !!task.archived_at;
+
+  const DATE_OPTIONS = [
+    {
+      label: "Nenhum",
+      icon: "✕",
+      apply: () => updateTask(task.id, { scheduled_date: null, scheduled_time: null, someday: false }),
+    },
+    {
+      label: "Amanhã",
+      icon: "📅",
+      apply: () => {
+        const d = new Date(); d.setDate(d.getDate() + 1);
+        updateTask(task.id, { scheduled_date: dateStr(d), someday: false });
+      },
+    },
+    {
+      label: "Depois de Amanhã",
+      icon: "⏩",
+      apply: () => {
+        const d = new Date(); d.setDate(d.getDate() + 2);
+        updateTask(task.id, { scheduled_date: dateStr(d), someday: false });
+      },
+    },
+    {
+      label: "Próximo Fim de Semana",
+      icon: "🏖️",
+      apply: () => updateTask(task.id, { scheduled_date: nextWeekday(6), scheduled_time: "09:00", someday: false }),
+    },
+    {
+      label: "Próxima Semana",
+      icon: "📆",
+      apply: () => updateTask(task.id, { scheduled_date: nextWeekday(1), scheduled_time: "09:00", someday: false }),
+    },
+  ];
 
   return (
     <div
       ref={ref}
       onClick={(e) => e.stopPropagation()}
-      className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[185px]"
+      className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[200px]"
     >
-      {!isToday && (
-        <button onClick={run(() => moveToToday(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
-          ☀️ Mover para Hoje
-        </button>
-      )}
-      <button onClick={run(() => updateTask(task.id, { scheduled_date: tomorrow(), someday: false }))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
-        📅 Adiar para Amanhã
+      {/* Data Limite — submenu inline */}
+      <button
+        onClick={(e) => { e.stopPropagation(); setShowDateSub((v) => !v); }}
+        className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between"
+      >
+        <span>📅 Data Limite</span>
+        <span className="text-text-secondary text-xs ml-2">{showDateSub ? "▾" : "▸"}</span>
       </button>
+
+      {showDateSub && (
+        <div className="mx-2 mb-1 rounded-lg border border-border overflow-hidden">
+          {DATE_OPTIONS.map((opt) => (
+            <button
+              key={opt.label}
+              onClick={run(opt.apply)}
+              className="menu-item w-full text-left px-3 py-2 text-xs transition-colors flex items-center gap-2"
+            >
+              <span>{opt.icon}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {!isSomeday && (
         <button onClick={run(() => moveToSomeday(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
           🔮 Mover para Depois
