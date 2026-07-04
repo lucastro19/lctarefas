@@ -618,26 +618,36 @@ export const useTaskStore = create(
       getByProject: (projectId) =>
         get().tasks.filter((t) => t.project_id === projectId && active(t)),
 
-      // --- Completed sections ---
+      // --- Completed sections (sempre ordenadas por conclusão decrescente) ---
       getCompletedInbox: () =>
-        get().tasks.filter((t) => !t.project_id && !t.area_id && !!t.completed_at && !t.deleted_at),
+        get().tasks
+          .filter((t) => !t.project_id && !t.area_id && !!t.completed_at && !t.deleted_at)
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
 
       getCompletedToday: () => {
         const t = today();
-        return get().tasks.filter((task) => {
-          if (!task.completed_at || task.deleted_at || task.archived_at) return false;
-          return task.completed_at.slice(0, 10) === t;
-        });
+        return get().tasks
+          .filter((task) => {
+            if (!task.completed_at || task.deleted_at || task.archived_at) return false;
+            return task.completed_at.slice(0, 10) === t;
+          })
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at));
       },
 
       getCompletedSomeday: () =>
-        get().tasks.filter((t) => t.someday && !!t.completed_at && !t.deleted_at && !t.archived_at),
+        get().tasks
+          .filter((t) => t.someday && !!t.completed_at && !t.deleted_at && !t.archived_at)
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
 
       getCompletedByProject: (projectId) =>
-        get().tasks.filter((t) => t.project_id === projectId && !!t.completed_at && !t.deleted_at),
+        get().tasks
+          .filter((t) => t.project_id === projectId && !!t.completed_at && !t.deleted_at)
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
 
       getCompletedByArea: (areaId) =>
-        get().tasks.filter((t) => t.area_id === areaId && !t.project_id && !!t.completed_at && !t.deleted_at),
+        get().tasks
+          .filter((t) => t.area_id === areaId && !t.project_id && !!t.completed_at && !t.deleted_at)
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
 
       getAllCompleted: () =>
         get().tasks
