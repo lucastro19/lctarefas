@@ -25,7 +25,10 @@ const ROUTE_OPTIONS = [
 ];
 
 export function SettingsModal({ onClose }) {
-  const { dayStart, defaultDurationMinutes, theme, tabBarIds, setDayStart, setDefaultDuration, setTheme, setTabBarIds } = useSettingsStore();
+  const {
+    dayStart, lunchStart, lunchEnd, dayEnd, defaultDurationMinutes, theme, tabBarIds,
+    setDayStart, setLunchStart, setLunchEnd, setDayEnd, setDefaultDuration, setTheme, setTabBarIds,
+  } = useSettingsStore();
   const { tasks } = useTaskStore();
   const { tags, createTag, updateTag, deleteTag, fetchTags } = useTagStore();
   const [editingTagId, setEditingTagId] = useState(null);
@@ -159,19 +162,32 @@ export function SettingsModal({ onClose }) {
             </div>
           </div>
 
+          {/* Horários do dia */}
           <div>
-            <label className="text-xs font-medium text-text-secondary block mb-1.5">
-              ☀️ Início do dia
+            <label className="text-xs font-medium text-text-secondary block mb-3">
+              🕐 Horários do dia
             </label>
-            <input
-              type="time"
-              value={dayStart}
-              onChange={(e) => setDayStart(e.target.value)}
-              className="w-full text-sm bg-bg border border-border rounded-lg px-3 py-2 outline-none focus:border-primary"
-            />
-            <p className="text-xs text-text-secondary mt-1">
-              Primeira tarefa do dia começa neste horário.
-            </p>
+            <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+              {[
+                { label: "🌅 Início da manhã", value: dayStart, setter: setDayStart, hint: "Primeira tarefa do período da manhã" },
+                { label: "🍽️ Início do almoço", value: lunchStart, setter: setLunchStart, hint: "Limite do período da manhã" },
+                { label: "☀️ Fim do almoço", value: lunchEnd, setter: setLunchEnd, hint: "Início do período da tarde" },
+                { label: "🌆 Fim da tarde", value: dayEnd, setter: setDayEnd, hint: "Início do período da noite" },
+              ].map(({ label, value, setter, hint }) => (
+                <div key={label} className="flex items-center gap-3 px-3 py-2.5 bg-card">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text-main">{label}</p>
+                    <p className="text-xs text-text-secondary">{hint}</p>
+                  </div>
+                  <input
+                    type="time"
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    className="text-sm bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary w-28 text-center"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           <div>

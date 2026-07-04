@@ -49,22 +49,32 @@ function minutesToStr(mins) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function getPeriod(time) {
+// Determina o período de um horário com base nas configurações do usuário
+function getPeriod(time, settings) {
   if (!time) return "sem-horario";
   const mins = timeToMinutes(time);
-  if (mins < 5 * 60) return "noite";
-  if (mins < 12 * 60) return "manha";
-  if (mins < 18 * 60) return "tarde";
-  return "noite";
+  const dayStartMins   = timeToMinutes(settings.dayStart);
+  const lunchStartMins = timeToMinutes(settings.lunchStart);
+  const lunchEndMins   = timeToMinutes(settings.lunchEnd);
+  const dayEndMins     = timeToMinutes(settings.dayEnd);
+
+  // Antes do início do dia ou depois do fim da tarde → noite
+  if (mins < dayStartMins || mins >= dayEndMins) return "noite";
+  if (mins >= lunchEndMins) return "tarde";
+  if (mins >= lunchStartMins) return "almoco"; // intervalo (ignorado nas listas)
+  return "manha";
 }
 
-// Horário de início de cada período
-const PERIOD_START = { manha: null, tarde: 12 * 60, noite: 18 * 60 }; // manhã usa dayStart
+// Calcula o próximo slot disponível num período, respeitando o limite do período
+// Se overflow, retorna o início do próximo período
+function nextSlotInPeriod(periodKey, periodTasks, settings, defaultDuration) {
+  const ds  = timeToMinutes(settings.dayStart);
+  const ls  = timeToMinutes(settings.lunchStart);
+  const le  = timeToMinutes(settings.lunchEnd);
+  const de  = timeToMinutes(settings.dayEnd);
 
-// Dado as tarefas já no período, calcula o próximo slot disponível
-function nextSlotInPeriod(periodKey, periodTasks, dayStartStr, defaultDuration) {
-  const [sh, sm] = dayStartStr.split(":").map(Number);
-  const periodStart = periodKey === "manha" ? sh * 60 + sm : PERIOD_START[periodKey];
+  const periodStart = periodKey === "manha" ? ds : periodKey === "tarde" ? le : de;
+  const periodEnd   = periodKey === "manha" ? ls : periodKey === "tarde" ? de : null; // noite sem limite
 
   if (periodTasks.length === 0) return minutesToStr(periodStart);
 
@@ -72,7 +82,15 @@ function nextSlotInPeriod(periodKey, periodTasks, dayStartStr, defaultDuration) 
   const last = sorted[sorted.length - 1];
   const lastStart = timeToMinutes(last.scheduled_time);
   const lastDur = last.duration_minutes ?? defaultDuration;
-  return minutesToStr(lastStart + lastDur);
+  const nextStart = lastStart + lastDur;
+
+  // Se o próximo slot transborda o limite do período, pula para o início do próximo
+  if (periodEnd !== null && nextStart >= periodEnd) {
+    if (periodKey === "manha") return minutesToStr(le);  // pula para início da tarde
+    if (periodKey === "tarde") return minutesToStr(de);  // pula para início da noite
+  }
+
+  return minutesToStr(nextStart);
 }
 
 const TIMED_PERIODS = [
@@ -112,7 +130,8 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   const { subtasks, fetchSubtasks } = useTaskStore();
   const { selectedIds, selectAll, clearAll } = useSelectionStore();
   const { focusMode } = useUiStore();
-  const { dayStart, defaultDurationMinutes } = useSettingsStore();
+  const settings = useSettingsStore();
+  const { defaultDurationMinutes } = settings;
   const [showCompleted, setShowCompleted] = useState(false);
   const [showNoPriority, setShowNoPriority] = useState(false);
   const [showNoTime, setShowNoTime] = useState(false);
@@ -190,10 +209,10 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   const sorted = [...tasks].sort((a, b) => timeToMinutes(a.scheduled_time) - timeToMinutes(b.scheduled_time));
 
   const grouped = TIMED_PERIODS.reduce((acc, p) => {
-    acc[p.key] = sorted.filter((t) => getPeriod(t.scheduled_time) === p.key);
+    acc[p.key] = sorted.filter((t) => getPeriod(t.scheduled_time, settings) === p.key);
     return acc;
   }, {});
-  const noTimeTasks = sorted.filter((t) => getPeriod(t.scheduled_time) === "sem-horario");
+  const noTimeTasks = sorted.filter((t) => getPeriod(t.scheduled_time, settings) === "sem-horario");
 
   return (
     <>
@@ -220,7 +239,7 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
         <SortableContext items={sorted.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {TIMED_PERIODS.map((period) => {
             const periodTasks = grouped[period.key];
-            const nextSlot = nextSlotInPeriod(period.key, periodTasks, dayStart, defaultDurationMinutes);
+                const nextSlot = nextSlotInPeriod(period.key, periodTasks, settings, defaultDurationMinutes);
             return (
               <div key={period.key}>
                 <PeriodSeparator icon={period.icon} label={period.label} />

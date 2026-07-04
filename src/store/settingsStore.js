@@ -15,11 +15,17 @@ export const useSettingsStore = create(
   persist(
     (set, get) => ({
       dayStart: "09:00",
+      lunchStart: "12:00",
+      lunchEnd: "13:00",
+      dayEnd: "18:00",
       defaultDurationMinutes: 30,
       theme: "auto",
       tabBarIds: ["inbox", "today", "upcoming", "someday"],
 
       setDayStart: (v) => set({ dayStart: v }),
+      setLunchStart: (v) => set({ lunchStart: v }),
+      setLunchEnd: (v) => set({ lunchEnd: v }),
+      setDayEnd: (v) => set({ dayEnd: v }),
       setDefaultDuration: (v) => set({ defaultDurationMinutes: Number(v) }),
       setTabBarIds: (v) => set({ tabBarIds: v }),
       setTheme: (v) => {
