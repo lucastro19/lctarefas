@@ -113,8 +113,8 @@ export function scheduleTaskNotifications(tasks) {
       const fireAt     = buildFireTime(task.scheduled_date, task.scheduled_time);
       const isUrgent   = !!task.is_urgent;
 
-      // Lembrete personalizado por tarefa (task.reminder_minutes, ex: 15)
-      const reminderMin = task.reminder_minutes ?? (isUrgent ? 30 : null);
+      // Lembrete antecipado apenas quando explicitamente definido na tarefa
+      const reminderMin = task.reminder_minutes ?? null;
 
       // ── Deadline: avisa às 08:00 do dia do vencimento ────────
       if (task.deadline) {
@@ -160,8 +160,8 @@ export function scheduleTaskNotifications(tasks) {
         );
       }
 
-      // Para urgentes: aviso adicional a 5 min antes (se não coincidir com o early)
-      if (isUrgent && reminderMin !== 5) {
+      // Aviso a 5 min antes apenas se o lembrete definido for maior que 5 min
+      if (reminderMin && reminderMin > 5) {
         const fiveAt = new Date(fireAt.getTime() - 5 * 60 * 1000);
         scheduleAt(
           fiveAt,

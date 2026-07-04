@@ -6,6 +6,7 @@ import { BulkActionBar } from "./BulkActionBar";
 import { useTaskStore } from "../../store/taskStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
+import { useSettingsStore } from "../../store/settingsStore";
 
 function OverdueSection({ tasks, subtasks, onTaskClick }) {
   const [open, setOpen] = useState(true);
@@ -42,6 +43,12 @@ function timeToMinutes(time) {
   return h * 60 + m;
 }
 
+function minutesToStr(mins) {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function getPeriod(time) {
   if (!time) return "sem-horario";
   const mins = timeToMinutes(time);
@@ -51,14 +58,28 @@ function getPeriod(time) {
   return "noite";
 }
 
-const PERIODS = [
+// Horário de início de cada período
+const PERIOD_START = { manha: null, tarde: 12 * 60, noite: 18 * 60 }; // manhã usa dayStart
+
+// Dado as tarefas já no período, calcula o próximo slot disponível
+function nextSlotInPeriod(periodKey, periodTasks, dayStartStr, defaultDuration) {
+  const [sh, sm] = dayStartStr.split(":").map(Number);
+  const periodStart = periodKey === "manha" ? sh * 60 + sm : PERIOD_START[periodKey];
+
+  if (periodTasks.length === 0) return minutesToStr(periodStart);
+
+  const sorted = [...periodTasks].sort((a, b) => timeToMinutes(a.scheduled_time) - timeToMinutes(b.scheduled_time));
+  const last = sorted[sorted.length - 1];
+  const lastStart = timeToMinutes(last.scheduled_time);
+  const lastDur = last.duration_minutes ?? defaultDuration;
+  return minutesToStr(lastStart + lastDur);
+}
+
+const TIMED_PERIODS = [
   { key: "manha", label: "Manhã", icon: "🌅" },
   { key: "tarde", label: "Tarde", icon: "☀️" },
   { key: "noite", label: "Noite", icon: "🌙" },
-  { key: "sem-horario", label: "Sem horário", icon: "📋" },
 ];
-
-const PRIORITY_ORDER = { high: 0, medium: 1, low: 2, null: 3, undefined: 3 };
 
 function PeriodSeparator({ icon, label }) {
   return (
@@ -91,8 +112,10 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   const { subtasks, fetchSubtasks } = useTaskStore();
   const { selectedIds, selectAll, clearAll } = useSelectionStore();
   const { focusMode } = useUiStore();
+  const { dayStart, defaultDurationMinutes } = useSettingsStore();
   const [showCompleted, setShowCompleted] = useState(false);
   const [showNoPriority, setShowNoPriority] = useState(false);
+  const [showNoTime, setShowNoTime] = useState(false);
 
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.includes(t.id));
 
@@ -112,7 +135,6 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
     return (
       <>
         <div className="space-y-1">
-          {/* Banner de foco */}
           <div className="flex items-center gap-2 mb-4 px-1 py-2 rounded-xl bg-primary/8 border border-primary/20">
             <span className="text-sm">🎯</span>
             <span className="text-xs font-medium text-primary flex-1">Modo Foco — apenas tarefas pendentes</span>
@@ -164,16 +186,14 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
     );
   }
 
-  // ── MODO NORMAL ──
+  // ── MODO NORMAL — períodos sempre visíveis ──
   const sorted = [...tasks].sort((a, b) => timeToMinutes(a.scheduled_time) - timeToMinutes(b.scheduled_time));
 
-  const grouped = PERIODS.reduce((acc, p) => {
+  const grouped = TIMED_PERIODS.reduce((acc, p) => {
     acc[p.key] = sorted.filter((t) => getPeriod(t.scheduled_time) === p.key);
     return acc;
   }, {});
-
-  const activePeriods = PERIODS.filter((p) => grouped[p.key].length > 0);
-  const showSeparators = activePeriods.length > 1 || (activePeriods.length === 1 && activePeriods[0].key !== "sem-horario");
+  const noTimeTasks = sorted.filter((t) => getPeriod(t.scheduled_time) === "sem-horario");
 
   return (
     <>
@@ -194,30 +214,48 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
         )}
 
         {tasks.length === 0 && overdueTasks.length === 0 && completedTasks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center gap-2 select-none">
-            <span className="text-5xl opacity-30 mb-1">☀️</span>
-            <p className="text-sm text-text-secondary">Nenhuma tarefa para hoje. Aproveite o dia!</p>
-          </div>
+          <div className="pb-2" />
         )}
 
         <SortableContext items={sorted.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {PERIODS.map((period) => {
+          {TIMED_PERIODS.map((period) => {
             const periodTasks = grouped[period.key];
-            if (periodTasks.length === 0) return null;
+            const nextSlot = nextSlotInPeriod(period.key, periodTasks, dayStart, defaultDurationMinutes);
             return (
               <div key={period.key}>
-                {showSeparators && <PeriodSeparator icon={period.icon} label={period.label} />}
+                <PeriodSeparator icon={period.icon} label={period.label} />
                 <div className="space-y-1">
                   {periodTasks.map((task) => (
                     <TaskCard key={task.id} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
                   ))}
                 </div>
+                <NewTaskInput
+                  defaultFields={{ ...defaultFields, scheduled_time: nextSlot }}
+                />
               </div>
             );
           })}
         </SortableContext>
 
-        <NewTaskInput defaultFields={defaultFields} />
+        {/* Tarefas sem horário (colapsável) */}
+        {noTimeTasks.length > 0 && (
+          <div className="pt-1">
+            <button
+              onClick={() => setShowNoTime((v) => !v)}
+              className="flex items-center gap-2 text-xs text-[#8E8E93] hover:text-text-main dark:text-white/40 dark:hover:text-white/80 py-2 px-1 w-full transition-colors font-medium"
+            >
+              <span>{showNoTime ? "▾" : "▸"}</span>
+              <span>📋 {noTimeTasks.length} sem horário</span>
+            </button>
+            {showNoTime && (
+              <div className="space-y-1 mt-1">
+                {noTimeTasks.map((task) => (
+                  <TaskCard key={task.id} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {completedTasks.length > 0 && (
           <div className="pt-2">

@@ -358,63 +358,19 @@ function PriorityButton({ task, updateTask }) {
 
 /* ── Botão de urgência com dropdown ── */
 function UrgencyButton({ task, updateTask }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const setUrgent = (val) => {
-    updateTask(task.id, { is_urgent: val });
-    setOpen(false);
-  };
-
-  const btnId = `urgency-btn-${task.id}`;
-
   return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        id={btnId}
-        onMouseDown={(e) => { e.preventDefault(); setOpen((v) => !v); }}
-        title={task.is_urgent ? "Urgente — clique para alterar" : "Definir urgência"}
-        className={[
-          "text-[13px] transition-all leading-none",
-          task.is_urgent
-            ? "text-danger drop-shadow-[0_0_4px_rgba(255,59,48,0.5)]"
-            : "text-text-secondary hover:text-danger",
-        ].join(" ")}
-      >
-        🔔
-      </button>
-
-      {open && createPortal(
-        <div style={{ position: "fixed", top: (() => { const el = document.getElementById(btnId); return el ? el.getBoundingClientRect().bottom + 4 : 0; })(), left: (() => { const el = document.getElementById(btnId); return el ? el.getBoundingClientRect().left : 0; })(), zIndex: 9999 }}
-          className="bg-card border border-border rounded-lg shadow-md py-1 min-w-[170px]"
-        >
-          <button
-            onMouseDown={(e) => { e.preventDefault(); setUrgent(false); }}
-            className="menu-item w-full text-left px-3 py-2 text-xs flex items-center gap-2"
-          >
-            <span className={["w-3 text-primary text-center", !task.is_urgent ? "opacity-100" : "opacity-0"].join(" ")}>✓</span>
-            Nenhum
-          </button>
-          <div className="h-px bg-border mx-2 my-0.5" />
-          <button
-            onMouseDown={(e) => { e.preventDefault(); setUrgent(true); }}
-            className="menu-item w-full text-left px-3 py-2 text-xs flex items-center gap-2"
-          >
-            <span className={["w-3 text-danger text-center", task.is_urgent ? "opacity-100" : "opacity-0"].join(" ")}>✓</span>
-            <span className="text-danger font-medium">🔔 Marcar como Urgente</span>
-          </button>
-        </div>,
-        document.body
-      )}
-    </div>
+    <button
+      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); updateTask(task.id, { is_urgent: !task.is_urgent }); }}
+      title={task.is_urgent ? "Urgente — clique para remover" : "Marcar como urgente"}
+      className={[
+        "text-[13px] transition-all leading-none",
+        task.is_urgent
+          ? "text-danger drop-shadow-[0_0_4px_rgba(255,59,48,0.5)]"
+          : "text-text-secondary hover:text-danger",
+      ].join(" ")}
+    >
+      🔔
+    </button>
   );
 }
 
