@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { supabase } from "../lib/supabase";
 import { useSettingsStore, minutesToTime } from "./settingsStore";
 import { useUiStore } from "./uiStore";
+import { useAuthStore } from "./authStore";
 import { cancelNotification } from "../services/notifications";
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -103,8 +104,8 @@ export const useTaskStore = create(
         const queue = [...get().offlineQueue];
         if (queue.length === 0) return;
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        const user = useAuthStore.getState().user;
+        if (!user?.id) return;
 
         const processed = [];
 
@@ -153,16 +154,18 @@ export const useTaskStore = create(
       // --- Create ---
       createTask: async (fields) => {
         if (get()._creating) return null;
+        // Usa o user do authStore (já em memória, sem requisição de rede)
+        const user = useAuthStore.getState().user;
+        if (!user?.id) return null;
         set({ _creating: true });
 
         try {
-          const { data: { user } } = await supabase.auth.getUser();
           const autoTime = fields.scheduled_date && !fields.scheduled_time
             ? { scheduled_time: nextSequentialTime(fields.scheduled_date, get().tasks) }
             : {};
           const fullFields = { duration_minutes: 30, ...autoTime, ...fields, user_id: user.id };
 
-          // Otimismo: adiciona com ID temporário imediatamente
+          // Otimismo: adiciona IMEDIATAMENTE com ID temporário, antes de qualquer await
           const tempId = `temp_${Date.now()}`;
           const optimistic = {
             ...fullFields,
@@ -190,13 +193,22 @@ export const useTaskStore = create(
             .single();
 
           if (error) {
-            set((s) => ({ tasks: s.tasks.filter((t) => t.id !== tempId) }));
-            console.error("createTask error:", error);
-            alert("Erro ao criar tarefa: " + error.message + "\n\nVerifique se rodou as migrations no Supabase.");
+            // Remove o otimista apenas se foi erro não-rede (rede = fica na fila)
+            const isNetworkErr = !navigator.onLine || error.message?.includes("fetch");
+            if (isNetworkErr) {
+              set((s) => ({
+                offlineQueue: [...s.offlineQueue, { qid: Date.now(), op: "create", tempId, fields: fullFields }],
+              }));
+            } else {
+              set((s) => ({ tasks: s.tasks.filter((t) => t.id !== tempId) }));
+              console.error("createTask error:", error);
+              alert("Erro ao criar tarefa: " + error.message + "\n\nVerifique se rodou as migrations no Supabase.");
+            }
             return null;
           }
 
           if (data) {
+            // Substitui tempId pelo ID real do servidor
             set((s) => ({ tasks: s.tasks.map((t) => (t.id === tempId ? data : t)) }));
           }
 
@@ -268,7 +280,8 @@ export const useTaskStore = create(
         if (task?.recurrence) {
           const next = nextRecurrenceDate(task.recurrence, task.scheduled_date);
           if (next) {
-            const { data: { user } } = await supabase.auth.getUser();
+            const user = useAuthStore.getState().user;
+            if (!user?.id) return;
             const { data } = await supabase.from("tasks").insert([{
               title: task.title,
               notes: task.notes,
@@ -401,7 +414,8 @@ export const useTaskStore = create(
       duplicateTask: async (id) => {
         const task = get().tasks.find((t) => t.id === id);
         if (!task) return;
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = useAuthStore.getState().user;
+        if (!user?.id) return;
         const { data } = await supabase.from("tasks").insert([{
           title: task.title + " (cópia)",
           notes: task.notes,
