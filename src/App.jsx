@@ -54,7 +54,7 @@ function OfflineBanner() {
 
 function AppRoutes() {
   const { user, loading, init } = useAuthStore();
-  const { tasks, fetchTasks } = useTaskStore();
+  const { tasks, fetchTasks, subscribeRealtime, unsubscribeRealtime, drainQueue } = useTaskStore();
   const { fetchAll } = useAreaStore();
   const { fetchTags, fetchAllTaskTags } = useTagStore();
   const { clearAll } = useSelectionStore();
@@ -81,8 +81,18 @@ function AppRoutes() {
       fetchTags();
       fetchAllTaskTags();
       requestNotificationPermission();
+      // Realtime sync entre dispositivos
+      const unsub = subscribeRealtime();
+      return () => { if (unsub) unsub(); };
     }
   }, [user]);
+
+  // Drena a fila offline quando a conexão volta
+  useEffect(() => {
+    const handleOnline = () => drainQueue();
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, []);
 
   // Reagenda notificações sempre que as tarefas mudam
   useEffect(() => {
