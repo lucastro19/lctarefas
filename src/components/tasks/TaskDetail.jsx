@@ -88,7 +88,7 @@ function MeetIcon({ size = 18 }) {
 
 function SectionLabel({ children }) {
   return (
-    <p className="text-[11px] font-semibold text-text-secondary/60 uppercase tracking-wider mb-1.5 ml-1">
+    <p className="text-[10px] font-semibold text-text-secondary/60 uppercase tracking-wider mb-1 ml-1">
       {children}
     </p>
   );
@@ -370,7 +370,7 @@ export function TaskDetail({ task, onClose }) {
             {saving && <span className="text-xs text-text-secondary pr-2">Salvando…</span>}
           </div>
 
-          <div className="px-4 pt-3 space-y-5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}>
+          <div className="px-4 pt-2 space-y-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}>
 
             {/* Title + Notes */}
             <div className="rounded-2xl overflow-hidden bg-card">
@@ -381,7 +381,7 @@ export function TaskDetail({ task, onClose }) {
                 onBlur={() => save()}
                 rows={1}
                 placeholder="Título"
-                className="w-full text-[20px] font-bold text-text-main bg-transparent px-4 pt-4 pb-3 outline-none leading-tight placeholder:text-text-secondary/40 resize-none overflow-hidden"
+                className="w-full text-[17px] font-bold text-text-main bg-transparent px-4 pt-3 pb-2 outline-none leading-tight placeholder:text-text-secondary/40 resize-none overflow-hidden"
                 style={{ minHeight: "2rem" }}
               />
               <div className="h-px bg-border/40 mx-4" />
@@ -391,7 +391,7 @@ export function TaskDetail({ task, onClose }) {
                 onBlur={() => save()}
                 rows={3}
                 placeholder="Adicionar notas…"
-                className="w-full text-[15px] text-text-main bg-transparent px-4 py-3 outline-none resize-none placeholder:text-text-secondary/40"
+                className="w-full text-[13px] text-text-main bg-transparent px-4 py-2 outline-none resize-none placeholder:text-text-secondary/40"
               />
             </div>
 
@@ -402,11 +402,11 @@ export function TaskDetail({ task, onClose }) {
 
                 {/* Data */}
                 <div>
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <span className="text-[17px] w-6 text-center leading-none">📅</span>
-                    <span className="flex-1 text-[16px] text-text-main">Data</span>
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">📅</span>
+                    <span className="flex-1 text-[14px] text-text-main">Data</span>
                     {scheduledDate && (
-                      <span className="text-[13px] text-primary mr-2 truncate max-w-[130px]">{fmtDate(scheduledDate)}</span>
+                      <span className="text-[12px] text-primary mr-2 truncate max-w-[130px]">{fmtDate(scheduledDate)}</span>
                     )}
                     <Toggle on={!!scheduledDate} onChange={v => {
                       if (v) { const d = localDateStr(); setScheduledDate(d); updateTask(task.id, { scheduled_date: d }); }
@@ -414,7 +414,7 @@ export function TaskDetail({ task, onClose }) {
                     }} />
                   </div>
                   {scheduledDate && (
-                    <div className="px-4 pb-3 space-y-2">
+                    <div className="px-4 pb-2 space-y-1.5">
                       <input
                         type="date"
                         value={scheduledDate}
@@ -439,11 +439,11 @@ export function TaskDetail({ task, onClose }) {
 
                 {/* Horário */}
                 <div>
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <span className="text-[17px] w-6 text-center leading-none">🕐</span>
-                    <span className="flex-1 text-[16px] text-text-main">Horário</span>
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🕐</span>
+                    <span className="flex-1 text-[14px] text-text-main">Horário</span>
                     {scheduledTime && (
-                      <span className="text-[13px] text-primary mr-2">{scheduledTime.slice(0, 5)}</span>
+                      <span className="text-[12px] text-primary mr-2">{scheduledTime.slice(0, 5)}</span>
                     )}
                     <Toggle on={!!scheduledTime} onChange={v => {
                       if (v) { setScheduledTime("09:00"); updateTask(task.id, { scheduled_time: "09:00" }); }
@@ -451,7 +451,7 @@ export function TaskDetail({ task, onClose }) {
                     }} />
                   </div>
                   {scheduledTime && (
-                    <div className="px-4 pb-3">
+                    <div className="px-4 pb-2">
                       <input
                         type="time"
                         value={scheduledTime}
@@ -464,17 +464,17 @@ export function TaskDetail({ task, onClose }) {
                 </div>
 
                 {/* Urgente */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <span className="text-[17px] w-6 text-center leading-none">🔔</span>
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">🔔</span>
                   <span className={["flex-1 text-[16px]", isUrgent ? "text-[#FF3B30] font-medium" : "text-text-main"].join(" ")}>Urgente</span>
                   <Toggle on={isUrgent} red onChange={async v => { setIsUrgent(v); await updateTask(task.id, { is_urgent: v }); }} />
                 </div>
 
                 {/* Prazo */}
                 <div>
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <span className="text-[17px] w-6 text-center leading-none">🚨</span>
-                    <span className="flex-1 text-[16px] text-text-main">Prazo</span>
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🚨</span>
+                    <span className="flex-1 text-[14px] text-text-main">Prazo</span>
                     {deadline && (
                       <span className="text-[13px] text-[#FF3B30] mr-2">{fmtDate(deadline)}</span>
                     )}
@@ -484,7 +484,7 @@ export function TaskDetail({ task, onClose }) {
                     }} />
                   </div>
                   {deadline && (
-                    <div className="px-4 pb-3">
+                    <div className="px-4 pb-2">
                       <input
                         type="date"
                         value={deadline}
@@ -658,9 +658,9 @@ export function TaskDetail({ task, onClose }) {
             <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
 
               {/* Duração */}
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-[17px] w-6 text-center leading-none">⏱</span>
-                <span className="flex-1 text-[16px] text-text-main">Duração</span>
+              <div className="flex items-center gap-3 px-4 py-2">
+                <span className="text-[15px] w-5 text-center leading-none">⏱</span>
+                <span className="flex-1 text-[14px] text-text-main">Duração</span>
                 {!customDuration ? (
                   <select
                     value={durationMinutes}
@@ -670,7 +670,7 @@ export function TaskDetail({ task, onClose }) {
                       setDurationMinutes(v ?? "");
                       updateTask(task.id, { duration_minutes: v });
                     }}
-                    className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                    className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
                   >
                     <option value="">Sem duração</option>
                     {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -698,9 +698,9 @@ export function TaskDetail({ task, onClose }) {
               </div>
 
               {/* Repetição */}
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-[17px] w-6 text-center leading-none">🔁</span>
-                <span className="flex-1 text-[16px] text-text-main">Repetição</span>
+              <div className="flex items-center gap-3 px-4 py-2">
+                <span className="text-[15px] w-5 text-center leading-none">🔁</span>
+                <span className="flex-1 text-[14px] text-text-main">Repetição</span>
                 <select
                   value={recurrence?.startsWith("custom:") ? "custom" : (recurrence ?? "")}
                   onChange={e => {
@@ -727,9 +727,9 @@ export function TaskDetail({ task, onClose }) {
 
               {/* Lembrete — só se horário definido */}
               {scheduledTime && (
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <span className="text-[17px] w-6 text-center leading-none">🔕</span>
-                  <span className="flex-1 text-[16px] text-text-main">Lembrete</span>
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">🔕</span>
+                  <span className="flex-1 text-[14px] text-text-main">Lembrete</span>
                   <select
                     value={reminderMinutes ?? ""}
                     onChange={e => {
@@ -737,7 +737,7 @@ export function TaskDetail({ task, onClose }) {
                       setReminderMinutes(v);
                       updateTask(task.id, { reminder_minutes: v });
                     }}
-                    className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                    className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
                   >
                     <option value="">Sem lembrete</option>
                     <option value="5">5 min antes</option>
@@ -763,8 +763,8 @@ export function TaskDetail({ task, onClose }) {
                     onClick={() => setShowContextPicker(v => !v)}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left"
                   >
-                    <span className="text-[17px] w-6 text-center leading-none">📂</span>
-                    <span className="flex-1 text-[16px] text-text-main">Contexto</span>
+                    <span className="text-[15px] w-5 text-center leading-none">📂</span>
+                    <span className="flex-1 text-[14px] text-text-main">Contexto</span>
                     <span className="text-[13px] text-text-secondary mr-2 truncate max-w-[120px]">{contextLabel}</span>
                     <ChevronRight />
                   </button>
@@ -818,8 +818,8 @@ export function TaskDetail({ task, onClose }) {
                     onClick={() => { setShowTagPicker(!showTagPicker); setCreatingTag(false); }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left"
                   >
-                    <span className="text-[17px] w-6 text-center leading-none">🏷️</span>
-                    <span className="flex-1 text-[16px] text-text-main">Tags</span>
+                    <span className="text-[15px] w-5 text-center leading-none">🏷️</span>
+                    <span className="flex-1 text-[14px] text-text-main">Tags</span>
                     <span className="text-[13px] text-text-secondary mr-2 truncate max-w-[130px]">
                       {taskTagList.length > 0 ? taskTagList.map(t => t.name).join(", ") : "Nenhuma"}
                     </span>
@@ -896,10 +896,10 @@ export function TaskDetail({ task, onClose }) {
                 </div>
 
                 {/* Checklist / Subtarefas */}
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-[17px] w-6 text-center leading-none">☑️</span>
-                    <span className="flex-1 text-[16px] text-text-main">Checklist</span>
+                <div className="px-4 py-2">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-[15px] w-5 text-center leading-none">☑️</span>
+                    <span className="flex-1 text-[14px] text-text-main">Checklist</span>
                     {taskSubtasks.length > 0 && (
                       <span className="text-[13px] text-text-secondary">
                         {taskSubtasks.filter(s => s.completed).length}/{taskSubtasks.length}
@@ -959,18 +959,18 @@ export function TaskDetail({ task, onClose }) {
 
             {/* Algum dia + Prioridade + Ações */}
             <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-[17px] w-6 text-center leading-none">🌙</span>
-                <span className="flex-1 text-[16px] text-text-main">Algum dia</span>
+              <div className="flex items-center gap-3 px-4 py-2">
+                <span className="text-[15px] w-5 text-center leading-none">🌙</span>
+                <span className="flex-1 text-[14px] text-text-main">Algum dia</span>
                 <Toggle on={someday} onChange={async v => { setSomeday(v); await updateTask(task.id, { someday: v }); }} />
               </div>
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-[17px] w-6 text-center leading-none">⚑</span>
-                <span className="flex-1 text-[16px] text-text-main">Prioridade</span>
+              <div className="flex items-center gap-3 px-4 py-2">
+                <span className="text-[15px] w-5 text-center leading-none">⚑</span>
+                <span className="flex-1 text-[14px] text-text-main">Prioridade</span>
                 <select
                   defaultValue={task.priority ?? ""}
                   onChange={e => updateTask(task.id, { priority: e.target.value || null })}
-                  className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                  className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
                 >
                   <option value="">Nenhuma</option>
                   <option value="high">🔴 Alta</option>
@@ -980,17 +980,17 @@ export function TaskDetail({ task, onClose }) {
               </div>
               <button
                 onClick={handleDelete}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#FF3B30]/5 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-[#FF3B30]/5 transition-colors"
               >
-                <span className="text-[17px] w-6 text-center leading-none">🗑️</span>
-                <span className="flex-1 text-[16px] text-[#FF3B30]">Mover para Lixeira</span>
+                <span className="text-[15px] w-5 text-center leading-none">🗑️</span>
+                <span className="flex-1 text-[14px] text-[#FF3B30]">Mover para Lixeira</span>
               </button>
               <button
                 onClick={handleArchive}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-border/20 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-border/20 transition-colors"
               >
-                <span className="text-[17px] w-6 text-center leading-none">📥</span>
-                <span className="flex-1 text-[16px] text-text-secondary">Arquivar</span>
+                <span className="text-[15px] w-5 text-center leading-none">📥</span>
+                <span className="flex-1 text-[14px] text-text-secondary">Arquivar</span>
               </button>
             </div>
 

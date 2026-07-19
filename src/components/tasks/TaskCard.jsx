@@ -1301,7 +1301,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
           : CSS.Transform.toString(transform),
         transition: swipeX !== 0 ? "none" : `${transition}, transform 0.25s cubic-bezier(.25,.8,.25,1)`,
       }}
-      onDoubleClick={() => onClick?.()}
+      onDoubleClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => { listeners?.onTouchStart?.(e); handleTouchStart(e); }}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
@@ -1846,6 +1846,20 @@ export function TaskCard({ task, subtasks = [], onClick }) {
               </>
             )}
           </div>
+        )}
+
+        {/* Chevron › — abre painel de detalhe */}
+        {!anySelected && !expanded && onClick && (
+          <button
+            onClick={e => { e.stopPropagation(); onClick(); }}
+            onDoubleClick={e => e.stopPropagation()}
+            title="Ver detalhes"
+            className="shrink-0 flex items-center justify-center w-7 h-9 text-text-secondary/40 md:text-text-secondary/20 md:group-hover:text-text-secondary/60 transition-colors"
+          >
+            <svg width="6" height="11" viewBox="0 0 7 12" fill="none">
+              <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
         )}
 
         {/* Menu ··· */}
