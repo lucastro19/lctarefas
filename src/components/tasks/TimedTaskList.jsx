@@ -9,6 +9,20 @@ import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { strToMins, minsToStr, getPeriod, nextSlotInPeriod } from "../../utils/timeSlots";
 
+function localDateStr(d = new Date()) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function fmtUrgentDate(iso) {
+  if (!iso) return null;
+  const today = localDateStr();
+  const tom = localDateStr(new Date(Date.now() + 86400000));
+  if (iso === today) return "Hoje";
+  if (iso === tom) return "Amanhã";
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+}
+
 function OverdueSection({ tasks, subtasks, onTaskClick }) {
   const [open, setOpen] = useState(true);
   const sorted = [...tasks].sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
@@ -88,7 +102,7 @@ function UrgentRow({ task, subtasks = [], onClick }) {
 
   return (
     <div
-      onClick={() => onClick?.()}
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       className={[
         "flex items-center gap-2.5 px-2 py-2 rounded-xl cursor-pointer hover:bg-danger/8 transition-colors group select-none",
         isDone ? "opacity-40" : "",
@@ -125,12 +139,10 @@ function UrgentRow({ task, subtasks = [], onClick }) {
         </span>
       )}
 
-      {/* Horário */}
-      {timeLabel && (
-        <span className="text-[11px] text-danger/60 shrink-0 tabular-nums font-medium">
-          {timeLabel}
-        </span>
-      )}
+      {/* Data + Horário */}
+      <span className="text-[11px] text-danger/60 shrink-0 tabular-nums font-medium">
+        {[fmtUrgentDate(task.scheduled_date), timeLabel].filter(Boolean).join(" · ")}
+      </span>
 
       {/* Chevron */}
       <svg width="5" height="9" viewBox="0 0 7 12" fill="none"
@@ -159,7 +171,7 @@ function FocusGroup({ label, color, tasks, subtasks, onTaskClick }) {
 }
 
 export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], defaultFields = {}, onTaskClick }) {
-  const { subtasks, fetchSubtasks } = useTaskStore();
+  const { subtasks, fetchSubtasks, tasks: allStoreTasks } = useTaskStore();
   const { selectedIds, selectAll, clearAll } = useSelectionStore();
   const { focusMode, urgentFilter, toggleUrgentFilter } = useUiStore();
   const settings = useSettingsStore();
@@ -275,7 +287,14 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   }
 
   // ── MODO NORMAL — períodos sempre visíveis ──
-  const urgentTodayTasks = tasks.filter((t) => t.is_urgent);
+  const allUrgentTasks = [...allStoreTasks]
+    .filter((t) => t.is_urgent && !t.completed_at && !t.deleted_at)
+    .sort((a, b) => {
+      const da = a.scheduled_date ?? "9999-99-99";
+      const db = b.scheduled_date ?? "9999-99-99";
+      if (da !== db) return da < db ? -1 : 1;
+      return (a.scheduled_time ?? "99:99") < (b.scheduled_time ?? "99:99") ? -1 : 1;
+    });
   const sorted = [...tasks].sort((a, b) => timeToMinutes(a.scheduled_time) - timeToMinutes(b.scheduled_time));
 
   const grouped = TIMED_PERIODS.reduce((acc, p) => {
@@ -315,8 +334,8 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
           </div>
         )}
 
-        {/* ── RESOLVER PRIMEIRO — tarefas urgentes do dia ── */}
-        {urgentTodayTasks.length > 0 && (
+        {/* ── RESOLVER PRIMEIRO — todas as tarefas urgentes ── */}
+        {allUrgentTasks.length > 0 && (
           <div className="mb-2 rounded-xl border border-danger/30 bg-danger/5 overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-2 border-b border-danger/20">
               <span className="relative flex h-2 w-2 shrink-0">
@@ -327,11 +346,11 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
                 Resolver primeiro
               </span>
               <span className="text-[10px] font-medium text-danger/70 bg-danger/10 px-1.5 py-0.5 rounded-full">
-                {urgentTodayTasks.length}
+                {allUrgentTasks.length}
               </span>
             </div>
             <div className="px-1.5 py-1 space-y-0.5">
-              {urgentTodayTasks.map((task) => (
+              {allUrgentTasks.map((task) => (
                 <UrgentRow key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
               ))}
             </div>
