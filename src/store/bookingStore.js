@@ -119,7 +119,7 @@ export function computeSlots({ availability, bookings, date, duration, bufferMin
   const minNoticeMs = (minNoticeHours ?? 2) * 60 * 60 * 1000;
 
   const slots = [];
-  for (let t = startMin; t + duration <= endMin; t += 30) {
+  for (let t = startMin; t + duration <= endMin; t += duration + (bufferMinutes ?? 0)) {
     const slotDate = new Date(date);
     slotDate.setHours(Math.floor(t / 60), t % 60, 0, 0);
 
