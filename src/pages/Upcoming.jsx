@@ -28,6 +28,33 @@ function parseDateLocal(dateStr) {
   return new Date(dateStr + "T12:00:00");
 }
 
+// ── Períodos do dia ──────────────────────────────────────────────────────────
+const PERIOD_CONFIG = {
+  manha: { icon: "🌅", label: "Manhã",  sub: "até 11:59" },
+  tarde: { icon: "☀️",  label: "Tarde",  sub: "12:00 – 17:59" },
+  noite: { icon: "🌙", label: "Noite",  sub: "18:00 – 23:59" },
+};
+
+function getPeriod(time) {
+  if (!time) return null;
+  const h = parseInt(time.split(":")[0], 10);
+  if (h < 12) return "manha";
+  if (h < 18) return "tarde";
+  return "noite";
+}
+
+// Separa tarefas em períodos + sem horário; cada grupo ordenado cronologicamente
+function splitByPeriod(tasks) {
+  const timed   = [...tasks].filter(t => t.scheduled_time)
+                            .sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time));
+  const untimed = tasks.filter(t => !t.scheduled_time);
+
+  const periods = { manha: [], tarde: [], noite: [] };
+  for (const task of timed) periods[getPeriod(task.scheduled_time)].push(task);
+
+  return { periods, untimed };
+}
+
 export function Upcoming() {
   const { getUpcoming, subtasks, fetchSubtasks } = useTaskStore();
   const { selectedIds, selectAll, clearAll } = useSelectionStore();
@@ -129,13 +156,21 @@ export function Upcoming() {
           )}
 
           {sortedDays.map((day) => {
-            const d = parseDateLocal(day);
-            const isToday = day === todayStr;
-            const isPast = day < todayStr;
-            const dayNum = d.getDate();
-            const weekday = WEEKDAYS_SHORT[d.getDay()];
-            const monthName = MONTHS[d.getMonth()];
-            const hasUrgent = groups[day].some((t) => t.is_urgent);
+            const d          = parseDateLocal(day);
+            const isToday    = day === todayStr;
+            const isPast     = day < todayStr;
+            const dayNum     = d.getDate();
+            const weekday    = WEEKDAYS_SHORT[d.getDay()];
+            const monthName  = MONTHS[d.getMonth()];
+            const hasUrgent  = groups[day].some((t) => t.is_urgent);
+            const { periods, untimed } = splitByPeriod(groups[day]);
+            const activePeriods = ["manha", "tarde", "noite"].filter((p) => periods[p].length > 0);
+            const hasTimed   = activePeriods.length > 0;
+            // IDs na ordem de exibição para o SortableContext
+            const orderedIds = [
+              ...activePeriods.flatMap((p) => periods[p].map((t) => t.id)),
+              ...untimed.map((t) => t.id),
+            ];
 
             return (
               <div key={day}>
@@ -149,44 +184,94 @@ export function Upcoming() {
                 )}
 
                 <div className="flex gap-4 mb-6">
+                  {/* Coluna do dia */}
                   <div className="flex flex-col items-center shrink-0 pt-0.5" style={{ minWidth: 40 }}>
-                    <span
-                      className={[
-                        "text-[28px] font-bold leading-none tabular-nums",
-                        isToday
-                          ? "text-primary"
-                          : isPast
-                          ? "text-danger/70"
-                          : hasUrgent
-                          ? "text-danger"
-                          : "text-text-main",
-                      ].join(" ")}
-                    >
+                    <span className={[
+                      "text-[28px] font-bold leading-none tabular-nums",
+                      isToday ? "text-primary" : isPast ? "text-danger/70" : hasUrgent ? "text-danger" : "text-text-main",
+                    ].join(" ")}>
                       {dayNum}
                     </span>
-                    <span
-                      className={[
-                        "text-[10px] font-medium uppercase tracking-wide mt-0.5",
-                        isToday ? "text-primary/70" : isPast ? "text-danger/50" : "text-text-secondary/60",
-                      ].join(" ")}
-                    >
+                    <span className={[
+                      "text-[10px] font-medium uppercase tracking-wide mt-0.5",
+                      isToday ? "text-primary/70" : isPast ? "text-danger/50" : "text-text-secondary/60",
+                    ].join(" ")}>
                       {isToday ? "Hoje" : weekday}
                     </span>
                   </div>
 
+                  {/* Coluna das tarefas */}
                   <div className="flex-1 min-w-0">
-                    <SortableContext items={groups[day].map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-1">
-                        {groups[day].map((task) => (
-                          <TaskCard
-                            key={task.id}
-                            task={task}
-                            subtasks={subtasks[task.id] ?? []}
-                            onClick={() => setSelectedTask(task)}
-                          />
-                        ))}
+                    <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-0.5">
+
+                        {/* ── Períodos com horário ── */}
+                        {activePeriods.map((periodKey, pi) => {
+                          const cfg = PERIOD_CONFIG[periodKey];
+                          return (
+                            <div key={periodKey} className={pi > 0 ? "pt-2" : ""}>
+                              {/* Separador de período */}
+                              <div className="flex items-center gap-1.5 mb-1.5 mt-0.5 select-none">
+                                <span className="text-[12px] leading-none">{cfg.icon}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/50">
+                                  {cfg.label}
+                                </span>
+                                <div className="flex-1 h-px bg-border/60" />
+                                <span className="text-[9px] text-text-secondary/35 tabular-nums hidden sm:block">
+                                  {cfg.sub}
+                                </span>
+                              </div>
+
+                              {/* Cards com pílula de horário */}
+                              <div className="space-y-1">
+                                {periods[periodKey].map((task) => (
+                                  <div key={task.id} className="flex items-start gap-2">
+                                    {/* Horário — visível só no desktop */}
+                                    <span className="hidden md:flex items-center justify-end shrink-0 tabular-nums text-[11px] font-semibold text-primary/55 pt-[11px]"
+                                      style={{ minWidth: 36 }}>
+                                      {task.scheduled_time}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <TaskCard
+                                        task={task}
+                                        subtasks={subtasks[task.id] ?? []}
+                                        onClick={() => setSelectedTask(task)}
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* ── Sem horário ── */}
+                        {untimed.length > 0 && (
+                          <div className={hasTimed ? "pt-2" : ""}>
+                            {hasTimed && (
+                              <div className="flex items-center gap-1.5 mb-1.5 select-none">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/35">
+                                  Sem horário
+                                </span>
+                                <div className="flex-1 h-px bg-border/30" />
+                              </div>
+                            )}
+                            <div className="space-y-1">
+                              {untimed.map((task) => (
+                                <TaskCard
+                                  key={task.id}
+                                  task={task}
+                                  subtasks={subtasks[task.id] ?? []}
+                                  onClick={() => setSelectedTask(task)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                       </div>
                     </SortableContext>
+
                     <div className="mt-1">
                       <NewTaskInput defaultFields={{ scheduled_date: day }} />
                     </div>
