@@ -70,6 +70,77 @@ function PeriodSeparator({ icon, label, count = 0 }) {
   );
 }
 
+function UrgentRow({ task, subtasks = [], onClick }) {
+  const { completeTask, uncompleteTask } = useTaskStore();
+  const [completing, setCompleting] = useState(false);
+  const isDone = !!task.completed_at;
+  const timeLabel = task.scheduled_time ? task.scheduled_time.slice(0, 5) : null;
+  const subtaskTotal = subtasks.length;
+  const subtaskDone = subtasks.filter((s) => s.completed).length;
+
+  const handleCheck = async (e) => {
+    e.stopPropagation();
+    setCompleting(true);
+    if (isDone) await uncompleteTask(task.id);
+    else await completeTask(task.id);
+    setCompleting(false);
+  };
+
+  return (
+    <div
+      onClick={() => onClick?.()}
+      className={[
+        "flex items-center gap-2.5 px-2 py-2 rounded-xl cursor-pointer hover:bg-danger/8 transition-colors group select-none",
+        isDone ? "opacity-40" : "",
+      ].join(" ")}
+    >
+      {/* Checkbox */}
+      <button
+        onClick={handleCheck}
+        className={[
+          "w-[18px] h-[18px] rounded-full border-2 shrink-0 flex items-center justify-center transition-colors",
+          completing ? "opacity-40" : "",
+          isDone ? "border-danger/40 bg-danger/20" : "border-danger/50 hover:border-danger",
+        ].join(" ")}
+      >
+        {isDone && (
+          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+            <path d="M1 3.5L3.5 6L8 1" stroke="#FF3B30" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </button>
+
+      {/* Título */}
+      <span className={[
+        "text-[13px] font-medium flex-1 min-w-0 truncate",
+        isDone ? "line-through text-text-secondary" : "text-text-main",
+      ].join(" ")}>
+        {task.title}
+      </span>
+
+      {/* Progresso subtarefas */}
+      {subtaskTotal > 0 && (
+        <span className="text-[10px] text-text-secondary/50 shrink-0 tabular-nums">
+          {subtaskDone}/{subtaskTotal}
+        </span>
+      )}
+
+      {/* Horário */}
+      {timeLabel && (
+        <span className="text-[11px] text-danger/60 shrink-0 tabular-nums font-medium">
+          {timeLabel}
+        </span>
+      )}
+
+      {/* Chevron */}
+      <svg width="5" height="9" viewBox="0 0 7 12" fill="none"
+        className="text-danger/30 group-hover:text-danger/60 transition-colors shrink-0">
+        <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  );
+}
+
 function FocusGroup({ label, color, tasks, subtasks, onTaskClick }) {
   return (
     <div className="mb-4">
@@ -259,9 +330,9 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
                 {urgentTodayTasks.length}
               </span>
             </div>
-            <div className="p-1.5 space-y-1">
+            <div className="px-1.5 py-1 space-y-0.5">
               {urgentTodayTasks.map((task) => (
-                <TaskCard key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
+                <UrgentRow key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
               ))}
             </div>
           </div>
