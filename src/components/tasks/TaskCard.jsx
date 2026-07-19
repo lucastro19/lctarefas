@@ -562,10 +562,11 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
   const { areas, projects } = useAreaStore();
   const { saveTemplate } = useTemplateStore();
   const ref = useRef(null);
-  const [openSub, setOpenSub] = useState(null); // "date" | "tags" | "areas"
-  const dateRowRef = useRef(null);
-  const tagsRowRef = useRef(null);
-  const areasRowRef = useRef(null);
+  const [openSub,    setOpenSub]    = useState(null); // "date" | "tags" | "areas"
+  const [openPeriod, setOpenPeriod] = useState(null); // "hoje" | "amanha" | "depois"
+  const dateRowRef   = useRef(null);
+  const tagsRowRef   = useRef(null);
+  const areasRowRef  = useRef(null);
 
   useEffect(() => {
     const handler = (e) => {
@@ -580,47 +581,47 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
   }, [onClose]);
 
   const run = (fn) => async (e) => { e?.stopPropagation(); await fn(); onClose(); };
-  const isSomeday = task.someday;
+  const isSomeday  = task.someday;
   const isArchived = !!task.archived_at;
   const activeTags = taskTags[task.id] ?? [];
+  const isMobile   = typeof window !== "undefined" && window.innerWidth < 640;
 
-  const DATE_OPTIONS = [
-    {
-      label: "Nenhum",
-      icon: "✕",
-      apply: () => updateTask(task.id, { scheduled_date: null, scheduled_time: null, someday: false }),
-    },
-    {
-      label: "Hoje",
-      icon: "☀️",
-      apply: () => onMoveToToday ? onMoveToToday() : updateTask(task.id, { scheduled_date: todayStr(), someday: false }),
-    },
-    {
-      label: "Amanhã",
-      icon: "📅",
-      apply: () => {
-        const d = new Date(); d.setDate(d.getDate() + 1);
-        updateTask(task.id, { scheduled_date: dateStr(d), someday: false });
-      },
-    },
-    {
-      label: "Depois de Amanhã",
-      icon: "⏩",
-      apply: () => {
-        const d = new Date(); d.setDate(d.getDate() + 2);
-        updateTask(task.id, { scheduled_date: dateStr(d), someday: false });
-      },
-    },
-    {
-      label: "Próximo Fim de Semana",
-      icon: "🏖️",
-      apply: () => updateTask(task.id, { scheduled_date: nextWeekday(6), scheduled_time: "09:00", someday: false }),
-    },
-    {
-      label: "Próxima Semana",
-      icon: "📆",
-      apply: () => updateTask(task.id, { scheduled_date: nextWeekday(1), scheduled_time: "09:00", someday: false }),
-    },
+  // Retorna o próximo horário livre no período para a data informada
+  function nextSlotInPeriod(targetDate, period) {
+    const bounds = { manha: [9, 12], tarde: [13, 18], noite: [19, 23] };
+    const [start, end] = bounds[period];
+    const { tasks: allTasks } = useTaskStore.getState();
+    const taken = new Set(
+      allTasks
+        .filter((t) => t.scheduled_date === targetDate && t.scheduled_time && !t.completed_at && !t.deleted_at && t.id !== task.id)
+        .map((t) => t.scheduled_time)
+    );
+    for (let h = start; h < end; h++) {
+      for (const m of ["00", "30"]) {
+        const slot = `${String(h).padStart(2, "0")}:${m}`;
+        if (!taken.has(slot)) return slot;
+      }
+    }
+    return `${String(start).padStart(2, "0")}:00`;
+  }
+
+  const PERIOD_OPTIONS = [
+    { key: "manha", icon: "🌅", label: "Manhã" },
+    { key: "tarde", icon: "☀️",  label: "Tarde" },
+    { key: "noite", icon: "🌙", label: "Noite" },
+  ];
+
+  // Itens com sub-flyout de período
+  const PERIOD_DATE_ITEMS = [
+    { key: "hoje",   icon: "☀️",  label: "Hoje",             getDate: () => todayStr() },
+    { key: "amanha", icon: "📅", label: "Amanhã",           getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); return dateStr(d); } },
+    { key: "depois", icon: "⏩", label: "Depois de Amanhã", getDate: () => { const d = new Date(); d.setDate(d.getDate() + 2); return dateStr(d); } },
+  ];
+
+  // Itens simples (sem período)
+  const SIMPLE_DATE_OPTIONS = [
+    { label: "Próximo Fim de Semana", icon: "🏖️", apply: () => updateTask(task.id, { scheduled_date: nextWeekday(6), scheduled_time: "09:00", someday: false }) },
+    { label: "Próxima Semana",        icon: "📆", apply: () => updateTask(task.id, { scheduled_date: nextWeekday(1), scheduled_time: "09:00", someday: false }) },
   ];
 
   return (
@@ -645,17 +646,88 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
         rowRef={dateRowRef}
         open={openSub === "date"}
         onEnter={() => setOpenSub("date")}
-        onLeave={() => setOpenSub(null)}
-        onToggle={() => setOpenSub(openSub === "date" ? null : "date")}
+        onLeave={() => { setOpenSub(null); setOpenPeriod(null); }}
+        onToggle={() => { setOpenSub(openSub === "date" ? null : "date"); setOpenPeriod(null); }}
       >
-        {DATE_OPTIONS.map((opt) => (
-          <button
-            key={opt.label}
-            onClick={run(opt.apply)}
+        {/* Nenhum */}
+        <button
+          onClick={run(() => updateTask(task.id, { scheduled_date: null, scheduled_time: null, someday: false }))}
+          className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+        >
+          <span>✕</span><span>Nenhum</span>
+        </button>
+        <div className="h-px bg-border mx-2 my-0.5" />
+
+        {/* Hoje / Amanhã / Depois — cada um com sub-flyout de período */}
+        {PERIOD_DATE_ITEMS.map((opt) => {
+          const isOpen = openPeriod === opt.key;
+          if (isMobile) {
+            return (
+              <div key={opt.key}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setOpenPeriod(isOpen ? null : opt.key); }}
+                  className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2"><span>{opt.icon}</span><span>{opt.label}</span></span>
+                  <span className="text-text-secondary text-xs ml-2 transition-transform"
+                    style={{ display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none" }}>▸</span>
+                </button>
+                {isOpen && (
+                  <div className="border-t border-border bg-bg/60">
+                    {PERIOD_OPTIONS.map((p) => (
+                      <button key={p.key}
+                        onClick={run(() => {
+                          const d = opt.getDate();
+                          updateTask(task.id, { scheduled_date: d, scheduled_time: nextSlotInPeriod(d, p.key), someday: false });
+                        })}
+                        className="menu-item w-full text-left pl-7 pr-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+                      >
+                        <span>{p.icon}</span><span>{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          // Desktop: sub-flyout lateral
+          return (
+            <div key={opt.key} className="relative"
+              onMouseEnter={() => setOpenPeriod(opt.key)}
+              onMouseLeave={() => setOpenPeriod(null)}
+            >
+              <div className="menu-item px-3 py-2.5 text-sm transition-colors flex items-center justify-between cursor-default select-none">
+                <span className="flex items-center gap-2"><span>{opt.icon}</span><span>{opt.label}</span></span>
+                <span className="text-text-secondary text-xs ml-2">▸</span>
+              </div>
+              {isOpen && (
+                <div className="absolute bg-card border border-border rounded-xl shadow-xl py-1.5 z-[9999]"
+                  style={{ left: "100%", top: 0, minWidth: 150 }}>
+                  {PERIOD_OPTIONS.map((p) => (
+                    <button key={p.key}
+                      onClick={run(() => {
+                        const d = opt.getDate();
+                        updateTask(task.id, { scheduled_date: d, scheduled_time: nextSlotInPeriod(d, p.key), someday: false });
+                      })}
+                      className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+                    >
+                      <span>{p.icon}</span><span>{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div className="h-px bg-border mx-2 my-0.5" />
+
+        {/* Próx Fim de Semana / Próx Semana — sem período */}
+        {SIMPLE_DATE_OPTIONS.map((opt) => (
+          <button key={opt.label} onClick={run(opt.apply)}
             className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
           >
-            <span>{opt.icon}</span>
-            <span>{opt.label}</span>
+            <span>{opt.icon}</span><span>{opt.label}</span>
           </button>
         ))}
       </FlyoutRow>
