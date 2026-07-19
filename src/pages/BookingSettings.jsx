@@ -272,28 +272,25 @@ export function BookingSettings() {
                       <div className="h-px flex-1 bg-border/60" />
                     </div>
                   )}
-                  <div className={[
-                    "flex items-center gap-3 px-4 py-3.5 transition-all",
-                    isActive ? "bg-card" : "bg-bg/40",
-                  ].join(" ")}>
+                  <div className="flex items-center gap-3 px-4 py-3.5">
                     {/* Toggle */}
                     <button
                       onClick={() => setAvail(a => ({ ...a, [day]: { ...a[day], active: !a[day].active } }))}
                       className={[
-                        "w-10 h-6 rounded-full transition-all duration-200 relative shrink-0 focus:outline-none ring-offset-1",
-                        isActive ? "bg-primary shadow-sm shadow-primary/30" : "bg-border/60 dark:bg-border",
+                        "relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 focus:outline-none overflow-hidden",
+                        isActive ? "bg-primary" : "bg-border/50 dark:bg-zinc-600",
                       ].join(" ")}
                     >
                       <span className={[
-                        "absolute top-0.5 w-5 h-5 rounded-full shadow-sm transition-transform duration-200",
-                        isActive ? "bg-white translate-x-4" : "bg-white/80 translate-x-0.5",
+                        "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200",
+                        isActive ? "left-5" : "left-0.5",
                       ].join(" ")} />
                     </button>
 
                     {/* Nome do dia */}
                     <span className={[
                       "text-sm w-7 shrink-0 font-semibold transition-colors",
-                      isActive ? "text-text-main" : "text-text-secondary/50",
+                      isActive ? "text-text-main" : "text-text-secondary/40",
                     ].join(" ")}>
                       {DAYS[day]}
                     </span>
@@ -333,7 +330,7 @@ export function BookingSettings() {
                         </button>
                       </div>
                     ) : (
-                      <span className="flex-1 text-xs text-text-secondary/40 italic">Não disponível</span>
+                      <span className="flex-1 text-xs text-text-secondary/30 italic pl-0.5">Não disponível</span>
                     )}
                   </div>
                 </div>
