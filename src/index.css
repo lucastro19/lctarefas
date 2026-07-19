@@ -284,3 +284,46 @@ html.dark {
 .animate-confetti-fall {
   animation: confettiFall linear forwards;
 }
+
+/* ============================================================
+   BOOK PAGE — dark theme animations & inputs
+   ============================================================ */
+@keyframes book-step-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.book-step-in {
+  animation: book-step-in 0.32s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+@keyframes book-avatar-spin {
+  to { --angle: 360deg; }
+}
+
+.book-input {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.90);
+  outline: none;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  -webkit-appearance: none;
+}
+.book-input::placeholder { color: rgba(255,255,255,0.22); }
+.book-input:focus {
+  border-color: rgba(79,142,247,0.65);
+  background: rgba(79,142,247,0.08);
+  box-shadow: 0 0 0 3px rgba(79,142,247,0.14);
+}
+.book-input.valid {
+  border-color: rgba(48,209,88,0.55);
+  background: rgba(48,209,88,0.06);
+}
+.book-input.invalid {
+  border-color: rgba(255,69,58,0.55);
+  background: rgba(255,69,58,0.06);
+}
+.book-input.is-textarea { resize: none; }
