@@ -174,6 +174,18 @@ export function TaskDetail({ task, onClose }) {
     };
   }, []);
 
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "Escape") {
+        if (showCustomModal) { setShowCustomModal(false); return; }
+        if (showRecurrenceModal) { setShowRecurrenceModal(false); return; }
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [showCustomModal, showRecurrenceModal, onClose]);
+
   const save = async (extra = {}) => {
     setSaving(true);
     await updateTask(task.id, { title, notes: notes || null, scheduled_date: scheduledDate || null, deadline: deadline || null, someday, ...extra });
