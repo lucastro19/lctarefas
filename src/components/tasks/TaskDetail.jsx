@@ -107,7 +107,7 @@ export function TaskDetail({ task, onClose }) {
   const [cFreq, setCFreq] = useState("weekly");
   const [cInterval, setCInterval] = useState(1);
   const [cWeekDays, setCWeekDays] = useState([]);
-  const [cMonthMode, setCMonthMode] = useState("weekday");
+  const [cMonthMode, setCMonthMode] = useState("day");
   const [cMonthDays, setCMonthDays] = useState([]);
   const [cMonthOrd, setCMonthOrd] = useState("primeiro");
   const [cMonthWd, setCMonthWd] = useState(0);
