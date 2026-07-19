@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { TimedTaskList } from "../components/tasks/TimedTaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
 import { useTaskStore } from "../store/taskStore";
+import { useUiStore } from "../store/uiStore";
 
 function localDateStr() {
   const d = new Date();
@@ -105,6 +106,7 @@ function DaySummary({ total, done }) {
 
 export function Today() {
   const { getToday, getCompletedToday } = useTaskStore();
+  const { urgentFilter, toggleUrgentFilter } = useUiStore();
   const [selectedTask, setSelectedTask] = useState(null);
 
   const todayDate = localDateStr();
@@ -117,13 +119,46 @@ export function Today() {
     weekday: "long", day: "numeric", month: "long",
   });
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+
   const total = todayTasks.length + completed.length;
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
       <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
-        <h1 className="hidden md:block text-2xl font-semibold text-text-main mb-1">Hoje</h1>
-        <p className="text-sm text-text-secondary mb-4 capitalize">{todayLabel}</p>
+        <div className="hidden md:flex items-center gap-3 mb-1">
+          <h1 className="text-2xl font-semibold text-text-main">Hoje</h1>
+          <span className="text-sm text-text-secondary font-normal">— {greeting}</span>
+          <button
+            onClick={toggleUrgentFilter}
+            title={urgentFilter ? "Ver todas as tarefas" : "Filtrar só urgentes"}
+            className={[
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+              urgentFilter
+                ? "bg-danger text-white shadow-sm"
+                : "bg-danger/10 text-danger hover:bg-danger/20",
+            ].join(" ")}
+          >
+            <span className={urgentFilter ? "animate-pulse" : ""}>🔴</span>
+            {urgentFilter ? "Só urgentes" : "Urgentes"}
+          </button>
+        </div>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-text-secondary capitalize">{todayLabel}</p>
+          <button
+            onClick={toggleUrgentFilter}
+            className={[
+              "md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+              urgentFilter
+                ? "bg-danger text-white shadow-sm"
+                : "bg-danger/10 text-danger",
+            ].join(" ")}
+          >
+            <span className={urgentFilter ? "animate-pulse" : ""}>🔴</span>
+            {urgentFilter ? "Só urgentes" : "Urgentes"}
+          </button>
+        </div>
         <DaySummary total={total} done={completed.length} />
         <TimedTaskList
           tasks={todayTasks}

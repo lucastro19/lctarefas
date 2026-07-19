@@ -8,7 +8,7 @@ import { TaskDetail } from "../components/tasks/TaskDetail";
 export function AreaPage() {
   const { id } = useParams();
   const { areas, projects, getProjectsByArea } = useAreaStore();
-  const { getByArea, getByProject, getCompletedByArea, getCompletedByProject } = useTaskStore();
+  const { getByArea, getByProject, getCompletedByArea, getCompletedByProject, tasks: allTasks } = useTaskStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [activeProjectId, setActiveProjectId] = useState(null);
 
@@ -44,19 +44,32 @@ export function AreaPage() {
             >
               Tarefas avulsas
             </button>
-            {areaProjects.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setActiveProjectId(p.id)}
-                className={[
-                  "text-sm px-3 py-1.5 rounded-lg shrink-0 transition-colors flex items-center gap-1.5",
-                  activeProjectId === p.id ? "bg-primary text-white" : "bg-card border border-border text-text-secondary hover:text-text-main",
-                ].join(" ")}
-              >
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: activeProjectId === p.id ? "white" : p.color }} />
-                {p.name}
-              </button>
-            ))}
+            {areaProjects.map((p) => {
+              const pCount = allTasks.filter(
+                (t) => t.project_id === p.id && !t.completed_at && !t.deleted_at && !t.archived_at
+              ).length;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setActiveProjectId(p.id)}
+                  className={[
+                    "text-sm px-3 py-1.5 rounded-lg shrink-0 transition-colors flex items-center gap-1.5",
+                    activeProjectId === p.id ? "bg-primary text-white" : "bg-card border border-border text-text-secondary hover:text-text-main",
+                  ].join(" ")}
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: activeProjectId === p.id ? "white" : p.color }} />
+                  {p.name}
+                  {pCount > 0 && (
+                    <span className={[
+                      "text-[10px] font-bold tabular-nums px-1 py-0.5 rounded-full leading-none",
+                      activeProjectId === p.id ? "bg-white/20 text-white" : "bg-border text-text-secondary",
+                    ].join(" ")}>
+                      {pCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 

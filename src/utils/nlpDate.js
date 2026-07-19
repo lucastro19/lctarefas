@@ -56,7 +56,23 @@ export function parseNaturalDate(text) {
   if (!refs.length) return null;
 
   const ref = refs[0];
-  const date = ref.date();
+
+  // Se só a hora foi reconhecida (sem data explícita), usa sempre hoje —
+  // forwardDate colocaria amanhã quando a hora já passou, o que não é o esperado
+  // quando o usuário digita "às 14h" sem mencionar um dia.
+  const onlyTimeMentioned =
+    ref.start.isCertain("hour") &&
+    !ref.start.isCertain("day") &&
+    !ref.start.isCertain("month");
+
+  const date = onlyTimeMentioned ? (() => {
+    const now = new Date();
+    const d = ref.date();
+    const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+      d.getHours(), d.getMinutes(), 0);
+    return local;
+  })() : ref.date();
+
   const dateStr = [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, "0"),
@@ -76,10 +92,14 @@ export function parseNaturalDate(text) {
   return { dateStr, timeStr, cleanTitle };
 }
 
+const localDateStr = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 export function formatDateHint(dateStr) {
   if (!dateStr) return "";
-  const today = new Date().toISOString().split("T")[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const today = localDateStr();
+  const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  const tomorrow = localDateStr(tom);
   if (dateStr === today) return "Hoje";
   if (dateStr === tomorrow) return "Amanhã";
   const d = new Date(dateStr + "T12:00:00");

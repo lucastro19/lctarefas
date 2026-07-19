@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAreaStore } from "../../store/areaStore";
+import { useAuthStore } from "../../store/authStore";
 import { DURATION_PRESETS, durationLabel } from "../../store/settingsStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
+import { createMeetingEvent, deleteMeetingEvent } from "../../lib/googleCalendar";
 
 function localDateStr(d = new Date()) {
   return (
@@ -21,18 +23,71 @@ function addDays(n) {
 
 function nextMonday() {
   const d = new Date();
-  const day = d.getDay(); // 0=Sun, 1=Mon, ...
+  const day = d.getDay();
   const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7 || 7;
   d.setDate(d.getDate() + daysUntilMonday);
   return localDateStr(d);
 }
 
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" });
+}
+
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
 
+function Toggle({ on, onChange, red = false }) {
+  return (
+    <button
+      type="button"
+      onClick={e => { e.stopPropagation(); onChange(!on); }}
+      className={[
+        "relative inline-flex w-[51px] h-[31px] rounded-full transition-colors duration-200 shrink-0",
+        on ? (red ? "bg-[#FF3B30]" : "bg-[#34C759]") : "bg-[#E5E5EA] dark:bg-[#3A3A3C]",
+      ].join(" ")}
+    >
+      <span className={[
+        "absolute top-[2px] w-[27px] h-[27px] bg-white rounded-full transition-transform duration-200",
+        "shadow-[0_2px_4px_rgba(0,0,0,0.3)]",
+        on ? "translate-x-[22px]" : "translate-x-[2px]",
+      ].join(" ")} />
+    </button>
+  );
+}
+
+function ChevronRight() {
+  return (
+    <svg width="7" height="12" viewBox="0 0 7 12" fill="none" className="text-text-secondary/50 shrink-0">
+      <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MeetIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className="shrink-0">
+      <rect width="48" height="48" rx="8" fill="#00BFA5"/>
+      <path d="M8 16C8 13.8 9.8 12 12 12H28C30.2 12 32 13.8 32 16V32C32 34.2 30.2 36 28 36H12C9.8 36 8 34.2 8 32V16Z" fill="white"/>
+      <path d="M34 20L40 15V33L34 28V20Z" fill="white"/>
+      <circle cx="20" cy="24" r="5" fill="#00BFA5"/>
+    </svg>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <p className="text-[11px] font-semibold text-text-secondary/60 uppercase tracking-wider mb-1.5 ml-1">
+      {children}
+    </p>
+  );
+}
+
 export function TaskDetail({ task, onClose }) {
-  const { updateTask, deleteTask, deleteRecurrenceFuture, archiveTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
+  const { updateTask, deleteTask, deleteRecurrenceFuture, archiveTask, completeTask, uncompleteTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, fetchTags, createTag, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
+  const { getGoogleToken, connectGoogleCalendar } = useAuthStore();
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
 
   const [title, setTitle] = useState(task.title);
@@ -54,7 +109,18 @@ export function TaskDetail({ task, onClose }) {
   const [newTagColor, setNewTagColor] = useState("#4F8EF7");
   const [saving, setSaving] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
+
+  // Meeting
+  const [meetingUrl, setMeetingUrl] = useState(task.meeting_url ?? null);
+  const [meetingEventId, setMeetingEventId] = useState(task.meeting_event_id ?? null);
+  const [meetingAttendees, setMeetingAttendees] = useState(task.meeting_attendees ?? []);
+  const [showMeetingPanel, setShowMeetingPanel] = useState(false);
+  const [attendeeInput, setAttendeeInput] = useState("");
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  const [meetingError, setMeetingError] = useState("");
   const contextPickerRef = useRef(null);
+  const titleRef = useRef(null);
+  const resizeTitle = (el) => { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
   const [localAreaId, setLocalAreaId] = useState(task.area_id ?? null);
   const [localProjectId, setLocalProjectId] = useState(task.project_id ?? null);
 
@@ -67,7 +133,8 @@ export function TaskDetail({ task, onClose }) {
     fetchTags();
   }, [task.id]);
 
-  // Close context picker on outside click
+  useEffect(() => { resizeTitle(titleRef.current); }, [title]);
+
   useEffect(() => {
     const handler = (e) => {
       if (contextPickerRef.current && !contextPickerRef.current.contains(e.target))
@@ -139,464 +206,753 @@ export function TaskDetail({ task, onClose }) {
   };
 
   const availableTags = tags.filter((t) => !taskTagList.find((tt) => tt.id === t.id));
+  const isDone = !!task.completed_at;
+
+  const handleComplete = async () => {
+    if (isDone) {
+      await uncompleteTask(task.id);
+    } else {
+      await completeTask(task.id);
+      onClose();
+    }
+  };
+
+  const contextLabel = localProjectId
+    ? projects.find(p => p.id === localProjectId)?.name ?? "Projeto"
+    : localAreaId
+      ? areas.find(a => a.id === localAreaId)?.name ?? "Área"
+      : "Inbox";
+
+  const handleAddAttendee = () => {
+    const email = attendeeInput.trim().toLowerCase();
+    if (!email || !email.includes("@")) return;
+    if (meetingAttendees.includes(email)) { setAttendeeInput(""); return; }
+    setMeetingAttendees(prev => [...prev, email]);
+    setAttendeeInput("");
+  };
+
+  const handleCreateMeeting = async () => {
+    const token = getGoogleToken();
+    if (!token) { setMeetingError("token_missing"); return; }
+    setMeetingLoading(true);
+    setMeetingError("");
+    try {
+      const { meetLink, eventId } = await createMeetingEvent(token, {
+        title: title || task.title,
+        date: scheduledDate || localDateStr(),
+        time: scheduledTime || "09:00",
+        duration: durationMinutes || 60,
+        attendees: meetingAttendees,
+        notes: notes,
+      });
+      setMeetingUrl(meetLink);
+      setMeetingEventId(eventId);
+      await updateTask(task.id, {
+        meeting_url: meetLink,
+        meeting_event_id: eventId,
+        meeting_attendees: meetingAttendees,
+      });
+      setShowMeetingPanel(false);
+    } catch (e) {
+      setMeetingError(e.message ?? "Erro ao criar reunião");
+    } finally {
+      setMeetingLoading(false);
+    }
+  };
+
+  const handleCancelMeeting = async () => {
+    const token = getGoogleToken();
+    if (token && meetingEventId) {
+      try { await deleteMeetingEvent(token, meetingEventId); } catch (_) {}
+    }
+    setMeetingUrl(null);
+    setMeetingEventId(null);
+    setMeetingAttendees([]);
+    await updateTask(task.id, { meeting_url: null, meeting_event_id: null, meeting_attendees: null });
+  };
+
+  const handleCopyMeetLink = () => {
+    if (!meetingUrl) return;
+    navigator.clipboard.writeText(meetingUrl);
+  };
 
   return (
     <>
-      {/* Mobile backdrop */}
-      <div className="md:hidden fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-    <aside
-      className="fixed bottom-0 left-0 right-0 z-50 md:static md:inset-auto md:z-auto md:w-96 md:border-l border-border bg-card md:h-full overflow-y-auto flex flex-col rounded-t-2xl md:rounded-none animate-slide-up md:[animation:none]"
-      style={{ maxHeight: "92dvh" }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* Drag handle (mobile only) */}
-      <div className="md:hidden flex justify-center pt-3 pb-1 shrink-0">
-        <div className="w-10 h-1 rounded-full bg-border" />
-      </div>
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-        <button onClick={onClose} className="md:hidden flex items-center gap-1 text-primary text-sm font-medium">
-          ← Voltar
-        </button>
-        <span className="hidden md:block text-xs text-text-secondary font-medium uppercase tracking-wide">Detalhe</span>
-        <button onClick={onClose} className="text-text-secondary hover:text-text-main text-lg leading-none">×</button>
-      </div>
+      <aside
+        className="fixed inset-0 z-[100] md:static md:inset-auto md:z-auto md:w-96 md:border-l border-border bg-bg md:bg-card md:h-full flex flex-col animate-slide-up md:[animation:none]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header desktop */}
+        <div className="hidden md:flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
+          <span className="text-xs text-text-secondary font-medium uppercase tracking-wide">Detalhe</span>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-main text-lg leading-none">×</button>
+        </div>
 
-      <div className="flex-1 px-5 py-4 space-y-5">
-        {/* Title */}
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => save()}
-          className="w-full font-semibold text-xl text-text-main outline-none bg-transparent border-b border-transparent focus:border-border pb-1"
-        />
-
-        {/* Context (projeto / área) — visual picker */}
-        <div ref={contextPickerRef} className="relative">
-          <label className="text-xs text-text-secondary font-medium block mb-1">📂 Contexto</label>
-          <button
-            onClick={() => setShowContextPicker((v) => !v)}
-            className="w-full flex items-center gap-2 text-xs bg-bg border border-border rounded-lg px-3 py-2 outline-none text-left hover:border-primary/50 transition-colors"
+        {/* Content — min-h-0 is critical for flex scroll to work */}
+        <div
+          className="flex-1 min-h-0 overflow-y-auto"
+          style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
+        >
+          {/* Mobile compact action row — replaces the top bar */}
+          <div
+            className="md:hidden flex items-center px-3 pb-1"
+            style={{ paddingTop: "calc(env(safe-area-inset-top) + 2px)" }}
           >
-            {localProjectId ? (
-              <>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: projects.find((p) => p.id === localProjectId)?.color ?? "#8E8E93" }} />
-                <span className="flex-1 text-text-main truncate">{projects.find((p) => p.id === localProjectId)?.name ?? "Projeto"}</span>
-              </>
-            ) : localAreaId ? (
-              <>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: areas.find((a) => a.id === localAreaId)?.color ?? "#8E8E93" }} />
-                <span className="flex-1 text-text-main truncate">{areas.find((a) => a.id === localAreaId)?.name ?? "Área"}</span>
-              </>
-            ) : (
-              <span className="flex-1 text-text-secondary">Inbox (sem contexto)</span>
-            )}
-            <span className="text-text-secondary text-[10px]">▾</span>
-          </button>
-
-          {showContextPicker && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 max-h-64 overflow-y-auto">
-              <button
-                onClick={() => { handleContextChange(""); setShowContextPicker(false); }}
-                className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg", !localProjectId && !localAreaId ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
-              >
-                <span className="w-2 h-2 rounded-full bg-[#8E8E93] shrink-0" />
-                Inbox (sem contexto)
-              </button>
-              {areas.length > 0 && <div className="h-px bg-border mx-2 my-1" />}
-              {areas.map((area) => {
-                const areaProjects = projects.filter((p) => p.area_id === area.id);
-                return (
-                  <div key={area.id}>
-                    <button
-                      onClick={() => { handleContextChange(`area:${area.id}`); setShowContextPicker(false); }}
-                      className={["w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left transition-colors hover:bg-bg font-medium", localAreaId === area.id && !localProjectId ? "text-primary" : "text-text-main"].join(" ")}
-                    >
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
-                      {area.name}
-                    </button>
-                    {areaProjects.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => { handleContextChange(`project:${p.id}`); setShowContextPicker(false); }}
-                        className={["w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-xs text-left transition-colors hover:bg-bg", localProjectId === p.id ? "text-primary font-medium" : "text-text-secondary"].join(" ")}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                        {p.name}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Notes */}
-        <div>
-          <label className="text-xs text-text-secondary font-medium block mb-1">Notas</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={() => save()}
-            rows={3}
-            placeholder="Adicionar notas…"
-            className="w-full text-sm text-text-main outline-none bg-bg rounded-lg p-2.5 resize-none border border-transparent focus:border-border"
-          />
-        </div>
-
-        {/* Dates */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="text-xs text-text-secondary font-medium block mb-1">📅 Execução</label>
-            <input
-              type="date"
-              value={scheduledDate}
-              onChange={(e) => { setScheduledDate(e.target.value); updateTask(task.id, { scheduled_date: e.target.value || null }); }}
-              className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary"
-            />
-            <div className="flex gap-1.5 mt-2">
-              {[
-                { label: "Hoje", date: () => localDateStr() },
-                { label: "Amanhã", date: () => addDays(1) },
-                { label: "Próx. semana", date: () => nextMonday() },
-              ].map(({ label, date }) => (
-                <button
-                  key={label}
-                  onClick={() => { const d = date(); setScheduledDate(d); updateTask(task.id, { scheduled_date: d }); }}
-                  className={[
-                    "flex-1 text-[11px] py-1 rounded-lg border transition-colors",
-                    scheduledDate === date()
-                      ? "border-primary bg-primary/10 text-primary font-medium"
-                      : "border-border text-text-secondary hover:border-primary/50 hover:text-text-main",
-                  ].join(" ")}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-text-secondary font-medium block mb-1">🕐 Horário</label>
-            <input
-              type="time"
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-              onBlur={(e) => updateTask(task.id, { scheduled_time: e.target.value || null })}
-              className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-text-secondary font-medium block mb-1">🚨 Prazo</label>
-            <input
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              onBlur={() => save()}
-              className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-danger"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-text-secondary font-medium block mb-1">⏱ Duração</label>
-            {!customDuration ? (
-              <select
-                value={durationMinutes}
-                onChange={(e) => {
-                  if (e.target.value === "custom") { setCustomDuration(true); return; }
-                  const v = e.target.value ? Number(e.target.value) : null;
-                  setDurationMinutes(v ?? "");
-                  updateTask(task.id, { duration_minutes: v });
-                }}
-                className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary"
-              >
-                <option value="">Sem duração</option>
-                {DURATION_PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-                <option value="custom">Personalizado…</option>
-              </select>
-            ) : (
-              <div className="flex gap-1 items-center">
-                <input
-                  type="number"
-                  min={0} max={23} placeholder="h"
-                  defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
-                  className="w-10 text-xs bg-bg border border-border rounded px-1.5 py-1.5 outline-none focus:border-primary"
-                  id="dur-h"
-                />
-                <span className="text-xs text-text-secondary">h</span>
-                <input
-                  type="number"
-                  min={0} max={59} placeholder="min"
-                  defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
-                  className="w-12 text-xs bg-bg border border-border rounded px-1.5 py-1.5 outline-none focus:border-primary"
-                  id="dur-m"
-                  onBlur={() => {
-                    const h = Number(document.getElementById("dur-h").value) || 0;
-                    const m = Number(document.getElementById("dur-m").value) || 0;
-                    const total = h * 60 + m;
-                    setDurationMinutes(total || "");
-                    setCustomDuration(false);
-                    updateTask(task.id, { duration_minutes: total || null });
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Recorrência */}
-        <div>
-          <label className="text-xs text-text-secondary font-medium block mb-1">🔁 Recorrência</label>
-          <select
-            defaultValue={task.recurrence ?? ""}
-            onChange={(e) => updateTask(task.id, { recurrence: e.target.value || null })}
-            className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
-          >
-            <option value="">Não repetir</option>
-            <option value="daily">Diariamente</option>
-            <option value="weekdays">Dias úteis (seg–sex)</option>
-            <option value="weekly">Semanalmente</option>
-            <option value="biweekly">Quinzenalmente (a cada 2 semanas)</option>
-            <option value="monthly">Mensalmente</option>
-          </select>
-        </div>
-
-        {/* Prioridade */}
-        <div>
-          <label className="text-xs text-text-secondary font-medium block mb-1">⚑ Prioridade</label>
-          <select
-            defaultValue={task.priority ?? ""}
-            onChange={(e) => updateTask(task.id, { priority: e.target.value || null })}
-            className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
-          >
-            <option value="">Sem prioridade</option>
-            <option value="high">🔴 Alta</option>
-            <option value="medium">🟡 Média</option>
-            <option value="low">🟢 Baixa</option>
-          </select>
-        </div>
-
-        {/* Lembrete com antecedência */}
-        {scheduledTime && (
-          <div>
-            <label className="text-xs text-text-secondary font-medium block mb-1">🔔 Lembrete</label>
-            <select
-              value={reminderMinutes ?? ""}
-              onChange={(e) => {
-                const v = e.target.value === "" ? null : Number(e.target.value);
-                setReminderMinutes(v);
-                updateTask(task.id, { reminder_minutes: v });
-              }}
-              className="w-full text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+            <button
+              type="button"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-card/80 text-text-secondary"
             >
-              <option value="">Sem lembrete</option>
-              <option value="5">5 min antes</option>
-              <option value="15">15 min antes</option>
-              <option value="30">30 min antes</option>
-              <option value="60">1 hora antes</option>
-              <option value="120">2 horas antes</option>
-              <option value="1440">1 dia antes</option>
-            </select>
-          </div>
-        )}
-
-        {/* Urgente toggle */}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <div
-            onClick={async () => {
-              const next = !isUrgent;
-              setIsUrgent(next);
-              await updateTask(task.id, { is_urgent: next });
-            }}
-            className={["w-9 h-5 rounded-full transition-colors", isUrgent ? "bg-[#FF3B30]" : "bg-[#C7C7CC]"].join(" ")}
-          >
-            <div className={["w-4 h-4 bg-white rounded-full shadow mt-0.5 transition-transform", isUrgent ? "translate-x-4" : "translate-x-0.5"].join(" ")} />
-          </div>
-          <span className={["text-sm", isUrgent ? "text-[#FF3B30] font-medium" : "text-text-secondary"].join(" ")}>
-            {isUrgent ? "🔔 Urgente" : "Urgente"}
-          </span>
-        </label>
-
-        {/* Someday toggle */}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <div
-            onClick={async () => {
-              const next = !someday;
-              setSomeday(next);
-              await updateTask(task.id, { someday: next });
-            }}
-            className={["w-9 h-5 rounded-full transition-colors", someday ? "bg-primary" : "bg-[#C7C7CC]"].join(" ")}
-          >
-            <div className={["w-4 h-4 bg-white rounded-full shadow mt-0.5 transition-transform", someday ? "translate-x-4" : "translate-x-0.5"].join(" ")} />
-          </div>
-          <span className="text-sm text-text-secondary">Depois</span>
-        </label>
-
-        {/* Tags */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-text-secondary font-medium">Tags</label>
-            <button onClick={() => { setShowTagPicker(!showTagPicker); setCreatingTag(false); }} className="text-xs text-primary hover:underline">
-              + Adicionar
+              <svg width="18" height="15" viewBox="0 0 18 15" fill="none">
+                <path d="M7 1L1 7.5L7 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M1.5 7.5H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
             </button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {taskTagList.map((tag) => (
-              <span
-                key={tag.id}
-                onClick={() => removeTagFromTask(task.id, tag.id)}
-                className="text-xs px-2 py-0.5 rounded-full cursor-pointer hover:opacity-70 transition-opacity"
-                style={{ backgroundColor: tag.color + "20", color: tag.color }}
-              >
-                {tag.name} ×
-              </span>
-            ))}
-          </div>
 
-          {showTagPicker && (
-            <div className="mt-2 bg-bg border border-border rounded-lg p-2">
-              {!creatingTag ? (
-                <>
-                  <div className="space-y-1 max-h-28 overflow-y-auto mb-2">
-                    {availableTags.map((tag) => (
-                      <button
-                        key={tag.id}
-                        onClick={() => { addTagToTask(task.id, tag.id); setShowTagPicker(false); }}
-                        className="flex items-center gap-2 w-full px-2 py-1 rounded hover:bg-card text-xs text-left"
-                      >
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-                        {tag.name}
-                      </button>
-                    ))}
-                    {availableTags.length === 0 && (
-                      <p className="text-xs text-text-secondary text-center py-1">Nenhuma tag disponível</p>
+          <div className="px-4 pt-3 space-y-5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}>
+
+            {/* Title + Notes */}
+            <div className="rounded-2xl overflow-hidden bg-card">
+              <textarea
+                ref={titleRef}
+                value={title}
+                onChange={e => { setTitle(e.target.value); resizeTitle(e.target); }}
+                onBlur={() => save()}
+                rows={1}
+                placeholder="Título"
+                className="w-full text-[20px] font-bold text-text-main bg-transparent px-4 pt-4 pb-3 outline-none leading-tight placeholder:text-text-secondary/40 resize-none overflow-hidden"
+                style={{ minHeight: "2rem" }}
+              />
+              <div className="h-px bg-border/40 mx-4" />
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                onBlur={() => save()}
+                rows={3}
+                placeholder="Adicionar notas…"
+                className="w-full text-[15px] text-text-main bg-transparent px-4 py-3 outline-none resize-none placeholder:text-text-secondary/40"
+              />
+            </div>
+
+            {/* Data e hora */}
+            <div>
+              <SectionLabel>Data e hora</SectionLabel>
+              <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
+
+                {/* Data */}
+                <div>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <span className="text-[17px] w-6 text-center leading-none">📅</span>
+                    <span className="flex-1 text-[16px] text-text-main">Data</span>
+                    {scheduledDate && (
+                      <span className="text-[13px] text-primary mr-2 truncate max-w-[130px]">{fmtDate(scheduledDate)}</span>
                     )}
+                    <Toggle on={!!scheduledDate} onChange={v => {
+                      if (v) { const d = localDateStr(); setScheduledDate(d); updateTask(task.id, { scheduled_date: d }); }
+                      else { setScheduledDate(""); updateTask(task.id, { scheduled_date: null }); }
+                    }} />
                   </div>
-                  <button
-                    onClick={() => setCreatingTag(true)}
-                    className="text-xs text-primary hover:underline w-full text-left px-2"
-                  >
-                    + Nova tag
-                  </button>
-                </>
-              ) : (
-                <div className="space-y-2">
-                  <input
-                    autoFocus
-                    value={newTagName}
-                    onChange={(e) => setNewTagName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleCreateTag()}
-                    placeholder="Nome da tag…"
-                    className="w-full text-xs bg-card border border-border rounded px-2 py-1.5 outline-none focus:border-primary"
-                  />
-                  <div className="flex gap-1.5 flex-wrap">
-                    {TAG_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setNewTagColor(c)}
-                        className={["w-5 h-5 rounded-full border-2 transition-all", newTagColor === c ? "border-text-main scale-110" : "border-transparent"].join(" ")}
-                        style={{ backgroundColor: c }}
+                  {scheduledDate && (
+                    <div className="px-4 pb-3 space-y-2">
+                      <input
+                        type="date"
+                        value={scheduledDate}
+                        onChange={e => { setScheduledDate(e.target.value); updateTask(task.id, { scheduled_date: e.target.value || null }); }}
+                        className="w-full text-sm bg-bg border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
                       />
-                    ))}
+                      <div className="flex gap-1.5">
+                        {[
+                          { l: "Hoje", d: () => localDateStr() },
+                          { l: "Amanhã", d: () => addDays(1) },
+                          { l: "Prox. seg.", d: nextMonday },
+                        ].map(({ l, d }) => (
+                          <button key={l} onClick={() => { const dt = d(); setScheduledDate(dt); updateTask(task.id, { scheduled_date: dt }); }}
+                            className={["flex-1 text-[11px] py-1.5 rounded-lg border transition-colors",
+                              scheduledDate === d() ? "bg-primary/10 text-primary border-primary/40 font-medium" : "text-text-secondary border-border",
+                            ].join(" ")}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Horário */}
+                <div>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <span className="text-[17px] w-6 text-center leading-none">🕐</span>
+                    <span className="flex-1 text-[16px] text-text-main">Horário</span>
+                    {scheduledTime && (
+                      <span className="text-[13px] text-primary mr-2">{scheduledTime.slice(0, 5)}</span>
+                    )}
+                    <Toggle on={!!scheduledTime} onChange={v => {
+                      if (v) { setScheduledTime("09:00"); updateTask(task.id, { scheduled_time: "09:00" }); }
+                      else { setScheduledTime(""); updateTask(task.id, { scheduled_time: null }); }
+                    }} />
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setCreatingTag(false)} className="text-xs text-text-secondary hover:text-text-main">Cancelar</button>
-                    <button onClick={handleCreateTag} className="text-xs text-primary hover:underline font-medium">Criar</button>
+                  {scheduledTime && (
+                    <div className="px-4 pb-3">
+                      <input
+                        type="time"
+                        value={scheduledTime}
+                        onChange={e => setScheduledTime(e.target.value)}
+                        onBlur={e => updateTask(task.id, { scheduled_time: e.target.value || null })}
+                        className="w-full text-sm bg-bg border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Urgente */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-[17px] w-6 text-center leading-none">🔔</span>
+                  <span className={["flex-1 text-[16px]", isUrgent ? "text-[#FF3B30] font-medium" : "text-text-main"].join(" ")}>Urgente</span>
+                  <Toggle on={isUrgent} red onChange={async v => { setIsUrgent(v); await updateTask(task.id, { is_urgent: v }); }} />
+                </div>
+
+                {/* Prazo */}
+                <div>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <span className="text-[17px] w-6 text-center leading-none">🚨</span>
+                    <span className="flex-1 text-[16px] text-text-main">Prazo</span>
+                    {deadline && (
+                      <span className="text-[13px] text-[#FF3B30] mr-2">{fmtDate(deadline)}</span>
+                    )}
+                    <Toggle on={!!deadline} onChange={v => {
+                      if (!v) { setDeadline(""); save({ deadline: null }); }
+                      else { const d = localDateStr(); setDeadline(d); save({ deadline: d }); }
+                    }} />
                   </div>
+                  {deadline && (
+                    <div className="px-4 pb-3">
+                      <input
+                        type="date"
+                        value={deadline}
+                        onChange={e => setDeadline(e.target.value)}
+                        onBlur={() => save()}
+                        className="w-full text-sm bg-bg border border-border/60 rounded-xl px-3 py-2 outline-none focus:border-[#FF3B30]"
+                      />
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* Reunião Google Meet */}
+            <div>
+              <SectionLabel>Reunião</SectionLabel>
+              <div className="rounded-2xl overflow-hidden bg-card">
+                {meetingUrl ? (
+                  /* ── Reunião criada ── */
+                  <div className="divide-y divide-border/50">
+                    <div className="flex items-center gap-3 px-4 py-3.5">
+                      <MeetIcon size={36} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-semibold text-text-main leading-tight">Google Meet</p>
+                        {meetingAttendees.length > 0 && (
+                          <p className="text-[12px] text-text-secondary truncate mt-0.5">
+                            {meetingAttendees.length === 1 ? meetingAttendees[0] : `${meetingAttendees.length} participantes`}
+                          </p>
+                        )}
+                        {scheduledDate && scheduledTime && (
+                          <p className="text-[12px] text-text-secondary/70 mt-0.5">
+                            {fmtDate(scheduledDate)} · {scheduledTime.slice(0, 5)}
+                          </p>
+                        )}
+                      </div>
+                      <a
+                        href={meetingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="text-[13px] font-semibold text-white bg-[#00BFA5] px-4 py-2 rounded-xl hover:bg-[#009688] transition-colors shrink-0 shadow-sm"
+                      >
+                        Entrar
+                      </a>
+                    </div>
+                    {meetingAttendees.length > 1 && (
+                      <div className="px-4 py-2.5">
+                        <p className="text-[11px] text-text-secondary/60 uppercase tracking-wide font-semibold mb-1.5">Participantes</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {meetingAttendees.map(email => (
+                            <span key={email} className="text-[11px] bg-bg text-text-secondary px-2.5 py-0.5 rounded-full border border-border">
+                              {email}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-center px-4 py-2.5 gap-4">
+                      <button onClick={handleCopyMeetLink} className="text-[13px] text-primary hover:opacity-70 transition-opacity">
+                        Copiar link
+                      </button>
+                      <div className="flex-1" />
+                      <button onClick={handleCancelMeeting} className="text-[13px] text-[#FF3B30] hover:opacity-70 transition-opacity">
+                        Cancelar reunião
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Criar reunião ── */
+                  <>
+                    <button
+                      onClick={() => { setShowMeetingPanel(v => !v); setMeetingError(""); }}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                    >
+                      <MeetIcon size={32} />
+                      <span className="flex-1 text-[15px] text-text-main font-medium">Criar reunião Google Meet</span>
+                      <ChevronRight />
+                    </button>
+
+                    {showMeetingPanel && (
+                      <div className="border-t border-border px-4 pt-4 pb-4 space-y-4 bg-bg dark:bg-[#1C1C1E]">
+                        {meetingError === "token_missing" ? (
+                          <div className="space-y-3 py-1">
+                            <p className="text-[13px] text-text-secondary leading-relaxed">
+                              Para criar reuniões, reconecte sua conta Google com permissão ao Calendar.
+                            </p>
+                            <button
+                              onClick={connectGoogleCalendar}
+                              className="w-full py-2.5 rounded-xl bg-primary text-white text-[14px] font-semibold"
+                            >
+                              Conectar Google Calendar
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="space-y-2">
+                              <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Convidar participantes</p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="email"
+                                  value={attendeeInput}
+                                  onChange={e => setAttendeeInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddAttendee(); } }}
+                                  placeholder="email@exemplo.com"
+                                  className="flex-1 text-[14px] bg-card dark:bg-[#2C2C2E] border border-border dark:border-[#3A3A3C] rounded-xl px-3 py-2.5 outline-none focus:border-[#00BFA5] text-text-main placeholder:text-text-secondary/40 min-w-0"
+                                />
+                                <button
+                                  onClick={handleAddAttendee}
+                                  className="px-3.5 py-2 rounded-xl bg-[#00BFA5]/15 text-[#00897B] dark:text-[#00BFA5] text-[13px] font-semibold shrink-0 hover:bg-[#00BFA5]/25 transition-colors"
+                                >
+                                  + Add
+                                </button>
+                              </div>
+                              {meetingAttendees.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {meetingAttendees.map(email => (
+                                    <span
+                                      key={email}
+                                      onClick={() => setMeetingAttendees(prev => prev.filter(e => e !== email))}
+                                      className="text-[11px] bg-card dark:bg-[#2C2C2E] text-text-secondary px-2.5 py-1 rounded-full border border-border dark:border-[#3A3A3C] cursor-pointer hover:border-[#FF3B30] hover:text-[#FF3B30] transition-colors select-none"
+                                    >
+                                      {email} ×
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {(scheduledDate || scheduledTime) && (
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-card dark:bg-[#2C2C2E] border border-border dark:border-[#3A3A3C]">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-secondary shrink-0">
+                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                                </svg>
+                                <span className="text-[12px] text-text-secondary">
+                                  {scheduledDate ? fmtDate(scheduledDate) : "Sem data"}
+                                  {scheduledTime ? ` · ${scheduledTime.slice(0, 5)}` : ""}
+                                  {durationMinutes ? ` · ${durationMinutes} min` : " · 60 min"}
+                                </span>
+                              </div>
+                            )}
+
+                            {!scheduledDate && !scheduledTime && (
+                              <p className="text-[12px] text-text-secondary/50 leading-relaxed">
+                                Dica: defina data e horário para o evento aparecer no Google Calendar no horário correto.
+                              </p>
+                            )}
+
+                            {meetingError && (
+                              <p className="text-[12px] text-[#FF3B30] leading-relaxed">{meetingError}</p>
+                            )}
+
+                            <button
+                              onClick={handleCreateMeeting}
+                              disabled={meetingLoading}
+                              className="w-full py-3 rounded-2xl text-white text-[15px] font-semibold disabled:opacity-40 transition-all active:scale-[0.98]"
+                              style={{ backgroundColor: "#00BFA5" }}
+                            >
+                              {meetingLoading ? "Criando reunião…" : "Criar link Google Meet"}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Duração + Repetição + Lembrete */}
+            <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
+
+              {/* Duração */}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-[17px] w-6 text-center leading-none">⏱</span>
+                <span className="flex-1 text-[16px] text-text-main">Duração</span>
+                {!customDuration ? (
+                  <select
+                    value={durationMinutes}
+                    onChange={e => {
+                      if (e.target.value === "custom") { setCustomDuration(true); return; }
+                      const v = e.target.value ? Number(e.target.value) : null;
+                      setDurationMinutes(v ?? "");
+                      updateTask(task.id, { duration_minutes: v });
+                    }}
+                    className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                  >
+                    <option value="">Sem duração</option>
+                    {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    <option value="custom">Personalizado…</option>
+                  </select>
+                ) : (
+                  <div className="flex gap-1 items-center">
+                    <input type="number" min={0} max={23} placeholder="0" id="dur-h"
+                      defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
+                      className="w-10 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center" />
+                    <span className="text-xs text-text-secondary">h</span>
+                    <input type="number" min={0} max={59} placeholder="30" id="dur-m"
+                      defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
+                      className="w-12 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center"
+                      onBlur={() => {
+                        const h = Number(document.getElementById("dur-h").value) || 0;
+                        const m = Number(document.getElementById("dur-m").value) || 0;
+                        const total = h * 60 + m;
+                        setDurationMinutes(total || "");
+                        setCustomDuration(false);
+                        updateTask(task.id, { duration_minutes: total || null });
+                      }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Repetição */}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-[17px] w-6 text-center leading-none">🔁</span>
+                <span className="flex-1 text-[16px] text-text-main">Repetição</span>
+                <select
+                  defaultValue={task.recurrence ?? ""}
+                  onChange={e => updateTask(task.id, { recurrence: e.target.value || null })}
+                  className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                >
+                  <option value="">Nunca</option>
+                  <option value="daily">Diariamente</option>
+                  <option value="weekdays">Dias úteis</option>
+                  <option value="weekly">Semanalmente</option>
+                  <option value="biweekly">Quinzenal</option>
+                  <option value="monthly">Mensalmente</option>
+                </select>
+              </div>
+
+              {/* Lembrete — só se horário definido */}
+              {scheduledTime && (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-[17px] w-6 text-center leading-none">🔕</span>
+                  <span className="flex-1 text-[16px] text-text-main">Lembrete</span>
+                  <select
+                    value={reminderMinutes ?? ""}
+                    onChange={e => {
+                      const v = e.target.value === "" ? null : Number(e.target.value);
+                      setReminderMinutes(v);
+                      updateTask(task.id, { reminder_minutes: v });
+                    }}
+                    className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                  >
+                    <option value="">Sem lembrete</option>
+                    <option value="5">5 min antes</option>
+                    <option value="15">15 min antes</option>
+                    <option value="30">30 min antes</option>
+                    <option value="60">1h antes</option>
+                    <option value="120">2h antes</option>
+                    <option value="1440">1 dia antes</option>
+                  </select>
                 </div>
               )}
+
             </div>
-          )}
-        </div>
 
-        {/* Subtasks */}
-        <div>
-          <label className="text-xs text-text-secondary font-medium block mb-2">
-            Checklist {taskSubtasks.length > 0 && `(${taskSubtasks.filter((s) => s.completed).length}/${taskSubtasks.length})`}
-          </label>
-          <div className="space-y-1.5">
-            {taskSubtasks.map((st) => (
-              <div key={st.id} className="flex items-center gap-2 group">
-                <input
-                  type="checkbox"
-                  checked={st.completed}
-                  onChange={(e) => toggleSubtask(task.id, st.id, e.target.checked)}
-                  className="accent-success w-4 h-4 rounded cursor-pointer shrink-0"
-                />
-                {editingSubtaskId === st.id ? (
-                  <input
-                    autoFocus
-                    value={editingSubtaskTitle}
-                    onChange={(e) => setEditingSubtaskTitle(e.target.value)}
-                    onBlur={() => {
-                      if (editingSubtaskTitle.trim()) updateSubtask(task.id, st.id, editingSubtaskTitle.trim());
-                      setEditingSubtaskId(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === "Escape") e.target.blur();
-                    }}
-                    className="text-sm flex-1 bg-transparent outline-none border-b border-primary text-text-main"
-                  />
-                ) : (
-                  <span
-                    onClick={() => { setEditingSubtaskId(st.id); setEditingSubtaskTitle(st.title); }}
-                    className={["text-sm flex-1 cursor-text", st.completed ? "line-through text-text-secondary" : "text-text-main"].join(" ")}
+            {/* Organização */}
+            <div>
+              <SectionLabel>Organização</SectionLabel>
+              <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
+
+                {/* Contexto */}
+                <div ref={contextPickerRef} className="relative">
+                  <button
+                    onClick={() => setShowContextPicker(v => !v)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left"
                   >
-                    {st.title}
-                  </span>
-                )}
-                <button
-                  onClick={() => deleteSubtask(task.id, st.id)}
-                  className="text-transparent group-hover:text-text-secondary hover:!text-danger text-xs transition-colors shrink-0"
-                >
-                  ×
-                </button>
+                    <span className="text-[17px] w-6 text-center leading-none">📂</span>
+                    <span className="flex-1 text-[16px] text-text-main">Contexto</span>
+                    <span className="text-[13px] text-text-secondary mr-2 truncate max-w-[120px]">{contextLabel}</span>
+                    <ChevronRight />
+                  </button>
+                  {showContextPicker && (
+                    <div className="mx-4 mb-3 bg-bg border border-border rounded-2xl shadow-xl z-50 py-1.5 max-h-52 overflow-y-auto">
+                      <button
+                        onClick={() => { handleContextChange(""); setShowContextPicker(false); }}
+                        className={["w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors",
+                          !localProjectId && !localAreaId ? "text-primary font-medium" : "text-text-secondary hover:bg-card/50",
+                        ].join(" ")}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-[#8E8E93] shrink-0" />
+                        Inbox (sem contexto)
+                      </button>
+                      {areas.length > 0 && <div className="h-px bg-border mx-3 my-1" />}
+                      {areas.map(area => {
+                        const areaProjects = projects.filter(p => p.area_id === area.id);
+                        return (
+                          <div key={area.id}>
+                            <button
+                              onClick={() => { handleContextChange(`area:${area.id}`); setShowContextPicker(false); }}
+                              className={["w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors font-medium",
+                                localAreaId === area.id && !localProjectId ? "text-primary" : "text-text-main hover:bg-card/50",
+                              ].join(" ")}
+                            >
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
+                              {area.name}
+                            </button>
+                            {areaProjects.map(p => (
+                              <button
+                                key={p.id}
+                                onClick={() => { handleContextChange(`project:${p.id}`); setShowContextPicker(false); }}
+                                className={["w-full flex items-center gap-2.5 pl-8 pr-3 py-2.5 text-sm text-left transition-colors",
+                                  localProjectId === p.id ? "text-primary font-medium" : "text-text-secondary hover:bg-card/50",
+                                ].join(" ")}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                                {p.name}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <button
+                    onClick={() => { setShowTagPicker(!showTagPicker); setCreatingTag(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                  >
+                    <span className="text-[17px] w-6 text-center leading-none">🏷️</span>
+                    <span className="flex-1 text-[16px] text-text-main">Tags</span>
+                    <span className="text-[13px] text-text-secondary mr-2 truncate max-w-[130px]">
+                      {taskTagList.length > 0 ? taskTagList.map(t => t.name).join(", ") : "Nenhuma"}
+                    </span>
+                    <ChevronRight />
+                  </button>
+                  {taskTagList.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+                      {taskTagList.map(tag => (
+                        <span
+                          key={tag.id}
+                          onClick={() => removeTagFromTask(task.id, tag.id)}
+                          className="text-xs px-2.5 py-1 rounded-full cursor-pointer hover:opacity-70 transition-opacity"
+                          style={{ backgroundColor: tag.color + "20", color: tag.color }}
+                        >
+                          {tag.name} ×
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {showTagPicker && (
+                    <div className="mx-4 mb-3 bg-bg border border-border rounded-2xl p-2">
+                      {!creatingTag ? (
+                        <>
+                          <div className="space-y-0.5 max-h-32 overflow-y-auto mb-2">
+                            {availableTags.map(tag => (
+                              <button
+                                key={tag.id}
+                                onClick={() => { addTagToTask(task.id, tag.id); setShowTagPicker(false); }}
+                                className="flex items-center gap-2 w-full px-3 py-2 rounded-xl hover:bg-card text-sm text-left"
+                              >
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                                {tag.name}
+                              </button>
+                            ))}
+                            {availableTags.length === 0 && (
+                              <p className="text-sm text-text-secondary text-center py-2">Nenhuma tag disponível</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => setCreatingTag(true)}
+                            className="text-sm text-primary w-full text-left px-3 py-1.5"
+                          >
+                            + Nova tag
+                          </button>
+                        </>
+                      ) : (
+                        <div className="space-y-2 p-1">
+                          <input
+                            autoFocus
+                            value={newTagName}
+                            onChange={e => setNewTagName(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && handleCreateTag()}
+                            placeholder="Nome da tag…"
+                            className="w-full text-sm bg-card border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
+                          />
+                          <div className="flex gap-1.5 flex-wrap px-1">
+                            {TAG_COLORS.map(c => (
+                              <button
+                                key={c}
+                                onClick={() => setNewTagColor(c)}
+                                className={["w-6 h-6 rounded-full border-2 transition-all", newTagColor === c ? "border-text-main scale-110" : "border-transparent"].join(" ")}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
+                          </div>
+                          <div className="flex gap-3 px-1">
+                            <button onClick={() => setCreatingTag(false)} className="text-sm text-text-secondary">Cancelar</button>
+                            <button onClick={handleCreateTag} className="text-sm text-primary font-medium">Criar</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Checklist / Subtarefas */}
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-[17px] w-6 text-center leading-none">☑️</span>
+                    <span className="flex-1 text-[16px] text-text-main">Checklist</span>
+                    {taskSubtasks.length > 0 && (
+                      <span className="text-[13px] text-text-secondary">
+                        {taskSubtasks.filter(s => s.completed).length}/{taskSubtasks.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-2 ml-9">
+                    {taskSubtasks.map(st => (
+                      <div key={st.id} className="flex items-center gap-2.5 group">
+                        <input
+                          type="checkbox"
+                          checked={st.completed}
+                          onChange={e => toggleSubtask(task.id, st.id, e.target.checked)}
+                          className="accent-[#34C759] w-[18px] h-[18px] rounded-full cursor-pointer shrink-0"
+                        />
+                        {editingSubtaskId === st.id ? (
+                          <input
+                            autoFocus
+                            value={editingSubtaskTitle}
+                            onChange={e => setEditingSubtaskTitle(e.target.value)}
+                            onBlur={() => {
+                              if (editingSubtaskTitle.trim()) updateSubtask(task.id, st.id, editingSubtaskTitle.trim());
+                              setEditingSubtaskId(null);
+                            }}
+                            onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") e.target.blur(); }}
+                            className="text-[15px] flex-1 bg-transparent outline-none border-b border-primary text-text-main"
+                          />
+                        ) : (
+                          <span
+                            onClick={() => { setEditingSubtaskId(st.id); setEditingSubtaskTitle(st.title); }}
+                            className={["text-[15px] flex-1 cursor-text", st.completed ? "line-through text-text-secondary" : "text-text-main"].join(" ")}
+                          >
+                            {st.title}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => deleteSubtask(task.id, st.id)}
+                          className="text-transparent group-hover:text-text-secondary hover:!text-[#FF3B30] text-base transition-colors shrink-0 leading-none"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={handleAddSubtask} className="mt-2 ml-9">
+                    <input
+                      value={newSubtask}
+                      onChange={e => setNewSubtask(e.target.value)}
+                      placeholder="+ Nova etapa…"
+                      className="w-full text-[15px] outline-none bg-transparent text-text-secondary placeholder:text-text-secondary/40 border-b border-transparent focus:border-border pb-0.5"
+                    />
+                  </form>
+                </div>
+
               </div>
-            ))}
+            </div>
+
+            {/* Algum dia + Prioridade */}
+            <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-[17px] w-6 text-center leading-none">🌙</span>
+                <span className="flex-1 text-[16px] text-text-main">Algum dia</span>
+                <Toggle on={someday} onChange={async v => { setSomeday(v); await updateTask(task.id, { someday: v }); }} />
+              </div>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-[17px] w-6 text-center leading-none">⚑</span>
+                <span className="flex-1 text-[16px] text-text-main">Prioridade</span>
+                <select
+                  defaultValue={task.priority ?? ""}
+                  onChange={e => updateTask(task.id, { priority: e.target.value || null })}
+                  className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                >
+                  <option value="">Nenhuma</option>
+                  <option value="high">🔴 Alta</option>
+                  <option value="medium">🟡 Média</option>
+                  <option value="low">🟢 Baixa</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Mobile: Lixeira + Arquivar inline at bottom of content */}
+            <div className="md:hidden flex items-center justify-between pt-1">
+              <button
+                onClick={handleDelete}
+                className="text-sm text-[#FF3B30] hover:opacity-70 transition-opacity py-2"
+              >
+                Lixeira
+              </button>
+              <button
+                onClick={handleArchive}
+                className="text-sm text-text-secondary hover:text-text-main transition-colors py-2"
+              >
+                Arquivar
+              </button>
+            </div>
+
           </div>
-          <form onSubmit={handleAddSubtask} className="mt-2">
-            <input
-              value={newSubtask}
-              onChange={(e) => setNewSubtask(e.target.value)}
-              placeholder="+ Nova etapa…"
-              className="w-full text-sm outline-none bg-transparent text-text-secondary placeholder:text-text-secondary/50 border-b border-transparent focus:border-border pb-0.5"
-            />
-          </form>
         </div>
-      </div>
 
-      {/* Footer */}
-      <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={handleDelete} className="text-xs text-danger hover:underline">
-            Lixeira
-          </button>
-          <button onClick={handleArchive} className="text-xs text-text-secondary hover:underline">
-            Arquivar
-          </button>
+        {/* Footer — desktop only */}
+        <div className="hidden md:flex shrink-0 px-5 py-3 border-t border-border items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={handleDelete} className="text-sm text-[#FF3B30] hover:opacity-70 transition-opacity">
+              Lixeira
+            </button>
+            <button onClick={handleArchive} className="text-sm text-text-secondary hover:text-text-main transition-colors">
+              Arquivar
+            </button>
+          </div>
+          {saving && <span className="text-xs text-text-secondary">Salvando…</span>}
         </div>
-        {saving && <span className="text-xs text-text-secondary">Salvando…</span>}
-      </div>
-      {/* Safe area spacer on mobile */}
-      <div className="md:hidden shrink-0" style={{ height: "env(safe-area-inset-bottom)" }} />
-    </aside>
 
-    {/* Modal de confirmação para exclusão de tarefa recorrente */}
-    {showRecurrenceModal && (
-      <RecurrenceDeleteModal
-        task={task}
-        onDeleteThis={() => {
-          deleteTask(task.id);
-          onClose();
-        }}
-        onDeleteFuture={() => {
-          deleteRecurrenceFuture(task.id);
-          onClose();
-        }}
-        onCancel={() => setShowRecurrenceModal(false)}
-      />
-    )}
+      </aside>
+
+      {showRecurrenceModal && (
+        <RecurrenceDeleteModal
+          task={task}
+          onDeleteThis={() => { deleteTask(task.id); onClose(); }}
+          onDeleteFuture={() => { deleteRecurrenceFuture(task.id); onClose(); }}
+          onCancel={() => setShowRecurrenceModal(false)}
+        />
+      )}
     </>
   );
 }

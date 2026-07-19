@@ -219,7 +219,14 @@ html.dark .menu-item:hover { background-color: #3A3A3C !important; }
     @apply bg-card rounded-card border border-border cursor-pointer;
   }
   .task-card-row {
-    @apply flex items-start gap-3 px-4 py-2;
+    @apply flex items-center gap-3 px-4 py-3 min-h-[52px];
+  }
+
+  /* Mobile sidebar: alvos de toque maiores */
+  @media (max-width: 767px) {
+    .sidebar-item {
+      @apply py-3 text-[15px] min-h-[44px];
+    }
   }
 
   .page-enter {
@@ -230,6 +237,44 @@ html.dark .menu-item:hover { background-color: #3A3A3C !important; }
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Calendário: variáveis de tema ── */
+:root {
+  --cal-line:           rgba(0,0,0,0.07);
+  --cal-line-dash:      rgba(0,0,0,0.03);
+  --cal-text:           rgba(30,30,30,0.80);
+  --cal-text-dim:       rgba(60,60,60,0.52);
+  --cal-text-dimmer:    rgba(60,60,60,0.30);
+  --cal-bg-today:       rgba(79,142,247,0.06);
+  --cal-bg-hover:       rgba(0,0,0,0.03);
+  --cal-border:         rgba(0,0,0,0.09);
+  --cal-ctrl-bg:        rgba(0,0,0,0.06);
+  --cal-ctrl-border:    rgba(0,0,0,0.12);
+  --cal-ctrl-btn-act:   rgba(0,0,0,0.09);
+  --cal-ctrl-txt-act:   rgba(20,20,20,0.90);
+  --cal-ctrl-txt-off:   rgba(60,60,60,0.45);
+  --cal-wknd:           rgba(210,50,40,0.65);
+  --cal-hour-txt:       rgba(70,70,70,0.45);
+  --cal-done-text:      rgba(100,100,100,0.45);
+}
+html.dark {
+  --cal-line:           rgba(255,255,255,0.08);
+  --cal-line-dash:      rgba(255,255,255,0.03);
+  --cal-text:           rgba(220,220,220,0.85);
+  --cal-text-dim:       rgba(180,180,180,0.60);
+  --cal-text-dimmer:    rgba(128,128,128,0.40);
+  --cal-bg-today:       rgba(79,142,247,0.04);
+  --cal-bg-hover:       rgba(128,128,128,0.04);
+  --cal-border:         rgba(255,255,255,0.10);
+  --cal-ctrl-bg:        rgba(128,128,128,0.10);
+  --cal-ctrl-border:    rgba(128,128,128,0.14);
+  --cal-ctrl-btn-act:   rgba(255,255,255,0.08);
+  --cal-ctrl-txt-act:   rgba(220,220,220,0.95);
+  --cal-ctrl-txt-off:   rgba(128,128,128,0.55);
+  --cal-wknd:           rgba(255,100,90,0.60);
+  --cal-hour-txt:       rgba(200,200,200,0.55);
+  --cal-done-text:      rgba(200,200,200,0.35);
 }
 
 @keyframes confettiFall {

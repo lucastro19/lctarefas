@@ -7,10 +7,14 @@ import { useTaskStore } from "../../store/taskStore";
 import { useTagStore } from "../../store/tagStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
-import { durationLabel, DURATION_PRESETS } from "../../store/settingsStore";
+import { durationLabel, DURATION_PRESETS, useSettingsStore } from "../../store/settingsStore";
 import { useAreaStore } from "../../store/areaStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 import { useTemplateStore } from "../../store/templateStore";
+import { TimeSlotPickerModal } from "./TimeSlotPickerModal";
+import { computeAvailableSlots } from "../../utils/timeSlots";
+import { useAuthStore } from "../../store/authStore";
+import { createMeetingEvent } from "../../lib/googleCalendar";
 
 // Usa data LOCAL (não UTC) para evitar bug de timezone em fusos negativos (BR = UTC-3)
 function localDateStr(d = new Date()) {
@@ -163,6 +167,7 @@ function TimeField({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const [selHour, setSelHour] = useState(value ? value.split(":")[0] : null);
   const wrapRef = useRef(null);
+  const dropdownRef = useRef(null);
   const hourListRef = useRef(null);
 
   useEffect(() => {
@@ -172,10 +177,16 @@ function TimeField({ value, onChange }) {
 
   useEffect(() => {
     const handler = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      const insideWrap = wrapRef.current && wrapRef.current.contains(e.target);
+      const insideDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!insideWrap && !insideDropdown) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, []);
 
   // Scroll para hora atual ao abrir
@@ -194,6 +205,14 @@ function TimeField({ value, onChange }) {
       const [h, m] = v.split(":").map(Number);
       if (h < 24 && m < 60) { onChange(v); setSelHour(String(h).padStart(2, "0")); }
     } else if (!v) { onChange(""); }
+  };
+
+  // Clicar na hora já confirma HH:00 imediatamente e mantém dropdown aberto para refinar minuto
+  const pickHour = (h) => {
+    const t = `${h}:00`;
+    setSelHour(h);
+    setInput(t);
+    onChange(t);
   };
 
   const pickMinute = (m) => {
@@ -239,16 +258,16 @@ function TimeField({ value, onChange }) {
 
       {open && createPortal(
         <div
-          style={{ position: "fixed", ...pos(), zIndex: 9999 }}
-          className="flex bg-card border border-border rounded-xl shadow-xl overflow-hidden"
+          ref={dropdownRef}
           style={{ position: "fixed", ...pos(), zIndex: 9999, width: 148 }}
+          className="flex bg-card border border-border rounded-xl shadow-xl overflow-hidden"
         >
           {/* Coluna horas */}
           <div ref={hourListRef} className="w-16 max-h-52 overflow-y-auto border-r border-border py-1">
             {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
               <button
                 key={h}
-                onMouseDown={(e) => { e.preventDefault(); setSelHour(h); }}
+                onClick={() => pickHour(h)}
                 className={[
                   "w-full text-center py-1.5 text-xs transition-colors",
                   h === selHour
@@ -268,7 +287,7 @@ function TimeField({ value, onChange }) {
                 return (
                   <button
                     key={m}
-                    onMouseDown={(e) => { e.preventDefault(); pickMinute(m); }}
+                    onClick={() => pickMinute(m)}
                     className={[
                       "w-full text-center py-1.5 rounded-lg text-xs font-medium transition-colors",
                       t === value
@@ -442,7 +461,7 @@ function ReminderField({ value, onChange }) {
 }
 
 /* ── Menu contextual ── */
-function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos }) {
+function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos, onSelect, onMoveToToday }) {
   const [pos, setPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
@@ -459,14 +478,18 @@ function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos
       const btn = document.getElementById(buttonId);
       if (btn) {
         const r = btn.getBoundingClientRect();
-        setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+        const menuH = 320;
+        const top = r.bottom + menuH > window.innerHeight - 8
+          ? r.top - menuH
+          : r.bottom + 4;
+        setPos({ top, right: window.innerWidth - r.right });
       }
     }
   }, [buttonId, cursorPos]);
 
   return (
     <div style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 9999 }}>
-      <TaskMenu task={task} onClose={onClose} onRecurrenceDelete={onRecurrenceDelete} />
+      <TaskMenu task={task} onClose={onClose} onRecurrenceDelete={onRecurrenceDelete} onSelect={onSelect} onMoveToToday={onMoveToToday} />
     </div>
   );
 }
@@ -483,8 +506,30 @@ function nextWeekday(weekday) {
   return dateStr(d);
 }
 
-// Linha de menu com flyout lateral ao hover
-function FlyoutRow({ label, rowRef, open, onEnter, onLeave, children }) {
+// Linha de menu com flyout lateral (desktop) ou accordion (mobile)
+function FlyoutRow({ label, rowRef, open, onEnter, onLeave, onToggle, children }) {
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+
+  if (isMobile) {
+    return (
+      <div ref={rowRef}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
+          className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between"
+        >
+          <span>{label}</span>
+          <span className="text-text-secondary text-xs ml-2 transition-transform" style={{ display: "inline-block", transform: open ? "rotate(90deg)" : "none" }}>▸</span>
+        </button>
+        {open && (
+          <div className="border-t border-border bg-bg/60">
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop: flyout lateral com hover
   const side = (() => {
     if (!rowRef.current) return { left: "100%", top: 0 };
     const r = rowRef.current.getBoundingClientRect();
@@ -511,7 +556,7 @@ function FlyoutRow({ label, rowRef, open, onEnter, onLeave, children }) {
   );
 }
 
-function TaskMenu({ task, onClose, onRecurrenceDelete }) {
+function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }) {
   const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
   const { tags, taskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
@@ -544,6 +589,11 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
       label: "Nenhum",
       icon: "✕",
       apply: () => updateTask(task.id, { scheduled_date: null, scheduled_time: null, someday: false }),
+    },
+    {
+      label: "Hoje",
+      icon: "☀️",
+      apply: () => onMoveToToday ? onMoveToToday() : updateTask(task.id, { scheduled_date: todayStr(), someday: false }),
     },
     {
       label: "Amanhã",
@@ -579,6 +629,16 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
       onClick={(e) => e.stopPropagation()}
       className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[200px]"
     >
+      {/* Selecionar (inicia multi-select) */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onSelect?.(); onClose(); }}
+        className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+      >
+        <span>☑️</span>
+        <span>Selecionar</span>
+      </button>
+      <div className="h-px bg-border mx-2 my-1" />
+
       {/* Data Limite */}
       <FlyoutRow
         label="📅 Data Limite"
@@ -586,6 +646,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
         open={openSub === "date"}
         onEnter={() => setOpenSub("date")}
         onLeave={() => setOpenSub(null)}
+        onToggle={() => setOpenSub(openSub === "date" ? null : "date")}
       >
         {DATE_OPTIONS.map((opt) => (
           <button
@@ -606,6 +667,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
         open={openSub === "tags"}
         onEnter={() => setOpenSub("tags")}
         onLeave={() => setOpenSub(null)}
+        onToggle={() => setOpenSub(openSub === "tags" ? null : "tags")}
       >
         {tags.length === 0 && (
           <p className="px-3 py-2 text-xs text-text-secondary">Nenhuma etiqueta criada</p>
@@ -639,6 +701,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete }) {
         open={openSub === "areas"}
         onEnter={() => setOpenSub("areas")}
         onLeave={() => setOpenSub(null)}
+        onToggle={() => setOpenSub(openSub === "areas" ? null : "areas")}
       >
         {/* Sem área */}
         <button
@@ -743,6 +806,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const [contextPos, setContextPos] = useState(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
+  const [longPressing, setLongPressing] = useState(false);
   const [focusField, setFocusField] = useState("title");
   const [titleDraft, setTitleDraft] = useState(task.title);
   const [notesDraft, setNotesDraft] = useState(task.notes ?? "");
@@ -751,7 +815,12 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [duration, setDuration] = useState(task.duration_minutes ?? "");
   const [reminder, setReminder] = useState(task.reminder_minutes ?? null);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showSlotPicker, setShowSlotPicker] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
+  const [meetQuick, setMeetQuick] = useState(false);
+  const [meetCreating, setMeetCreating] = useState(false);
+  const [showMeetPopover, setShowMeetPopover] = useState(false);
+  const meetBadgeRef = useRef(null);
   const swipingRef = useRef(false); // true quando comprometido com gesto horizontal
   const hapticFiredRef = useRef(false);
 
@@ -762,6 +831,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const collapseRef = useRef(null);
   const pendingCursorRef = useRef(null);
   const longPressRef = useRef(null);
+  const longPressFiredRef = useRef(false);
   const swipeStartRef = useRef(null);
   const cardRef = useRef(null);
 
@@ -779,6 +849,23 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const taskArea = task.area_id ? areas.find((a) => a.id === task.area_id) : null;
   const contextLabel = taskProject ?? taskArea ?? null;
   const collapsedTags = taskTags[task.id] ?? [];
+  const settings = useSettingsStore();
+
+  const handleMoveToToday = () => {
+    const { tasks: allTasks } = useTaskStore.getState();
+    const todayDate = todayStr();
+    const todayTasks = allTasks.filter(
+      (t) => t.scheduled_date === todayDate && !t.completed_at && !t.deleted_at && t.id !== task.id
+    );
+    const slots = computeAvailableSlots(todayTasks, settings);
+    if (!slots.manha.full) {
+      updateTask(task.id, { scheduled_date: todayDate, scheduled_time: slots.manha.time, someday: false });
+    } else {
+      setShowMenu(false);
+      setContextPos(null);
+      setShowSlotPicker(true);
+    }
+  };
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -799,6 +886,15 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
   useEffect(() => { if (expanded) fetchTaskTags(task.id); }, [expanded, task.id]);
 
+  // Cancela o long-press quando DnD ativa o drag (evita multi-select disparar no meio do arraste)
+  useEffect(() => {
+    if (isDragging) {
+      clearTimeout(longPressRef.current);
+      longPressFiredRef.current = false;
+      setLongPressing(false);
+    }
+  }, [isDragging]);
+
   // Foca o campo certo ao expandir
   useEffect(() => {
     if (!expanded) return;
@@ -815,10 +911,11 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     return () => clearTimeout(timer);
   }, [expanded, focusField]);
 
-  // Ajusta altura do textarea quando muda conteúdo ou expande
+  // Ajusta altura dos textareas quando muda conteúdo ou expande
   useEffect(() => {
     if (expanded && notesRef.current) resizeTextarea(notesRef.current);
-  }, [notesDraft, expanded]);
+    if (expanded && titleInputRef.current) resizeTextarea(titleInputRef.current);
+  }, [notesDraft, titleDraft, expanded]);
 
   // Restaura posição do cursor após atualização de estado (bullet list)
   useLayoutEffect(() => {
@@ -1017,7 +1114,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
-    contextLabel || collapsedTags.length > 0 || task.priority;
+    contextLabel || collapsedTags.length > 0 || task.priority || task.meeting_url;
 
   const SWIPE_THRESHOLD = 80;
 
@@ -1026,10 +1123,13 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     swipingRef.current = false;
     hapticFiredRef.current = false;
     if (anySelected) return;
+    setLongPressing(true);
     longPressRef.current = setTimeout(() => {
+      setLongPressing(false);
+      longPressFiredRef.current = true;
       toggle(task.id);
-      navigator.vibrate?.(50);
-    }, 700);
+      navigator.vibrate?.(40);
+    }, 500);
   };
 
   const handleTouchMove = (e) => {
@@ -1037,6 +1137,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     const dx = e.touches[0].clientX - swipeStartRef.current.x;
     const dy = e.touches[0].clientY - swipeStartRef.current.y;
     clearTimeout(longPressRef.current);
+    setLongPressing(false);
 
     // Se ainda não comprometeu: decide se é horizontal ou vertical
     if (!swipingRef.current) {
@@ -1060,8 +1161,18 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e) => {
     clearTimeout(longPressRef.current);
+    setLongPressing(false);
+    // Bloqueia o click sintético que o iOS dispara após long-press
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false;
+      e.preventDefault();
+      setSwipeX(0);
+      swipeStartRef.current = null;
+      swipingRef.current = false;
+      return;
+    }
     if (swipeX > SWIPE_THRESHOLD) {
       handleCheck(!task.completed_at); // concluir ou desfazer
     } else if (swipeX < -SWIPE_THRESHOLD) {
@@ -1111,6 +1222,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
       )}
     <div
       ref={setNodeRef}
+      {...attributes}
       style={{
         transform: swipeX !== 0
           ? `translateX(${swipeX}px)`
@@ -1118,7 +1230,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         transition: swipeX !== 0 ? "none" : `${transition}, transform 0.25s cubic-bezier(.25,.8,.25,1)`,
       }}
       onDoubleClick={() => onClick?.()}
-      onTouchStart={handleTouchStart}
+      onTouchStart={(e) => { listeners?.onTouchStart?.(e); handleTouchStart(e); }}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
       className={[
@@ -1126,28 +1238,37 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         completing ? "opacity-50" : "",
         task.completed_at ? "opacity-40" : "",
         isDragging ? "opacity-30" : "",
-        selected ? "ring-2 ring-primary/40 bg-primary/5" : "",
+        selected ? "bg-primary/15 border-l-[3px] border-primary" : "",
         expanded ? "ring-1 ring-primary/20" : "",
         isUrgent ? "is-urgent" : "",
+        longPressing ? "scale-[0.98] opacity-80 transition-transform duration-150" : "",
       ].join(" ")}
     >
-      <div className="task-card-row">
-        {/* Arraste */}
+      {/* Overlay de seleção: captura todos os toques quando no modo multi-select */}
+      {anySelected && !expanded && (
         <div
-          {...listeners}
-          {...attributes}
+          className="absolute inset-0 z-[15]"
+          onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); toggle(task.id); }}
+          onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
+        />
+      )}
+      <div className="task-card-row">
+        {/* Ícone de arraste — desktop: com pointer listeners; mobile: card inteiro tem TouchSensor via onTouchStart composto */}
+        <div
+          className="hidden md:block shrink-0"
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
-          className={[
-            "hidden md:block cursor-grab active:cursor-grabbing text-[#8E8E93] hover:text-[#3C3C43] dark:text-white/50 dark:hover:text-white/80 shrink-0 px-0.5 pt-0.5 transition-all select-none text-base",
-            anySelected ? "opacity-0" : "opacity-100",
-          ].join(" ")}
         >
-          ⠿
+          <div
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-[#8E8E93] hover:text-[#3C3C43] dark:text-white/50 dark:hover:text-white/80 px-0.5 pt-0.5 transition-all select-none text-base opacity-0 group-hover:opacity-100"
+          >
+            ⠿
+          </div>
         </div>
 
         {/* Checkbox circular */}
-        <div className="pt-0.5 shrink-0" onDoubleClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0" onDoubleClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={!!task.completed_at}
             onChange={(checked) => {
@@ -1159,18 +1280,20 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         </div>
 
         {/* Conteúdo */}
-        <div className="flex-1 min-w-0 py-0.5" onDoubleClick={(e) => e.stopPropagation()}>
+        <div className="flex-1 min-w-0" onDoubleClick={(e) => e.stopPropagation()}>
           {expanded ? (
             /* ── EXPANDIDO ── */
             <>
-              <input
+              <textarea
                 ref={titleInputRef}
                 value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
+                onChange={(e) => { setTitleDraft(e.target.value); resizeTextarea(e.target); }}
                 onBlur={saveTitle}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); notesRef.current?.focus(); } }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full text-base font-medium text-text-main bg-transparent outline-none leading-snug"
+                rows={1}
+                className="w-full text-base font-medium text-text-main bg-transparent outline-none leading-snug resize-none overflow-hidden"
+                style={{ minHeight: "24px" }}
                 placeholder="Título"
               />
 
@@ -1186,6 +1309,18 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 className="w-full text-xs text-text-secondary bg-transparent outline-none resize-none overflow-hidden leading-normal mt-0.5 py-0 placeholder:text-[#C7C7CC] dark:placeholder:text-[#48484A]"
                 style={{ minHeight: "16px" }}
               />
+
+              {/* Linha de topo mobile: botão ··· inline */}
+              <div className="flex md:hidden items-center justify-end -mt-0.5 mb-1" onClick={e => e.stopPropagation()}>
+                <button
+                  ref={(el) => { if (el) el._menuBtn = true; }}
+                  id={`menu-btn-exp-${task.id}`}
+                  onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
+                  className="text-[#8E8E93] w-8 h-6 flex items-center justify-center rounded-lg text-sm tracking-widest"
+                >
+                  ···
+                </button>
+              </div>
 
               {/* Etiquetas */}
               <div className="flex items-center gap-1.5 flex-wrap mt-0.5" onClick={(e) => e.stopPropagation()}>
@@ -1253,7 +1388,12 @@ export function TaskCard({ task, subtasks = [], onClick }) {
               )}
 
               {/* Linha de meta: data · hora · urgência · duração */}
-              <div className="flex items-center gap-2 flex-wrap mt-1" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="flex items-center gap-2 flex-wrap mt-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
                 <DateField
                   value={date}
                   onChange={(v) => { setDate(v); updateTask(task.id, { scheduled_date: v || null }); }}
@@ -1306,6 +1446,67 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   <option value="biweekly">Quinzenalmente</option>
                   <option value="monthly">Mensalmente</option>
                 </select>
+
+                {/* Meet na tarefa expandida */}
+                {!task.completed_at && (
+                  task.meeting_url ? (
+                    <button
+                      ref={meetBadgeRef}
+                      onClick={e => { e.stopPropagation(); setShowMeetPopover(v => !v); }}
+                      className="text-xs rounded-full px-2 py-0.5 font-semibold flex items-center gap-1 meta-chip-filled text-[#00897B] transition-colors"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="8" fill="#00BFA5"/>
+                        <path d="M8 16C8 13.8 9.8 12 12 12H28C30.2 12 32 13.8 32 16V32C32 34.2 30.2 36 28 36H12C9.8 36 8 34.2 8 32V16Z" fill="white"/>
+                        <path d="M34 20L40 15V33L34 28V20Z" fill="white"/>
+                        <circle cx="20" cy="24" r="5" fill="#00BFA5"/>
+                      </svg>
+                      Meet
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async e => {
+                        e.stopPropagation();
+                        const token = useAuthStore.getState().getGoogleToken();
+                        if (!token) { setMeetQuick(true); return; }
+                        setMeetCreating(true);
+                        try {
+                          const today = new Date();
+                          const d = task.scheduled_date ?? `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+                          const t = task.scheduled_time ?? "09:00";
+                          const { meetLink, eventId } = await createMeetingEvent(token, {
+                            title: task.title,
+                            date: d,
+                            time: t,
+                            duration: task.duration_minutes || 60,
+                            attendees: [],
+                          });
+                          useTaskStore.getState().updateTask(task.id, {
+                            meeting_url: meetLink,
+                            meeting_event_id: eventId,
+                            meeting_attendees: [],
+                          });
+                        } catch (_) {
+                          setMeetQuick(true);
+                        } finally {
+                          setMeetCreating(false);
+                        }
+                      }}
+                      className="text-xs rounded-full px-2 py-0.5 flex items-center gap-1 bg-transparent text-[#AEAEB2] dark:text-[#636366] hover:text-[#00897B] transition-colors"
+                    >
+                      {meetCreating ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="animate-spin">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeDasharray="50" strokeDashoffset="15"/>
+                        </svg>
+                      ) : (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                        </svg>
+                      )}
+                      Meet
+                    </button>
+                  )
+                )}
               </div>
             </>
           ) : (
@@ -1319,7 +1520,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 }}
                 onDoubleClick={(e) => e.stopPropagation()}
                 className={[
-                  "text-sm leading-snug flex items-baseline gap-1.5",
+                  "text-[15px] leading-snug flex items-baseline gap-1.5",
                   task.completed_at
                     ? "line-through text-text-secondary cursor-default"
                     : "text-text-main cursor-text",
@@ -1340,7 +1541,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                     if (!task.completed_at) expandTask("notes");
                   }}
                   onDoubleClick={(e) => e.stopPropagation()}
-                  className="text-xs text-text-secondary mt-0.5 leading-relaxed whitespace-pre-wrap break-words cursor-text"
+                  className="text-[13px] text-text-secondary mt-0.5 leading-relaxed whitespace-pre-wrap break-words cursor-text"
                 >
                   {parseNotes(task.notes).map((part, i) =>
                     part.type === "bold" ? (
@@ -1374,7 +1575,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
               {hasMetadata && (
                 <div
-                  className="flex items-center gap-2 mt-0.5 flex-wrap"
+                  className="flex items-center gap-2 mt-1 flex-wrap"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
@@ -1422,6 +1623,21 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   {task.duration_minutes && (
                     <span className="text-xs text-text-secondary">{durationLabel(task.duration_minutes)}</span>
                   )}
+                  {task.meeting_url && !task.completed_at && (
+                    <button
+                      ref={meetBadgeRef}
+                      onClick={e => { e.stopPropagation(); setShowMeetPopover(v => !v); }}
+                      className="text-[10px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#00BFA5]/10 text-[#00897B] hover:bg-[#00BFA5]/20 transition-colors select-none"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="8" fill="#00BFA5"/>
+                        <path d="M8 16C8 13.8 9.8 12 12 12H28C30.2 12 32 13.8 32 16V32C32 34.2 30.2 36 28 36H12C9.8 36 8 34.2 8 32V16Z" fill="white"/>
+                        <path d="M34 20L40 15V33L34 28V20Z" fill="white"/>
+                        <circle cx="20" cy="24" r="5" fill="#00BFA5"/>
+                      </svg>
+                      Meet
+                    </button>
+                  )}
                   {subtaskTotal > 0 && (
                     <span className="flex items-center gap-1.5">
                       <span className="w-16 h-1 bg-border rounded-full overflow-hidden shrink-0">
@@ -1462,23 +1678,126 @@ export function TaskCard({ task, subtasks = [], onClick }) {
           )}
         </div>
 
+        {/* Botão rápido Google Meet — oculto no mobile quando expandido */}
+        {!task.completed_at && !anySelected && !expanded && (
+          <div className="relative shrink-0" onDoubleClick={e => e.stopPropagation()}>
+            {task.meeting_url ? (
+              /* Reunião existente — abre direto */
+              <a
+                href={task.meeting_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                title="Entrar na reunião"
+                className="w-9 h-9 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-[#00BFA5]/10"
+              >
+                <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+                  <rect width="48" height="48" rx="8" fill="#00BFA5"/>
+                  <path d="M8 16C8 13.8 9.8 12 12 12H28C30.2 12 32 13.8 32 16V32C32 34.2 30.2 36 28 36H12C9.8 36 8 34.2 8 32V16Z" fill="white"/>
+                  <path d="M34 20L40 15V33L34 28V20Z" fill="white"/>
+                  <circle cx="20" cy="24" r="5" fill="#00BFA5"/>
+                </svg>
+              </a>
+            ) : (
+              /* Sem reunião — cria rapidamente */
+              <>
+                <button
+                  onClick={async e => {
+                    e.stopPropagation();
+                    const token = useAuthStore.getState().getGoogleToken();
+                    if (!token) { setMeetQuick(true); return; }
+                    setMeetCreating(true);
+                    try {
+                      const today = new Date();
+                      const d = task.scheduled_date ?? `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+                      const t = task.scheduled_time ?? "09:00";
+                      const { meetLink, eventId } = await createMeetingEvent(token, {
+                        title: task.title,
+                        date: d,
+                        time: t,
+                        duration: task.duration_minutes || 60,
+                        attendees: [],
+                      });
+                      useTaskStore.getState().updateTask(task.id, {
+                        meeting_url: meetLink,
+                        meeting_event_id: eventId,
+                        meeting_attendees: [],
+                      });
+                    } catch (_) {
+                      setMeetQuick(true);
+                    } finally {
+                      setMeetCreating(false);
+                    }
+                  }}
+                  title="Criar reunião Google Meet"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all text-text-secondary/50 hover:text-[#00BFA5] hover:bg-[#00BFA5]/10"
+                >
+                  {meetCreating ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="animate-spin">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeDasharray="50" strokeDashoffset="15"/>
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                    </svg>
+                  )}
+                </button>
+                {meetQuick && createPortal(
+                  <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center px-6"
+                    onClick={() => setMeetQuick(false)}
+                  >
+                    <div
+                      className="bg-card border border-border rounded-2xl shadow-2xl p-5 w-full max-w-xs space-y-3"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <p className="text-[14px] font-semibold text-text-main">Conectar Google Calendar</p>
+                      <p className="text-[13px] text-text-secondary leading-relaxed">
+                        Para criar reuniões, você precisa reconectar sua conta Google com permissão ao Calendar.
+                      </p>
+                      <div className="flex gap-2">
+                        <button onClick={() => setMeetQuick(false)} className="flex-1 py-2 rounded-xl text-[13px] text-text-secondary border border-border">
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => { setMeetQuick(false); useAuthStore.getState().connectGoogleCalendar(); }}
+                          className="flex-1 py-2 rounded-xl text-[13px] font-semibold text-white"
+                          style={{ backgroundColor: "#00BFA5" }}
+                        >
+                          Conectar
+                        </button>
+                      </div>
+                    </div>
+                  </div>,
+                  document.body
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Menu ··· */}
         <div className="relative shrink-0" onDoubleClick={(e) => e.stopPropagation()}>
           <button
             ref={(el) => { if (el) el._menuBtn = true; }}
             id={`menu-btn-${task.id}`}
             onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
-            className="text-[#8E8E93] hover:text-[#1C1C1E] dark:text-white/50 dark:hover:text-white/90 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:bg-bg"
+            className={[
+              "text-[#8E8E93] hover:text-[#1C1C1E] dark:text-white/50 dark:hover:text-white/90 w-11 h-11 flex items-center justify-center rounded-lg transition-all active:bg-bg",
+              expanded ? "hidden md:flex" : "",
+            ].join(" ")}
           >
             ···
           </button>
           {showMenu && createPortal(
             <TaskMenuPortal
               task={task}
-              buttonId={`menu-btn-${task.id}`}
+              buttonId={expanded ? `menu-btn-exp-${task.id}` : `menu-btn-${task.id}`}
               onClose={() => { setShowMenu(false); setContextPos(null); }}
               onRecurrenceDelete={() => setShowRecurrenceModal(true)}
               cursorPos={contextPos}
+              onSelect={() => toggle(task.id)}
+              onMoveToToday={handleMoveToToday}
             />,
             document.body
           )}
@@ -1517,6 +1836,85 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         onDeleteFuture={() => { deleteRecurrenceFuture(task.id); setShowRecurrenceModal(false); }}
         onCancel={() => setShowRecurrenceModal(false)}
       />
+    )}
+    {showSlotPicker && (
+      <TimeSlotPickerModal
+        task={task}
+        todayTasks={useTaskStore.getState().tasks.filter(
+          (t) => t.scheduled_date === todayStr() && !t.completed_at && !t.deleted_at && t.id !== task.id
+        )}
+        settings={settings}
+        onPick={(slotTime) => {
+          updateTask(task.id, { scheduled_date: todayStr(), scheduled_time: slotTime, someday: false });
+          setShowSlotPicker(false);
+        }}
+        onClose={() => setShowSlotPicker(false)}
+      />
+    )}
+
+    {/* Meet popover — fora do condicional expandido/recolhido para funcionar nos dois modos */}
+    {showMeetPopover && task.meeting_url && createPortal(
+      <>
+        <div className="fixed inset-0 z-[199]" onClick={() => setShowMeetPopover(false)} />
+        <div
+          className="fixed z-[200] bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+          style={(() => {
+            const rect = meetBadgeRef.current?.getBoundingClientRect();
+            if (!rect) return { top: 0, left: 0, minWidth: 160 };
+            const popoverH = 88;
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const showAbove = spaceBelow < popoverH + 12;
+            return {
+              top: showAbove ? rect.top - popoverH - 6 : rect.bottom + 6,
+              left: Math.min(rect.left, window.innerWidth - 170),
+              minWidth: 160,
+            };
+          })()}
+        >
+          <a
+            href={task.meeting_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => { e.stopPropagation(); setShowMeetPopover(false); }}
+            className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-[#00BFA5]/8 transition-colors"
+          >
+            <span className="w-6 h-6 rounded-full bg-[#00BFA5] flex items-center justify-center shrink-0">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+            </span>
+            <span className="text-[12px] font-semibold text-[#00897B]">Entrar</span>
+          </a>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              setShowMeetPopover(false);
+              const token = useAuthStore.getState().getGoogleToken();
+              const eventId = task.meeting_event_id;
+              if (token && eventId) {
+                import("../../lib/googleCalendar").then(({ deleteMeetingEvent }) => {
+                  deleteMeetingEvent(token, eventId).catch(() => {});
+                });
+              }
+              useTaskStore.getState().updateTask(task.id, {
+                meeting_url: null,
+                meeting_event_id: null,
+                meeting_attendees: null,
+              });
+            }}
+            className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-[#FF3B30]/5 transition-colors w-full text-left border-t border-border/60"
+          >
+            <span className="w-6 h-6 rounded-full bg-[#FF3B30]/10 flex items-center justify-center shrink-0">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </span>
+            <span className="text-[12px] font-medium text-[#FF3B30]">Cancelar reunião</span>
+          </button>
+        </div>
+      </>,
+      document.body
     )}
     </>
   );

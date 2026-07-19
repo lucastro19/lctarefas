@@ -9,19 +9,23 @@ import { useAreaStore } from "./store/areaStore";
 import { useTagStore } from "./store/tagStore";
 import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
+import { Landing } from "./pages/Landing";
 // Páginas críticas (carregadas imediatamente)
 import { Inbox } from "./pages/Inbox";
 import { Today } from "./pages/Today";
 import { Upcoming } from "./pages/Upcoming";
 import { Someday } from "./pages/Someday";
 // Páginas secundárias (lazy — carregadas só quando o usuário navegar)
-const Trash      = lazy(() => import("./pages/Trash").then((m) => ({ default: m.Trash })));
-const AreaPage   = lazy(() => import("./pages/AreaPage").then((m) => ({ default: m.AreaPage })));
-const ProjectPage= lazy(() => import("./pages/ProjectPage").then((m) => ({ default: m.ProjectPage })));
-const Archive    = lazy(() => import("./pages/Archive").then((m) => ({ default: m.Archive })));
-const Logbook    = lazy(() => import("./pages/Logbook").then((m) => ({ default: m.Logbook })));
-const TagPage    = lazy(() => import("./pages/TagPage").then((m) => ({ default: m.TagPage })));
-const Calendar   = lazy(() => import("./pages/Calendar").then((m) => ({ default: m.Calendar })));
+const Trash          = lazy(() => import("./pages/Trash").then((m) => ({ default: m.Trash })));
+const AreaPage       = lazy(() => import("./pages/AreaPage").then((m) => ({ default: m.AreaPage })));
+const ProjectPage    = lazy(() => import("./pages/ProjectPage").then((m) => ({ default: m.ProjectPage })));
+const Archive        = lazy(() => import("./pages/Archive").then((m) => ({ default: m.Archive })));
+const Logbook        = lazy(() => import("./pages/Logbook").then((m) => ({ default: m.Logbook })));
+const TagPage        = lazy(() => import("./pages/TagPage").then((m) => ({ default: m.TagPage })));
+const Calendar       = lazy(() => import("./pages/Calendar").then((m) => ({ default: m.Calendar })));
+const AdminPage      = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
+const BookPage       = lazy(() => import("./pages/BookPage").then((m) => ({ default: m.BookPage })));
+const BookingSettings= lazy(() => import("./pages/BookingSettings").then((m) => ({ default: m.BookingSettings })));
 import { SearchModal } from "./components/search/SearchModal";
 import { QuickEntry } from "./components/quickentry/QuickEntry";
 import { ToastContainer } from "./components/ui/ToastContainer";
@@ -53,7 +57,7 @@ function OfflineBanner() {
 }
 
 function AppRoutes() {
-  const { user, loading, init } = useAuthStore();
+  const { user, loading, init, profile } = useAuthStore();
   const { tasks, fetchTasks, subscribeRealtime, unsubscribeRealtime, drainQueue } = useTaskStore();
   const { fetchAll } = useAreaStore();
   const { fetchTags, fetchAllTaskTags } = useTagStore();
@@ -131,11 +135,22 @@ function AppRoutes() {
       if (meta && e.key === "k") { e.preventDefault(); showSearch ? closeSearch() : openSearch(); }
       if (meta && e.key === "n") { e.preventDefault(); toggleQuickEntry(); }
       if (meta && e.shiftKey && e.key === "F") { e.preventDefault(); toggleFocusMode(); }
-      if (e.key === "Escape") { closeSearch(); closeQuickEntry(); }
+      if (e.key === "Escape") { closeSearch(); closeQuickEntry(); clearAll(); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
+
+  // Rota pública — não requer autenticação
+  if (location.pathname.startsWith("/book/")) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#F2F2F7] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-[#4F8EF7] border-t-transparent animate-spin" /></div>}>
+        <Routes>
+          <Route path="/book/:slug" element={<BookPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
 
   if (loading) {
     return (
@@ -145,7 +160,35 @@ function AppRoutes() {
     );
   }
 
-  if (!user) return <Login />;
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Landing />} />
+      </Routes>
+    );
+  }
+
+  // Conta suspensa — bloqueia acesso ao app
+  if (profile?.suspended_at) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center px-4">
+        <div className="bg-card border border-border rounded-2xl p-8 max-w-sm w-full text-center space-y-4">
+          <span className="text-4xl">🚫</span>
+          <h2 className="text-lg font-semibold text-text-main">Conta suspensa</h2>
+          <p className="text-sm text-text-secondary">
+            Sua conta foi suspensa. Entre em contato com o suporte para mais informações.
+          </p>
+          <button
+            onClick={() => useAuthStore.getState().signOut()}
+            className="text-sm text-primary hover:underline"
+          >
+            Sair da conta
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -164,6 +207,8 @@ function AppRoutes() {
             <Route path="/logbook" element={<Logbook />} />
             <Route path="/tag/:id" element={<TagPage />} />
             <Route path="/calendar" element={<Calendar />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/booking-settings" element={<BookingSettings />} />
           </Routes>
         </Suspense>
       </Layout>

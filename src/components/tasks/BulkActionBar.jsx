@@ -124,9 +124,10 @@ export function BulkActionBar() {
         {/* Fechar */}
         <button
           onClick={clearAll}
-          className="text-text-secondary hover:text-text-main w-8 h-8 flex items-center justify-center rounded-xl transition-colors shrink-0 text-sm"
+          className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors text-text-secondary hover:text-text-main shrink-0"
         >
-          ✕
+          <span className="text-sm leading-none">✕</span>
+          <span className="text-[9px] md:text-[10px] font-medium leading-none">Cancelar</span>
         </button>
       </div>
     </div>

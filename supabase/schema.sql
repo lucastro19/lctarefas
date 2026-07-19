@@ -41,7 +41,11 @@ create table if not exists tasks (
   position integer not null default 0,
   completed_at timestamptz,
   deleted_at timestamptz,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  -- Reunião Google Meet
+  meeting_url text,
+  meeting_event_id text,
+  meeting_attendees text[]
 );
 
 -- SUBTAREFAS (checklist dentro de uma tarefa)

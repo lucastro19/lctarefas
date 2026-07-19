@@ -6,11 +6,13 @@ import { useUiStore } from "./uiStore";
 import { useAuthStore } from "./authStore";
 import { cancelNotification } from "../services/notifications";
 
-const today = () => new Date().toISOString().split("T")[0];
+const localDate = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const today = () => localDate();
 const inDays = (n) => {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().split("T")[0];
+  return localDate(d);
 };
 
 const active = (t) => !t.completed_at && !t.deleted_at && !t.archived_at;
@@ -208,8 +210,12 @@ export const useTaskStore = create(
           }
 
           if (data) {
-            // Substitui tempId pelo ID real do servidor
-            set((s) => ({ tasks: s.tasks.map((t) => (t.id === tempId ? data : t)) }));
+            // Substitui tempId pelo ID real, preservando campos relacionais que o Supabase
+            // pode omitir quando a migration ainda não foi aplicada (area_id, project_id, etc.)
+            const merged = { ...data };
+            if (fields.area_id   && !merged.area_id)   merged.area_id   = fields.area_id;
+            if (fields.project_id && !merged.project_id) merged.project_id = fields.project_id;
+            set((s) => ({ tasks: s.tasks.map((t) => (t.id === tempId ? merged : t)) }));
           }
 
           return data;
@@ -594,12 +600,12 @@ export const useTaskStore = create(
           (t) => t.scheduled_date && t.scheduled_date <= today() && active(t)
         ),
 
-      getUpcoming: (days = 7) =>
+      getUpcoming: (days = null) =>
         get().tasks.filter(
           (t) =>
             t.scheduled_date &&
             t.scheduled_date > today() &&
-            t.scheduled_date <= inDays(days) &&
+            (days === null || t.scheduled_date <= inDays(days)) &&
             active(t)
         ),
 

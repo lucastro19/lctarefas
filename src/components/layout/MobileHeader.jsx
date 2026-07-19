@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useUiStore } from "../../store/uiStore";
+import { useTaskStore } from "../../store/taskStore";
 
 const PAGE_TITLES = {
   "/inbox":    "Inbox",
@@ -15,6 +17,15 @@ const PAGE_TITLES = {
 export function MobileHeader() {
   const { pathname } = useLocation();
   const { openDrawer, openSearch } = useUiStore();
+  const { fetchTasks } = useTaskStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    await fetchTasks();
+    setRefreshing(false);
+  };
 
   const title = PAGE_TITLES[pathname] ?? "LCTarefas";
 
@@ -43,8 +54,21 @@ export function MobileHeader() {
         </span>
       </div>
 
-      {/* Search — empurrado para a direita */}
+      {/* Botões direita */}
       <div className="flex-1" />
+      <button
+        onClick={handleRefresh}
+        className="w-10 h-10 flex items-center justify-center rounded-xl text-text-secondary hover:text-text-main hover:bg-bg transition-colors shrink-0"
+        aria-label="Atualizar"
+      >
+        <svg
+          width="17" height="17" viewBox="0 0 24 24" fill="none"
+          className={refreshing ? "animate-spin" : ""}
+        >
+          <path d="M20 12a8 8 0 1 1-2.343-5.657" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M15 7h5V2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
       <button
         onClick={openSearch}
         className="w-10 h-10 flex items-center justify-center rounded-xl text-text-secondary hover:text-text-main hover:bg-bg transition-colors shrink-0"

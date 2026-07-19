@@ -7,6 +7,7 @@ import { useTaskStore } from "../../store/taskStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { strToMins, minsToStr, getPeriod, nextSlotInPeriod } from "../../utils/timeSlots";
 
 function OverdueSection({ tasks, subtasks, onTaskClick }) {
   const [open, setOpen] = useState(true);
@@ -39,58 +40,13 @@ function OverdueSection({ tasks, subtasks, onTaskClick }) {
 
 function timeToMinutes(time) {
   if (!time) return Infinity;
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
+  return strToMins(time);
 }
 
-function minutesToStr(mins) {
-  const h = Math.floor(mins / 60) % 24;
-  const m = mins % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-// Determina o período de um horário com base nas configurações do usuário
-function getPeriod(time, settings) {
-  if (!time) return "sem-horario";
-  const mins = timeToMinutes(time);
-  const dayStartMins   = timeToMinutes(settings.dayStart);
-  const lunchStartMins = timeToMinutes(settings.lunchStart);
-  const lunchEndMins   = timeToMinutes(settings.lunchEnd);
-  const dayEndMins     = timeToMinutes(settings.dayEnd);
-
-  // Antes do início do dia ou depois do fim da tarde → noite
-  if (mins < dayStartMins || mins >= dayEndMins) return "noite";
-  if (mins >= lunchEndMins) return "tarde";
-  if (mins >= lunchStartMins) return "almoco"; // intervalo (ignorado nas listas)
-  return "manha";
-}
-
-// Calcula o próximo slot disponível num período, respeitando o limite do período
-// Se overflow, retorna o início do próximo período
-function nextSlotInPeriod(periodKey, periodTasks, settings, defaultDuration) {
-  const ds  = timeToMinutes(settings.dayStart);
-  const ls  = timeToMinutes(settings.lunchStart);
-  const le  = timeToMinutes(settings.lunchEnd);
-  const de  = timeToMinutes(settings.dayEnd);
-
-  const periodStart = periodKey === "manha" ? ds : periodKey === "tarde" ? le : de;
-  const periodEnd   = periodKey === "manha" ? ls : periodKey === "tarde" ? de : null; // noite sem limite
-
-  if (periodTasks.length === 0) return minutesToStr(periodStart);
-
-  const sorted = [...periodTasks].sort((a, b) => timeToMinutes(a.scheduled_time) - timeToMinutes(b.scheduled_time));
-  const last = sorted[sorted.length - 1];
-  const lastStart = timeToMinutes(last.scheduled_time);
-  const lastDur = last.duration_minutes ?? defaultDuration;
-  const nextStart = lastStart + lastDur;
-
-  // Se o próximo slot transborda o limite do período, pula para o início do próximo
-  if (periodEnd !== null && nextStart >= periodEnd) {
-    if (periodKey === "manha") return minutesToStr(le);  // pula para início da tarde
-    if (periodKey === "tarde") return minutesToStr(de);  // pula para início da noite
-  }
-
-  return minutesToStr(nextStart);
+// nextSlotInPeriod aqui retorna só a string (compatibilidade com uso existente)
+function nextSlotInPeriodStr(periodKey, periodTasks, settings, defaultDuration) {
+  const result = nextSlotInPeriod(periodKey, periodTasks, settings, defaultDuration);
+  return result.time;
 }
 
 const TIMED_PERIODS = [
@@ -99,11 +55,16 @@ const TIMED_PERIODS = [
   { key: "noite", label: "Noite", icon: "🌙" },
 ];
 
-function PeriodSeparator({ icon, label }) {
+function PeriodSeparator({ icon, label, count = 0 }) {
   return (
     <div className="flex items-center gap-2 pt-5 pb-1 px-1">
       <span className="text-sm">{icon}</span>
       <span className="text-xs font-semibold text-text-secondary uppercase tracking-widest">{label}</span>
+      {count > 0 && (
+        <span className="text-[10px] font-medium text-text-secondary/60 tabular-nums bg-border/60 px-1.5 py-0.5 rounded-full leading-none">
+          {count}
+        </span>
+      )}
       <div className="flex-1 h-px bg-border" />
     </div>
   );
@@ -129,7 +90,7 @@ function FocusGroup({ label, color, tasks, subtasks, onTaskClick }) {
 export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], defaultFields = {}, onTaskClick }) {
   const { subtasks, fetchSubtasks } = useTaskStore();
   const { selectedIds, selectAll, clearAll } = useSelectionStore();
-  const { focusMode } = useUiStore();
+  const { focusMode, urgentFilter, toggleUrgentFilter } = useUiStore();
   const settings = useSettingsStore();
   const { defaultDurationMinutes } = settings;
   const [showCompleted, setShowCompleted] = useState(false);
@@ -205,11 +166,54 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
     );
   }
 
+  // ── FILTRO URGENTE ──
+  if (urgentFilter) {
+    const urgentTasks = tasks.filter((t) => t.is_urgent);
+    const allUrgent = [...overdueTasks.filter((t) => t.is_urgent), ...urgentTasks];
+    return (
+      <>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 mb-4 px-1 py-2 rounded-xl bg-danger/8 border border-danger/25">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
+            </span>
+            <span className="text-xs font-medium text-danger flex-1">Filtro urgente — mostrando só tarefas urgentes</span>
+            <button
+              onClick={toggleUrgentFilter}
+              className="text-[10px] text-danger/70 hover:text-danger underline underline-offset-2 transition-colors"
+            >
+              Ver tudo
+            </button>
+          </div>
+
+          {allUrgent.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-2 select-none">
+              <span className="text-5xl opacity-30 mb-1">✅</span>
+              <p className="text-sm text-text-secondary">Nenhuma tarefa urgente pendente.</p>
+            </div>
+          )}
+
+          {allUrgent.map((task) => (
+            <TaskCard key={task.id} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
+          ))}
+        </div>
+        <BulkActionBar />
+      </>
+    );
+  }
+
   // ── MODO NORMAL — períodos sempre visíveis ──
+  const urgentTodayTasks = tasks.filter((t) => t.is_urgent);
   const sorted = [...tasks].sort((a, b) => timeToMinutes(a.scheduled_time) - timeToMinutes(b.scheduled_time));
 
   const grouped = TIMED_PERIODS.reduce((acc, p) => {
-    acc[p.key] = sorted.filter((t) => getPeriod(t.scheduled_time, settings) === p.key);
+    acc[p.key] = sorted.filter((t) => {
+      const period = getPeriod(t.scheduled_time, settings);
+      // Tarefas no almoço definidas manualmente aparecem em Manhã (logo antes da Tarde)
+      if (p.key === "manha") return period === "manha" || period === "almoco";
+      return period === p.key;
+    });
     return acc;
   }, {});
   const noTimeTasks = sorted.filter((t) => getPeriod(t.scheduled_time, settings) === "sem-horario");
@@ -233,16 +237,43 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
         )}
 
         {tasks.length === 0 && overdueTasks.length === 0 && completedTasks.length === 0 && (
-          <div className="pb-2" />
+          <div className="flex flex-col items-center justify-center py-10 text-center gap-2 select-none">
+            <span className="text-5xl opacity-25 mb-1">☀️</span>
+            <p className="text-sm font-medium text-text-main">Dia livre!</p>
+            <p className="text-xs text-text-secondary max-w-xs">Nenhuma tarefa agendada para hoje. Use os blocos abaixo para planejar o seu dia.</p>
+          </div>
+        )}
+
+        {/* ── RESOLVER PRIMEIRO — tarefas urgentes do dia ── */}
+        {urgentTodayTasks.length > 0 && (
+          <div className="mb-2 rounded-xl border border-danger/30 bg-danger/5 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-danger/20">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-60" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
+              </span>
+              <span className="text-[11px] font-semibold text-danger uppercase tracking-widest flex-1">
+                Resolver primeiro
+              </span>
+              <span className="text-[10px] font-medium text-danger/70 bg-danger/10 px-1.5 py-0.5 rounded-full">
+                {urgentTodayTasks.length}
+              </span>
+            </div>
+            <div className="p-1.5 space-y-1">
+              {urgentTodayTasks.map((task) => (
+                <TaskCard key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
+              ))}
+            </div>
+          </div>
         )}
 
         <SortableContext items={sorted.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {TIMED_PERIODS.map((period) => {
             const periodTasks = grouped[period.key];
-                const nextSlot = nextSlotInPeriod(period.key, periodTasks, settings, defaultDurationMinutes);
+                const nextSlot = nextSlotInPeriodStr(period.key, periodTasks, settings, defaultDurationMinutes);
             return (
               <div key={period.key}>
-                <PeriodSeparator icon={period.icon} label={period.label} />
+                <PeriodSeparator icon={period.icon} label={period.label} count={periodTasks.length} />
                 <div className="space-y-1">
                   {periodTasks.map((task) => (
                     <TaskCard key={task.id} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />

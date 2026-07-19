@@ -8,6 +8,9 @@ export const useUiStore = create((set) => ({
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
 
+  urgentFilter: false,
+  toggleUrgentFilter: () => set((s) => ({ urgentFilter: !s.urgentFilter })),
+
   expandedTaskId: null,
   setExpandedTaskId: (id) => set({ expandedTaskId: id }),
 

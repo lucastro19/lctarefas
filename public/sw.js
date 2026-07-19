@@ -1,6 +1,6 @@
 // LCTarefas Service Worker — Web Push + PWA offline
 
-const CACHE = "lctarefas-v2";
+const CACHE = "lctarefas-v4";
 const PRECACHE = ["/", "/index.html", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener('install', (e) => {
@@ -16,23 +16,50 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Cache-first for static assets, network-first for API
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Skip non-GET and Supabase API requests
+
   if (e.request.method !== 'GET') return;
   if (url.hostname.includes('supabase') || url.pathname.startsWith('/api/')) return;
 
+  // HTML: network-first — garante sempre a versão mais recente do app shell
+  if (e.request.headers.get('accept')?.includes('text/html') || url.pathname === '/') {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Assets com hash (JS/CSS): cache-first — nome muda a cada build, nunca fica stale
+  if (url.pathname.startsWith('/assets/')) {
+    e.respondWith(
+      caches.match(e.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(e.request).then((res) => {
+          if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
+          return res;
+        });
+      })
+    );
+    return;
+  }
+
+  // Demais recursos (ícones, manifest): stale-while-revalidate
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const fresh = fetch(e.request).then((res) => {
-        if (res.ok && url.origin === self.location.origin) {
-          caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
-        }
-        return res;
-      });
-      return cached || fresh;
-    })
+    caches.open(CACHE).then((cache) =>
+      cache.match(e.request).then((cached) => {
+        const fresh = fetch(e.request).then((res) => {
+          if (res.ok) cache.put(e.request, res.clone());
+          return res;
+        });
+        return cached || fresh;
+      })
+    )
   );
 });
 
@@ -74,7 +101,6 @@ self.addEventListener('notificationclick', (event) => {
   const { taskId, url } = event.notification.data ?? {};
   const action = event.action;
 
-  // Ação: Concluir tarefa
   if (action === 'complete' && taskId) {
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
@@ -83,14 +109,12 @@ self.addEventListener('notificationclick', (event) => {
           list[0].postMessage(msg);
           return 'focus' in list[0] ? list[0].focus() : null;
         }
-        // App fechado: abre e passa o taskId via query string para completar ao carregar
         return clients.openWindow(`/?complete=${taskId}`);
       })
     );
     return;
   }
 
-  // Ação: Adiar 30 minutos
   if (action === 'snooze' && taskId) {
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
@@ -105,7 +129,6 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
 
-  // Clique padrão: abre/foca o app na URL da tarefa
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const target = url ?? '/today';

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { useAreaStore } from "../../store/areaStore";
+import { useTagStore } from "../../store/tagStore";
 import { parseNaturalDate, formatDateHint } from "../../utils/nlpDate";
 
 function localDateStr() {
@@ -18,9 +19,12 @@ export function QuickEntry({ onClose }) {
   const [title, setTitle] = useState("");
   const [contextValue, setContextValue] = useState("");
   const [date, setDate] = useState("");
+  const [selectedTagId, setSelectedTagId] = useState("");
   const inputRef = useRef(null);
 
   const { createTask } = useTaskStore();
+  const { addTagToTask } = useTagStore();
+  const { tags } = useTagStore();
   const { areas, projects } = useAreaStore();
 
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -39,7 +43,10 @@ export function QuickEntry({ onClose }) {
     else if (nlp?.dateStr) fields.scheduled_date = nlp.dateStr;
     if (nlp?.timeStr) fields.scheduled_time = nlp.timeStr;
 
-    await createTask({ title: t, ...fields });
+    const created = await createTask({ title: t, ...fields });
+    if (created?.id && selectedTagId) {
+      await addTagToTask(created.id, selectedTagId);
+    }
     onClose();
   };
 
@@ -77,7 +84,8 @@ export function QuickEntry({ onClose }) {
           )}
         </div>
 
-        <div className="flex items-center gap-2 px-4 pb-3 pt-1 border-t border-border mt-3">
+        {/* Linha 1: data + contexto */}
+        <div className="flex items-center gap-2 px-4 pt-1 border-t border-border mt-3 flex-wrap">
           <button
             type="button"
             onClick={() => setDate(isToday ? "" : todayDate)}
@@ -101,7 +109,7 @@ export function QuickEntry({ onClose }) {
           <select
             value={contextValue}
             onChange={(e) => setContextValue(e.target.value)}
-            className="flex-1 text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-secondary"
+            className="flex-1 min-w-0 text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-secondary"
           >
             <option value="">Inbox</option>
             {areas.map((area) => (
@@ -114,6 +122,22 @@ export function QuickEntry({ onClose }) {
             ))}
           </select>
 
+          {tags.length > 0 && (
+            <select
+              value={selectedTagId}
+              onChange={(e) => setSelectedTagId(e.target.value)}
+              className="text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-secondary shrink-0"
+            >
+              <option value="">🏷️ Tag</option>
+              {tags.map((tag) => (
+                <option key={tag.id} value={tag.id}>{tag.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Linha 2: ações */}
+        <div className="flex items-center justify-end gap-2 px-4 pb-3 pt-2">
           <button
             onClick={handleSubmit}
             disabled={!title.trim()}

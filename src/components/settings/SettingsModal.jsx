@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSettingsStore, DURATION_PRESETS } from "../../store/settingsStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAuthStore } from "../../store/authStore";
 import { useTaskStore } from "../../store/taskStore";
+import { usePlanLimits } from "../../hooks/usePlanLimits";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getSubscriptionStatus } from "../../lib/pushNotifications";
 
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
@@ -24,7 +26,15 @@ const ROUTE_OPTIONS = [
   { id: "archive",  icon: "📦", label: "Arquivo" },
 ];
 
+const PLAN_LABEL = { free: "Free", pro: "Pro", admin: "Admin" };
+const PLAN_COLOR = {
+  free:  "text-text-secondary bg-border/60",
+  pro:   "text-primary bg-primary/10 border border-primary/20",
+  admin: "text-danger bg-danger/10 border border-danger/20",
+};
+
 export function SettingsModal({ onClose }) {
+  const navigate = useNavigate();
   const {
     dayStart, lunchStart, lunchEnd, dayEnd, defaultDurationMinutes, theme, tabBarIds,
     setDayStart, setLunchStart, setLunchEnd, setDayEnd, setDefaultDuration, setTheme, setTabBarIds,
@@ -39,7 +49,8 @@ export function SettingsModal({ onClose }) {
   const [addingTag, setAddingTag] = useState(false);
 
   useEffect(() => { fetchTags(); }, []);
-  const { session } = useAuthStore();
+  const { session, profile, signOut } = useAuthStore();
+  const { plan, isPro, isAdmin, limits, usage, taskUsagePct } = usePlanLimits();
 
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -147,6 +158,68 @@ export function SettingsModal({ onClose }) {
           className="overflow-y-auto flex-1 px-6 py-5 space-y-5"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
         >
+          {/* ── Minha Conta ── */}
+          <div className="rounded-xl border border-border overflow-hidden">
+            {/* Perfil */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-card">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.full_name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary/20 text-primary font-bold text-sm flex items-center justify-center shrink-0">
+                  {(profile?.full_name ?? "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-main truncate">{profile?.full_name ?? "Usuário"}</p>
+                <p className="text-xs text-text-secondary truncate">{profile?.email ?? ""}</p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${PLAN_COLOR[plan]}`}>
+                {PLAN_LABEL[plan]}
+              </span>
+            </div>
+
+            {/* Uso do plano free */}
+            {!isPro && (
+              <div className="px-4 py-3 bg-bg border-t border-border space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-text-secondary">Tarefas ativas</span>
+                  <span className="text-xs font-medium text-text-main">{usage.tasks} / {limits.tasks}</span>
+                </div>
+                <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${taskUsagePct >= 90 ? "bg-danger" : taskUsagePct >= 70 ? "bg-warning" : "bg-primary"}`}
+                    style={{ width: `${taskUsagePct}%` }}
+                  />
+                </div>
+                {taskUsagePct >= 80 && (
+                  <p className="text-[10px] text-warning">
+                    {taskUsagePct >= 100 ? "Limite atingido — faça upgrade para continuar." : `${100 - taskUsagePct}% do limite. Considere fazer upgrade.`}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Ações */}
+            <div className="divide-y divide-border border-t border-border">
+              {isAdmin && (
+                <button
+                  onClick={() => { onClose(); navigate("/admin"); }}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-danger hover:bg-danger/5 transition-colors"
+                >
+                  <span>Painel administrativo</span>
+                  <span className="text-text-secondary text-xs">→</span>
+                </button>
+              )}
+              <button
+                onClick={() => { signOut(); onClose(); }}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-text-secondary hover:text-text-main hover:bg-bg transition-colors"
+              >
+                <span>Sair da conta</span>
+                <span className="text-xs">→</span>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="text-xs font-medium text-text-secondary block mb-1.5">🎨 Aparência</label>
             <div className="grid grid-cols-3 gap-1.5">

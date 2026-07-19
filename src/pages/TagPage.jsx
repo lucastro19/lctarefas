@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { useTagStore } from "../store/tagStore";
 import { useTaskStore } from "../store/taskStore";
@@ -7,10 +7,17 @@ import { TaskDetail } from "../components/tasks/TaskDetail";
 
 export function TagPage() {
   const { id } = useParams();
-  const { tags, fetchTagTasks } = useTagStore();
+  const { tags, fetchTagTasks, addTagToTask } = useTagStore();
   const { tasks } = useTaskStore();
   const [taskIds, setTaskIds] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
+
+  const handleCreated = useCallback(async (task) => {
+    if (!task?.id) return;
+    await addTagToTask(task.id, id);
+    // Adiciona o novo id à lista local para aparecer imediatamente
+    setTaskIds((prev) => prev ? [...prev, task.id] : [task.id]);
+  }, [id, addTagToTask]);
 
   const tag = tags.find((t) => t.id === id);
 
@@ -51,6 +58,7 @@ export function TagPage() {
           tasks={active}
           completedTasks={completed}
           onTaskClick={setSelectedTask}
+          onCreated={handleCreated}
           emptyMessage="Nenhuma tarefa ativa com esta tag."
         />
       </div>

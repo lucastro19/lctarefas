@@ -21,10 +21,12 @@ export function MobileTabBar() {
   const { tabBarIds } = useSettingsStore();
   const { tags } = useTagStore();
 
+  const todayTasks = getToday();
   const counts = {
     inbox: getInbox().length,
-    today: getToday().length,
+    today: todayTasks.length,
   };
+  const urgentTodayCount = todayTasks.filter((t) => t.is_urgent).length;
 
   const tabs = tabBarIds.map((id) => {
     if (id.startsWith("tag:")) {
@@ -58,6 +60,9 @@ export function MobileTabBar() {
             <span className="absolute top-1 right-3 w-4 h-4 bg-primary text-white text-[9px] rounded-full flex items-center justify-center font-bold">
               {counts[id] > 99 ? "99" : counts[id]}
             </span>
+          )}
+          {id === "today" && urgentTodayCount > 0 && (
+            <span className="absolute top-1 left-3 w-2 h-2 bg-danger rounded-full border border-card" />
           )}
         </NavLink>
       ))}

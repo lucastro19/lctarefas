@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTaskStore } from "../store/taskStore";
 import { useAreaStore } from "../store/areaStore";
 
-const dateStr = (d) => d.toISOString().split("T")[0];
+const dateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 function formatGroupDate(isoDate) {
   const d = new Date(isoDate + "T12:00:00");

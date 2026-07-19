@@ -1,14 +1,18 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTaskStore } from "../../store/taskStore";
 import { useTemplateStore } from "../../store/templateStore";
 import { parseNaturalDate, formatDateHint } from "../../utils/nlpDate";
+import { usePlanLimits } from "../../hooks/usePlanLimits";
 
-export function NewTaskInput({ defaultFields = {} }) {
+export function NewTaskInput({ defaultFields = {}, onCreated }) {
   const [value, setValue] = useState("");
   const [active, setActive] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const { createTask } = useTaskStore();
   const { templates, deleteTemplate } = useTemplateStore();
+  const { canAddTask, isPro, usage, limits } = usePlanLimits();
+  const navigate = useNavigate();
 
   const nlp = useMemo(() => parseNaturalDate(value), [value]);
 
@@ -19,7 +23,8 @@ export function NewTaskInput({ defaultFields = {} }) {
     const extra = {};
     if (nlp?.dateStr) extra.scheduled_date = nlp.dateStr;
     if (nlp?.timeStr) extra.scheduled_time = nlp.timeStr;
-    await createTask({ title, ...defaultFields, ...extra });
+    const created = await createTask({ title, ...defaultFields, ...extra });
+    if (created) onCreated?.(created);
     setValue("");
   };
 
@@ -28,7 +33,26 @@ export function NewTaskInput({ defaultFields = {} }) {
     setShowTemplates(false);
   };
 
+  if (!canAddTask) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-card bg-warning/5 border border-warning/20">
+        <span className="text-warning text-sm">⚠️</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-warning font-medium">Limite de {limits.tasks} tarefas atingido</p>
+          <p className="text-[10px] text-text-secondary">Conclua tarefas ou faça upgrade para Pro</p>
+        </div>
+        <button
+          onClick={() => navigate("/settings-upgrade")}
+          className="text-[10px] font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors whitespace-nowrap shrink-0"
+        >
+          Ver Pro
+        </button>
+      </div>
+    );
+  }
+
   if (!active) {
+    const usagePct = Math.round((usage.tasks / limits.tasks) * 100);
     return (
       <button
         onClick={(e) => { e.stopPropagation(); setActive(true); }}
@@ -37,7 +61,10 @@ export function NewTaskInput({ defaultFields = {} }) {
         <span className="w-5 h-5 rounded-full border-2 border-[#AEAEB2] dark:border-white/30 flex items-center justify-center text-[#AEAEB2] dark:text-white/30 text-xs font-bold leading-none">
           +
         </span>
-        Nova tarefa
+        <span className="flex-1 text-left">Nova tarefa</span>
+        {!isPro && usagePct >= 80 && (
+          <span className="text-[10px] text-warning font-medium">{usage.tasks}/{limits.tasks}</span>
+        )}
       </button>
     );
   }
