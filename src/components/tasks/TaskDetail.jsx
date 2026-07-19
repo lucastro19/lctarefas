@@ -37,6 +37,17 @@ function fmtDate(iso) {
 
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
 
+function getCustomLabel(str) {
+  if (!str?.startsWith("custom:")) return "Personalizada";
+  try {
+    const r = JSON.parse(str.slice(7));
+    const units = { hourly: ["hora","horas"], daily: ["dia","dias"], weekly: ["semana","semanas"], monthly: ["mês","meses"], yearly: ["ano","anos"] };
+    const [s, p] = units[r.freq] ?? ["?","?"];
+    const n = r.interval ?? 1;
+    return `A cada ${n} ${n === 1 ? s : p}`;
+  } catch { return "Personalizada"; }
+}
+
 function Toggle({ on, onChange, red = false }) {
   return (
     <button
@@ -89,6 +100,21 @@ export function TaskDetail({ task, onClose }) {
   const { areas, projects } = useAreaStore();
   const { getGoogleToken, connectGoogleCalendar } = useAuthStore();
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
+
+  // Custom recurrence
+  const [recurrence, setRecurrence] = useState(task.recurrence ?? "");
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [cFreq, setCFreq] = useState("weekly");
+  const [cInterval, setCInterval] = useState(1);
+  const [cWeekDays, setCWeekDays] = useState([]);
+  const [cMonthMode, setCMonthMode] = useState("weekday");
+  const [cMonthDays, setCMonthDays] = useState([]);
+  const [cMonthOrd, setCMonthOrd] = useState("primeiro");
+  const [cMonthWd, setCMonthWd] = useState(0);
+  const [cYearMonths, setCYearMonths] = useState([]);
+  const [cYearHasWd, setCYearHasWd] = useState(false);
+  const [cYearOrd, setCYearOrd] = useState("primeiro");
+  const [cYearWd, setCYearWd] = useState(0);
 
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? "");
@@ -276,39 +302,72 @@ export function TaskDetail({ task, onClose }) {
     navigator.clipboard.writeText(meetingUrl);
   };
 
+  const openCustomModal = () => {
+    if (recurrence?.startsWith("custom:")) {
+      try {
+        const r = JSON.parse(recurrence.slice(7));
+        setCFreq(r.freq ?? "weekly");
+        setCInterval(r.interval ?? 1);
+        setCWeekDays(r.freq === "weekly" ? (r.days ?? []) : []);
+        setCMonthMode(r.freq === "monthly" ? (r.mode ?? "weekday") : "weekday");
+        setCMonthDays(r.freq === "monthly" && r.mode === "day" ? (r.days ?? []) : []);
+        setCMonthOrd(r.ord ?? "primeiro");
+        setCMonthWd(r.wd ?? 0);
+        setCYearMonths(r.freq === "yearly" ? (r.months ?? []) : []);
+        setCYearHasWd(r.freq === "yearly" && !!r.ord);
+        setCYearOrd(r.ord ?? "primeiro");
+        setCYearWd(r.wd ?? 0);
+      } catch {}
+    }
+    setShowCustomModal(true);
+  };
+
+  const saveCustomRecurrence = () => {
+    const base = { freq: cFreq, interval: Number(cInterval) || 1 };
+    if (cFreq === "weekly") base.days = cWeekDays;
+    if (cFreq === "monthly") {
+      base.mode = cMonthMode;
+      if (cMonthMode === "day") base.days = cMonthDays;
+      else { base.ord = cMonthOrd; base.wd = cMonthWd; }
+    }
+    if (cFreq === "yearly") {
+      base.months = cYearMonths;
+      if (cYearHasWd) { base.ord = cYearOrd; base.wd = cYearWd; }
+    }
+    const rule = "custom:" + JSON.stringify(base);
+    setRecurrence(rule);
+    updateTask(task.id, { recurrence: rule });
+    setShowCustomModal(false);
+  };
+
   return (
     <>
       <aside
         className="fixed inset-0 z-[100] md:static md:inset-auto md:z-auto md:w-96 md:border-l border-border bg-bg md:bg-card md:h-full flex flex-col animate-slide-up md:[animation:none]"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header desktop */}
-        <div className="hidden md:flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-          <span className="text-xs text-text-secondary font-medium uppercase tracking-wide">Detalhe</span>
-          <button onClick={onClose} className="text-text-secondary hover:text-text-main text-lg leading-none">×</button>
-        </div>
-
         {/* Content — min-h-0 is critical for flex scroll to work */}
         <div
           className="flex-1 min-h-0 overflow-y-auto"
           style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
         >
-          {/* Mobile compact action row — replaces the top bar */}
+          {/* Back button row — visible on all screen sizes */}
           <div
-            className="md:hidden flex items-center px-3 pb-1"
+            className="flex items-center justify-between px-3 pb-1"
             style={{ paddingTop: "calc(env(safe-area-inset-top) + 2px)" }}
           >
             <button
               type="button"
               onPointerDown={e => e.stopPropagation()}
               onClick={onClose}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-card/80 text-text-secondary"
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-card/80 text-text-secondary hover:text-text-main transition-colors"
             >
               <svg width="18" height="15" viewBox="0 0 18 15" fill="none">
                 <path d="M7 1L1 7.5L7 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M1.5 7.5H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
             </button>
+            {saving && <span className="text-xs text-text-secondary pr-2">Salvando…</span>}
           </div>
 
           <div className="px-4 pt-3 space-y-5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}>
@@ -643,9 +702,14 @@ export function TaskDetail({ task, onClose }) {
                 <span className="text-[17px] w-6 text-center leading-none">🔁</span>
                 <span className="flex-1 text-[16px] text-text-main">Repetição</span>
                 <select
-                  defaultValue={task.recurrence ?? ""}
-                  onChange={e => updateTask(task.id, { recurrence: e.target.value || null })}
-                  className="text-[14px] text-text-secondary bg-transparent outline-none text-right"
+                  value={recurrence?.startsWith("custom:") ? "custom" : (recurrence ?? "")}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === "custom_open") { openCustomModal(); return; }
+                    setRecurrence(val);
+                    updateTask(task.id, { recurrence: val || null });
+                  }}
+                  className="text-[14px] text-text-secondary bg-transparent outline-none text-right max-w-[140px]"
                 >
                   <option value="">Nunca</option>
                   <option value="daily">Diariamente</option>
@@ -653,6 +717,11 @@ export function TaskDetail({ task, onClose }) {
                   <option value="weekly">Semanalmente</option>
                   <option value="biweekly">Quinzenal</option>
                   <option value="monthly">Mensalmente</option>
+                  <option value="annually">Anualmente</option>
+                  {recurrence?.startsWith("custom:") && (
+                    <option value="custom">{getCustomLabel(recurrence)}</option>
+                  )}
+                  <option value="custom_open">Personalizada…</option>
                 </select>
               </div>
 
@@ -888,7 +957,7 @@ export function TaskDetail({ task, onClose }) {
               </div>
             </div>
 
-            {/* Algum dia + Prioridade */}
+            {/* Algum dia + Prioridade + Ações */}
             <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
               <div className="flex items-center gap-3 px-4 py-3">
                 <span className="text-[17px] w-6 text-center leading-none">🌙</span>
@@ -909,38 +978,23 @@ export function TaskDetail({ task, onClose }) {
                   <option value="low">🟢 Baixa</option>
                 </select>
               </div>
-            </div>
-
-            {/* Mobile: Lixeira + Arquivar inline at bottom of content */}
-            <div className="md:hidden flex items-center justify-between pt-1">
               <button
                 onClick={handleDelete}
-                className="text-sm text-[#FF3B30] hover:opacity-70 transition-opacity py-2"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#FF3B30]/5 transition-colors"
               >
-                Lixeira
+                <span className="text-[17px] w-6 text-center leading-none">🗑️</span>
+                <span className="flex-1 text-[16px] text-[#FF3B30]">Mover para Lixeira</span>
               </button>
               <button
                 onClick={handleArchive}
-                className="text-sm text-text-secondary hover:text-text-main transition-colors py-2"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-border/20 transition-colors"
               >
-                Arquivar
+                <span className="text-[17px] w-6 text-center leading-none">📥</span>
+                <span className="flex-1 text-[16px] text-text-secondary">Arquivar</span>
               </button>
             </div>
 
           </div>
-        </div>
-
-        {/* Footer — desktop only */}
-        <div className="hidden md:flex shrink-0 px-5 py-3 border-t border-border items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={handleDelete} className="text-sm text-[#FF3B30] hover:opacity-70 transition-opacity">
-              Lixeira
-            </button>
-            <button onClick={handleArchive} className="text-sm text-text-secondary hover:text-text-main transition-colors">
-              Arquivar
-            </button>
-          </div>
-          {saving && <span className="text-xs text-text-secondary">Salvando…</span>}
         </div>
 
       </aside>
@@ -952,6 +1006,163 @@ export function TaskDetail({ task, onClose }) {
           onDeleteFuture={() => { deleteRecurrenceFuture(task.id); onClose(); }}
           onCancel={() => setShowRecurrenceModal(false)}
         />
+      )}
+
+      {showCustomModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowCustomModal(false)} />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 w-full max-w-[340px] space-y-4 max-h-[88vh] overflow-y-auto">
+
+            {/* Frequência */}
+            <div className="flex items-center gap-3">
+              <span className="text-[14px] text-text-secondary whitespace-nowrap">Frequência:</span>
+              <select
+                value={cFreq}
+                onChange={e => setCFreq(e.target.value)}
+                className="flex-1 text-[14px] text-text-main bg-bg border border-border rounded-xl px-3 py-2 outline-none"
+              >
+                <option value="hourly">A Cada Hora</option>
+                <option value="daily">Diariamente</option>
+                <option value="weekly">Semanalmente</option>
+                <option value="monthly">Mensalmente</option>
+                <option value="yearly">Anualmente</option>
+              </select>
+            </div>
+
+            {/* Intervalo */}
+            <div className="flex items-center gap-2">
+              <span className="text-[14px] text-text-secondary">A Cada</span>
+              <input
+                type="number" min={1} max={99}
+                value={cInterval}
+                onChange={e => setCInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-14 text-[14px] font-semibold text-text-main bg-bg border-2 border-primary rounded-xl px-2 py-1.5 outline-none text-center"
+              />
+              <span className="text-[14px] text-text-secondary">
+                {cFreq === "hourly" ? (cInterval > 1 ? "Horas" : "Hora")
+                 : cFreq === "daily" ? (cInterval > 1 ? "Dias" : "Dia")
+                 : cFreq === "weekly" ? (cInterval > 1 ? "Semanas" : "Semana")
+                 : cFreq === "monthly" ? (cInterval > 1 ? "Meses" : "Mês")
+                 : (cInterval > 1 ? "Anos" : "Ano")}
+              </span>
+            </div>
+
+            {/* Semanal: seletor de dias */}
+            {cFreq === "weekly" && (
+              <div className="flex gap-1.5 justify-between">
+                {["D","S","T","Q","Q","S","S"].map((l, i) => (
+                  <button
+                    key={i} type="button"
+                    onClick={() => setCWeekDays(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
+                    className={["w-9 h-9 rounded-full text-[13px] font-semibold transition-colors",
+                      cWeekDays.includes(i)
+                        ? "bg-primary text-white"
+                        : "bg-border/40 text-text-secondary hover:bg-border/70"
+                    ].join(" ")}
+                  >{l}</button>
+                ))}
+              </div>
+            )}
+
+            {/* Mensal: Cada (dia do mês) ou No(a) (dia da semana) */}
+            {cFreq === "monthly" && (
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="radio" name="cMonthMode" value="day" checked={cMonthMode === "day"}
+                    onChange={() => setCMonthMode("day")} className="accent-primary" />
+                  <span className="text-[14px] text-text-main">Cada</span>
+                </label>
+                {cMonthMode === "day" && (
+                  <div className="grid grid-cols-7 gap-px bg-border/30 border border-border rounded-xl overflow-hidden text-center ml-5">
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <button key={d} type="button"
+                        onClick={() => setCMonthDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])}
+                        className={["py-1.5 text-[12px] transition-colors bg-card",
+                          cMonthDays.includes(d) ? "!bg-primary text-white font-semibold" : "text-text-main hover:bg-border/30"
+                        ].join(" ")}
+                      >{d}</button>
+                    ))}
+                    {Array.from({ length: (7 - 31 % 7) % 7 }, (_, i) => (
+                      <div key={`pad${i}`} className="bg-card py-1.5" />
+                    ))}
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="radio" name="cMonthMode" value="weekday" checked={cMonthMode === "weekday"}
+                    onChange={() => setCMonthMode("weekday")} className="accent-primary" />
+                  <span className="text-[14px] text-text-main">No(a)</span>
+                </label>
+                {cMonthMode === "weekday" && (
+                  <div className="flex gap-2 ml-5">
+                    <select value={cMonthOrd} onChange={e => setCMonthOrd(e.target.value)}
+                      className="flex-1 text-[13px] text-text-main bg-bg border border-border rounded-xl px-2 py-2 outline-none">
+                      {["primeiro","segundo","terceiro","quarto","quinto","último"].map(o => (
+                        <option key={o} value={o}>{o}(a)</option>
+                      ))}
+                    </select>
+                    <select value={cMonthWd} onChange={e => setCMonthWd(Number(e.target.value))}
+                      className="flex-1 text-[13px] text-text-main bg-bg border border-border rounded-xl px-2 py-2 outline-none">
+                      {["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map((wd, i) => (
+                        <option key={i} value={i}>{wd}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Anual: grade de meses + opcional dia da semana */}
+            {cFreq === "yearly" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-4 gap-px bg-border/30 border border-border rounded-xl overflow-hidden text-center">
+                  {["jan.","fev.","mar.","abr.","mai.","jun.","jul.","ago.","set.","out.","nov.","dez."].map((m, i) => (
+                    <button key={i} type="button"
+                      onClick={() => setCYearMonths(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
+                      className={["py-2 text-[13px] transition-colors bg-card",
+                        cYearMonths.includes(i) ? "!bg-primary text-white font-semibold" : "text-text-main hover:bg-border/30"
+                      ].join(" ")}
+                    >{m}</button>
+                  ))}
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={cYearHasWd} onChange={e => setCYearHasWd(e.target.checked)}
+                    className="accent-primary w-4 h-4" />
+                  <span className="text-[14px] text-text-main">No(a):</span>
+                </label>
+                {cYearHasWd && (
+                  <div className="flex gap-2 ml-5">
+                    <select value={cYearOrd} onChange={e => setCYearOrd(e.target.value)}
+                      className="flex-1 text-[13px] text-text-main bg-bg border border-border rounded-xl px-2 py-2 outline-none">
+                      {["primeiro","segundo","terceiro","quarto","quinto","último"].map(o => (
+                        <option key={o} value={o}>{o}(a)</option>
+                      ))}
+                    </select>
+                    <select value={cYearWd} onChange={e => setCYearWd(Number(e.target.value))}
+                      className="flex-1 text-[13px] text-text-main bg-bg border border-border rounded-xl px-2 py-2 outline-none">
+                      {["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map((wd, i) => (
+                        <option key={i} value={i}>{wd}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Botões */}
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setShowCustomModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-border/40 text-text-main text-[15px] font-medium hover:bg-border/60 transition-colors">
+                Cancelar
+              </button>
+              <button type="button" onClick={saveCustomRecurrence}
+                className="flex-1 py-2.5 rounded-xl bg-primary text-white text-[15px] font-semibold hover:bg-primary/90 transition-colors">
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
