@@ -12,7 +12,7 @@ import { useAreaStore } from "../../store/areaStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 import { useTemplateStore } from "../../store/templateStore";
 import { TimeSlotPickerModal } from "./TimeSlotPickerModal";
-import { computeAvailableSlots, getPeriod } from "../../utils/timeSlots";
+import { computeAvailableSlots, getPeriod, nextSlotInPeriod as nextSlotInPeriodFromSettings } from "../../utils/timeSlots";
 import { useAuthStore } from "../../store/authStore";
 import { createMeetingEvent } from "../../lib/googleCalendar";
 
@@ -561,6 +561,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
   const { tags, taskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { saveTemplate } = useTemplateStore();
+  const menuSettings = useSettingsStore();
   const ref = useRef(null);
   const [openSub,       setOpenSub]       = useState(null); // "date" | "tags" | "areas"
   const [openPeriod,    setOpenPeriod]    = useState(null); // "hoje" | "amanha" | "depois"
@@ -587,23 +588,15 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
   const activeTags = taskTags[task.id] ?? [];
   const isMobile   = typeof window !== "undefined" && window.innerWidth < 640;
 
-  // Retorna o próximo horário livre no período para a data informada
+  // Retorna o próximo horário livre no período para a data informada (respeita settings do usuário)
   function nextSlotInPeriod(targetDate, period) {
-    const bounds = { manha: [9, 12], tarde: [13, 18], noite: [19, 23] };
-    const [start, end] = bounds[period];
     const { tasks: allTasks } = useTaskStore.getState();
-    const taken = new Set(
-      allTasks
-        .filter((t) => t.scheduled_date === targetDate && t.scheduled_time && !t.completed_at && !t.deleted_at && t.id !== task.id)
-        .map((t) => t.scheduled_time)
+    const periodTasks = allTasks.filter(
+      (t) => t.scheduled_date === targetDate && t.scheduled_time && !t.completed_at && !t.deleted_at && t.id !== task.id
+        && getPeriod(t.scheduled_time, menuSettings) === period
     );
-    for (let h = start; h < end; h++) {
-      for (const m of ["00", "30"]) {
-        const slot = `${String(h).padStart(2, "0")}:${m}`;
-        if (!taken.has(slot)) return slot;
-      }
-    }
-    return `${String(start).padStart(2, "0")}:00`;
+    const { time } = nextSlotInPeriodFromSettings(period, periodTasks, menuSettings, menuSettings.defaultDurationMinutes ?? 30);
+    return time;
   }
 
   const PERIOD_OPTIONS = [
