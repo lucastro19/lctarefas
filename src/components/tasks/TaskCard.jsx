@@ -12,7 +12,7 @@ import { useAreaStore } from "../../store/areaStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 import { useTemplateStore } from "../../store/templateStore";
 import { TimeSlotPickerModal } from "./TimeSlotPickerModal";
-import { computeAvailableSlots } from "../../utils/timeSlots";
+import { computeAvailableSlots, getPeriod } from "../../utils/timeSlots";
 import { useAuthStore } from "../../store/authStore";
 import { createMeetingEvent } from "../../lib/googleCalendar";
 
@@ -562,8 +562,9 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
   const { areas, projects } = useAreaStore();
   const { saveTemplate } = useTemplateStore();
   const ref = useRef(null);
-  const [openSub,    setOpenSub]    = useState(null); // "date" | "tags" | "areas"
-  const [openPeriod, setOpenPeriod] = useState(null); // "hoje" | "amanha" | "depois"
+  const [openSub,       setOpenSub]       = useState(null); // "date" | "tags" | "areas"
+  const [openPeriod,    setOpenPeriod]    = useState(null); // "hoje" | "amanha" | "depois"
+  const [periodSubSide, setPeriodSubSide] = useState({ left: "100%", top: 0 });
   const dateRowRef   = useRef(null);
   const tagsRowRef   = useRef(null);
   const areasRowRef  = useRef(null);
@@ -693,7 +694,13 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
           // Desktop: sub-flyout lateral
           return (
             <div key={opt.key} className="relative"
-              onMouseEnter={() => setOpenPeriod(opt.key)}
+              onMouseEnter={e => {
+                setOpenPeriod(opt.key);
+                const r = e.currentTarget.getBoundingClientRect();
+                setPeriodSubSide(r.right + 160 > window.innerWidth - 8
+                  ? { right: "100%", top: 0 }
+                  : { left: "100%", top: 0 });
+              }}
               onMouseLeave={() => setOpenPeriod(null)}
             >
               <div className="menu-item px-3 py-2.5 text-sm transition-colors flex items-center justify-between cursor-default select-none">
@@ -702,7 +709,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
               </div>
               {isOpen && (
                 <div className="absolute bg-card border border-border rounded-xl shadow-xl py-1.5 z-[9999]"
-                  style={{ left: "100%", top: 0, minWidth: 150 }}>
+                  style={{ ...periodSubSide, minWidth: 150 }}>
                   {PERIOD_OPTIONS.map((p) => (
                     <button key={p.key}
                       onClick={run(() => {
@@ -1472,7 +1479,23 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 />
                 <TimeField
                   value={time}
-                  onChange={(v) => { setTime(v); updateTask(task.id, { scheduled_time: v || null }); }}
+                  onChange={(v) => {
+                    setTime(v);
+                    updateTask(task.id, { scheduled_time: v || null });
+                    if (v && getPeriod(v, settings) === "almoco") {
+                      const nextAvail = settings.lunchEnd ?? "13:00";
+                      const toastId = showToast({
+                        message: `⚠️ ${v} cai no intervalo de almoço`,
+                        action: `Mover para ${nextAvail}`,
+                        onAction: () => {
+                          dismissToast(toastId);
+                          setTime(nextAvail);
+                          updateTask(task.id, { scheduled_time: nextAvail });
+                        },
+                        duration: 7000,
+                      });
+                    }
+                  }}
                 />
                 <PriorityButton task={task} updateTask={updateTask} />
                 <UrgencyButton task={task} updateTask={updateTask} />
@@ -1853,6 +1876,8 @@ export function TaskCard({ task, subtasks = [], onClick }) {
           <button
             onClick={e => { e.stopPropagation(); onClick(); }}
             onDoubleClick={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
             title="Ver detalhes"
             className="shrink-0 flex items-center justify-center w-7 h-9 text-text-secondary/40 md:text-text-secondary/20 md:group-hover:text-text-secondary/60 transition-colors"
           >

@@ -64,9 +64,10 @@ function nextSlotInPeriodStr(periodKey, periodTasks, settings, defaultDuration) 
 }
 
 const TIMED_PERIODS = [
-  { key: "manha", label: "Manhã", icon: "🌅" },
-  { key: "tarde", label: "Tarde", icon: "☀️" },
-  { key: "noite", label: "Noite", icon: "🌙" },
+  { key: "manha",  label: "Manhã",     icon: "🌅" },
+  { key: "almoco", label: "Intervalo", icon: "🍽️" },
+  { key: "tarde",  label: "Tarde",     icon: "☀️" },
+  { key: "noite",  label: "Noite",     icon: "🌙" },
 ];
 
 function PeriodSeparator({ icon, label, count = 0 }) {
@@ -298,12 +299,7 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   const sorted = [...tasks].sort((a, b) => timeToMinutes(a.scheduled_time) - timeToMinutes(b.scheduled_time));
 
   const grouped = TIMED_PERIODS.reduce((acc, p) => {
-    acc[p.key] = sorted.filter((t) => {
-      const period = getPeriod(t.scheduled_time, settings);
-      // Tarefas no almoço definidas manualmente aparecem em Manhã (logo antes da Tarde)
-      if (p.key === "manha") return period === "manha" || period === "almoco";
-      return period === p.key;
-    });
+    acc[p.key] = sorted.filter((t) => getPeriod(t.scheduled_time, settings) === p.key);
     return acc;
   }, {});
   const noTimeTasks = sorted.filter((t) => getPeriod(t.scheduled_time, settings) === "sem-horario");
@@ -360,7 +356,11 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
         <SortableContext items={sorted.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {TIMED_PERIODS.map((period) => {
             const periodTasks = grouped[period.key];
-                const nextSlot = nextSlotInPeriodStr(period.key, periodTasks, settings, defaultDurationMinutes);
+            // Oculta o período de intervalo quando não há tarefas agendadas nele
+            if (period.key === "almoco" && periodTasks.length === 0) return null;
+            const nextSlot = period.key === "almoco"
+              ? null
+              : nextSlotInPeriodStr(period.key, periodTasks, settings, defaultDurationMinutes);
             return (
               <div key={period.key}>
                 <PeriodSeparator icon={period.icon} label={period.label} count={periodTasks.length} />
@@ -369,9 +369,11 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
                     <TaskCard key={task.id} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
                   ))}
                 </div>
-                <NewTaskInput
-                  defaultFields={{ ...defaultFields, scheduled_time: nextSlot }}
-                />
+                {nextSlot && (
+                  <NewTaskInput
+                    defaultFields={{ ...defaultFields, scheduled_time: nextSlot }}
+                  />
+                )}
               </div>
             );
           })}
