@@ -888,13 +888,10 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [reminder, setReminder] = useState(task.reminder_minutes ?? null);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showSlotPicker, setShowSlotPicker] = useState(false);
-  const [swipeX, setSwipeX] = useState(0);
   const [meetQuick, setMeetQuick] = useState(false);
   const [meetCreating, setMeetCreating] = useState(false);
   const [showMeetPopover, setShowMeetPopover] = useState(false);
   const meetBadgeRef = useRef(null);
-  const swipingRef = useRef(false); // true quando comprometido com gesto horizontal
-  const hapticFiredRef = useRef(false);
 
   const titleInputRef = useRef(null);
   const notesRef = useRef(null);
@@ -904,7 +901,6 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const pendingCursorRef = useRef(null);
   const longPressRef = useRef(null);
   const longPressFiredRef = useRef(false);
-  const swipeStartRef = useRef(null);
   const cardRef = useRef(null);
 
   const expanded = expandedTaskId === task.id;
@@ -1009,16 +1005,6 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Listener non-passive separado só para cancelar scroll vertical durante swipe horizontal
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const preventScroll = (e) => {
-      if (swipingRef.current) e.preventDefault();
-    };
-    el.addEventListener("touchmove", preventScroll, { passive: false });
-    return () => el.removeEventListener("touchmove", preventScroll);
-  }, []);
 
   // Esc → salva e recolhe
   useEffect(() => {
@@ -1188,12 +1174,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
     contextLabel || collapsedTags.length > 0 || task.priority || task.meeting_url;
 
-  const SWIPE_THRESHOLD = 80;
-
-  const handleTouchStart = (e) => {
-    swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    swipingRef.current = false;
-    hapticFiredRef.current = false;
+  const handleTouchStart = () => {
     if (anySelected) return;
     setLongPressing(true);
     longPressRef.current = setTimeout(() => {
@@ -1204,60 +1185,19 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     }, 500);
   };
 
-  const handleTouchMove = (e) => {
-    if (!swipeStartRef.current) return;
-    const dx = e.touches[0].clientX - swipeStartRef.current.x;
-    const dy = e.touches[0].clientY - swipeStartRef.current.y;
+  const handleTouchMove = () => {
     clearTimeout(longPressRef.current);
     setLongPressing(false);
-
-    // Se ainda não comprometeu: decide se é horizontal ou vertical
-    if (!swipingRef.current) {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; // movimento pequeno demais
-      if (Math.abs(dy) > Math.abs(dx)) return; // vertical — deixa o scroll agir
-      swipingRef.current = true;
-    }
-
-    if (expanded || anySelected) return;
-
-    const clamped = Math.max(-120, Math.min(120, dx));
-    setSwipeX(clamped);
-
-    // Haptic ao cruzar o threshold (uma vez por gesto)
-    if (!hapticFiredRef.current && Math.abs(clamped) >= SWIPE_THRESHOLD) {
-      navigator.vibrate?.(10);
-      hapticFiredRef.current = true;
-    }
-    if (Math.abs(clamped) < SWIPE_THRESHOLD) {
-      hapticFiredRef.current = false;
-    }
   };
 
   const handleTouchEnd = (e) => {
     clearTimeout(longPressRef.current);
     setLongPressing(false);
-    // Bloqueia o click sintético que o iOS dispara após long-press
     if (longPressFiredRef.current) {
       longPressFiredRef.current = false;
       e.preventDefault();
-      setSwipeX(0);
-      swipeStartRef.current = null;
-      swipingRef.current = false;
-      return;
     }
-    if (swipeX > SWIPE_THRESHOLD) {
-      handleCheck(!task.completed_at); // concluir ou desfazer
-    } else if (swipeX < -SWIPE_THRESHOLD) {
-      deleteTask(task.id); // lixeira direta
-    }
-    setSwipeX(0);
-    swipeStartRef.current = null;
-    swipingRef.current = false;
   };
-
-  const swipeActive = Math.abs(swipeX) > 8;
-  const swipeRight = swipeX > 0;
-  const swipePct = Math.min(Math.abs(swipeX) / SWIPE_THRESHOLD, 1); // 0→1 até o threshold
 
   return (
     <>
@@ -1271,38 +1211,15 @@ export function TaskCard({ task, subtasks = [], onClick }) {
         setShowMenu(true);
       }}
     >
-      {/* Swipe reveal backgrounds — ficam ATRÁS do card, revelados pelo slide */}
-      {swipeActive && (
-        <div
-          className={[
-            "absolute inset-0 flex items-center px-5 rounded-card",
-            swipeRight ? "justify-start" : "justify-end",
-          ].join(" ")}
-          style={{
-            backgroundColor: swipeRight
-              ? `rgba(52,199,89,${0.15 + swipePct * 0.55})`  // verde progressivo
-              : `rgba(255,59,48,${0.15 + swipePct * 0.55})`, // vermelho progressivo
-          }}
-        >
-          <span
-            className="transition-transform"
-            style={{ fontSize: `${16 + swipePct * 8}px`, transform: `scale(${0.8 + swipePct * 0.4})` }}
-          >
-            {swipeRight ? (task.completed_at ? "↩️" : "✅") : "🗑️"}
-          </span>
-        </div>
-      )}
     <div
       ref={setNodeRef}
       {...attributes}
       style={{
-        transform: swipeX !== 0
-          ? `translateX(${swipeX}px)`
-          : CSS.Transform.toString(transform),
-        transition: swipeX !== 0 ? "none" : `${transition}, transform 0.25s cubic-bezier(.25,.8,.25,1)`,
+        transform: CSS.Transform.toString(transform),
+        transition: `${transition}, transform 0.25s cubic-bezier(.25,.8,.25,1)`,
       }}
       onDoubleClick={(e) => e.stopPropagation()}
-      onTouchStart={(e) => { listeners?.onTouchStart?.(e); handleTouchStart(e); }}
+      onTouchStart={(e) => { listeners?.onTouchStart?.(e); handleTouchStart(); }}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
       className={[
@@ -1663,7 +1580,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
               {hasMetadata && (
                 <div
-                  className="flex items-center gap-2 mt-1 flex-wrap"
+                  className="flex items-center gap-1.5 mt-1 flex-wrap min-w-0 overflow-hidden"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (anySelected) { toggle(task.id); return; }
@@ -1872,10 +1789,10 @@ export function TaskCard({ task, subtasks = [], onClick }) {
             onTouchStart={e => e.stopPropagation()}
             onPointerDown={e => e.stopPropagation()}
             title="Ver detalhes"
-            className="shrink-0 flex items-center justify-center w-7 h-9 text-text-secondary/40 md:text-text-secondary/20 md:group-hover:text-text-secondary/60 transition-colors"
+            className="shrink-0 flex items-center justify-center w-10 h-10 text-text-secondary/50 md:text-text-secondary/20 md:group-hover:text-text-secondary/70 transition-colors"
           >
-            <svg width="6" height="11" viewBox="0 0 7 12" fill="none">
-              <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg width="9" height="15" viewBox="0 0 7 12" fill="none">
+              <path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
         )}
@@ -1964,17 +1881,19 @@ export function TaskCard({ task, subtasks = [], onClick }) {
           className="fixed z-[200] bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
           style={(() => {
             const rect = meetBadgeRef.current?.getBoundingClientRect();
-            if (!rect) return { top: 0, left: 0, minWidth: 160 };
-            const popoverH = 88;
+            if (!rect) return { top: 0, left: 0, minWidth: 190 };
+            const popoverH = 176;
             const spaceBelow = window.innerHeight - rect.bottom;
             const showAbove = spaceBelow < popoverH + 12;
             return {
               top: showAbove ? rect.top - popoverH - 6 : rect.bottom + 6,
-              left: Math.min(rect.left, window.innerWidth - 170),
-              minWidth: 160,
+              left: Math.min(rect.left, window.innerWidth - 200),
+              minWidth: 190,
             };
           })()}
+          onClick={e => e.stopPropagation()}
         >
+          {/* Entrar */}
           <a
             href={task.meeting_url}
             target="_blank"
@@ -1988,8 +1907,44 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
               </svg>
             </span>
-            <span className="text-[12px] font-semibold text-[#00897B]">Entrar</span>
+            <span className="text-[12px] font-semibold text-[#00897B]">Entrar na reunião</span>
           </a>
+          {/* Copiar link */}
+          <button
+            onClick={async e => {
+              e.stopPropagation();
+              try { await navigator.clipboard.writeText(task.meeting_url); } catch (_) {}
+              setShowMeetPopover(false);
+              showToast({ message: "🔗 Link copiado!", duration: 2500 });
+            }}
+            className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-[#00BFA5]/8 transition-colors w-full text-left border-t border-border/40"
+          >
+            <span className="w-6 h-6 rounded-full bg-[#00BFA5]/15 flex items-center justify-center shrink-0">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00897B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+              </svg>
+            </span>
+            <span className="text-[12px] font-medium text-[#00897B]">Copiar link</span>
+          </button>
+          {/* Convidar pessoas */}
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              setShowMeetPopover(false);
+              const subject = encodeURIComponent(`Convite: ${task.title}`);
+              const body = encodeURIComponent(`Olá!\n\nVocê está convidado para a reunião "${task.title}".\n\nLink: ${task.meeting_url}`);
+              window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
+            }}
+            className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-[#00BFA5]/8 transition-colors w-full text-left border-t border-border/40"
+          >
+            <span className="w-6 h-6 rounded-full bg-[#00BFA5]/15 flex items-center justify-center shrink-0">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00897B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+              </svg>
+            </span>
+            <span className="text-[12px] font-medium text-[#00897B]">Convidar pessoas</span>
+          </button>
+          {/* Cancelar reunião */}
           <button
             onClick={e => {
               e.stopPropagation();
@@ -2007,7 +1962,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 meeting_attendees: null,
               });
             }}
-            className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-[#FF3B30]/5 transition-colors w-full text-left border-t border-border/60"
+            className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-[#FF3B30]/5 transition-colors w-full text-left border-t border-border"
           >
             <span className="w-6 h-6 rounded-full bg-[#FF3B30]/10 flex items-center justify-center shrink-0">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2.5" strokeLinecap="round">

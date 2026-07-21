@@ -307,6 +307,29 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   return (
     <>
       <div className="space-y-1">
+        {/* ── RESOLVER PRIMEIRO — antes das atrasadas ── */}
+        {allUrgentTasks.length > 0 && (
+          <div className="mb-2 rounded-xl border border-danger/30 bg-danger/5 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-danger/20">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-60" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
+              </span>
+              <span className="text-[11px] font-semibold text-danger uppercase tracking-widest flex-1">
+                Resolver primeiro
+              </span>
+              <span className="text-[10px] font-medium text-danger/70 bg-danger/10 px-1.5 py-0.5 rounded-full">
+                {allUrgentTasks.length}
+              </span>
+            </div>
+            <div className="px-1.5 py-1 space-y-0.5">
+              {allUrgentTasks.map((task) => (
+                <UrgentRow key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {overdueTasks.length > 0 && (
           <OverdueSection tasks={overdueTasks} subtasks={subtasks} onTaskClick={onTaskClick} />
         )}
@@ -327,29 +350,6 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
             <span className="text-5xl opacity-25 mb-1">☀️</span>
             <p className="text-sm font-medium text-text-main">Dia livre!</p>
             <p className="text-xs text-text-secondary max-w-xs">Nenhuma tarefa agendada para hoje. Use os blocos abaixo para planejar o seu dia.</p>
-          </div>
-        )}
-
-        {/* ── RESOLVER PRIMEIRO — todas as tarefas urgentes ── */}
-        {allUrgentTasks.length > 0 && (
-          <div className="mb-2 rounded-xl border border-danger/30 bg-danger/5 overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-danger/20">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
-              </span>
-              <span className="text-[11px] font-semibold text-danger uppercase tracking-widest flex-1">
-                Resolver primeiro
-              </span>
-              <span className="text-[10px] font-medium text-danger/70 bg-danger/10 px-1.5 py-0.5 rounded-full">
-                {allUrgentTasks.length}
-              </span>
-            </div>
-            <div className="px-1.5 py-1 space-y-0.5">
-              {allUrgentTasks.map((task) => (
-                <UrgentRow key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
-              ))}
-            </div>
           </div>
         )}
 

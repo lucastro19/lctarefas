@@ -126,7 +126,7 @@ export function Today() {
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
-      <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
+      <div className="flex-1 min-w-0 overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
         <div className="hidden md:flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-semibold text-text-main">Hoje</h1>
           <span className="text-sm text-text-secondary font-normal">— {greeting}</span>
