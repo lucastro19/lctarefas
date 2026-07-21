@@ -5,6 +5,7 @@ import { useAreaStore } from "../../store/areaStore";
 import { useAuthStore } from "../../store/authStore";
 import { DURATION_PRESETS, durationLabel } from "../../store/settingsStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
+import { DelegationSection } from "../delegation/DelegationSection";
 import { createMeetingEvent, deleteMeetingEvent } from "../../lib/googleCalendar";
 
 function localDateStr(d = new Date()) {
@@ -510,6 +511,9 @@ export function TaskDetail({ task, onClose }) {
 
               </div>
             </div>
+
+            {/* Delegação */}
+            <DelegationSection taskId={task.id} fallbackTask={task} />
 
             {/* Reunião Google Meet */}
             <div>

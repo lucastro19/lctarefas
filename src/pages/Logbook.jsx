@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useTaskStore } from "../store/taskStore";
 import { useAreaStore } from "../store/areaStore";
+import { useCollaboratorStore } from "../store/collaboratorStore";
+import { CollaboratorAvatar } from "../components/delegation/shared";
 
 const dateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -160,12 +163,91 @@ function AdvancedStats({ tasks, groups, areas }) {
   );
 }
 
+const DAY_MS = 86400000;
+
+/*
+  Placar da equipe — mede a delegação, não a execução própria.
+  "No prazo" só considera tarefas que tinham deadline combinado.
+*/
+function TeamStats({ collaborators, done, open }) {
+  const rows = collaborators
+    .map((c) => {
+      const cDone = done.filter((t) => t.delegated_to === c.id);
+      const cOpen = open.filter((t) => t.delegated_to === c.id);
+      const withDeadline = cDone.filter((t) => t.deadline);
+      const onTime = withDeadline.filter((t) => t.completed_at.slice(0, 10) <= t.deadline).length;
+      const durations = cDone
+        .filter((t) => t.delegated_at)
+        .map((t) => (new Date(t.completed_at) - new Date(t.delegated_at)) / DAY_MS)
+        .filter((d) => d >= 0);
+      const nudges = cDone.map((t) => t.nudge_count ?? 0);
+      return {
+        c,
+        done: cDone.length,
+        open: cOpen.length,
+        onTimePct: withDeadline.length > 0 ? Math.round((onTime / withDeadline.length) * 100) : null,
+        avgDays: durations.length ? (durations.reduce((a, b) => a + b, 0) / durations.length).toFixed(1) : null,
+        avgNudges: nudges.length ? (nudges.reduce((a, b) => a + b, 0) / nudges.length).toFixed(1) : null,
+      };
+    })
+    .filter((r) => r.done > 0 || r.open > 0)
+    .sort((a, b) => b.done - a.done);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="bg-card border border-border rounded-card px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary mb-3">Equipe</p>
+      <div className="space-y-2.5">
+        {rows.map((r) => (
+          <Link
+            key={r.c.id}
+            to={`/colaborador/${r.c.id}`}
+            className="flex items-center gap-2 group"
+          >
+            <CollaboratorAvatar collaborator={r.c} size={24} />
+            <span className="text-sm text-text-main truncate flex-1 min-w-0 group-hover:text-primary transition-colors">
+              {r.c.name}
+            </span>
+            <span className="text-[11px] text-text-secondary tabular-nums shrink-0 w-16 text-right">
+              {r.done} entregue{r.done !== 1 ? "s" : ""}
+            </span>
+            <span
+              className={[
+                "text-[11px] font-semibold tabular-nums shrink-0 w-12 text-right",
+                r.onTimePct === null ? "text-text-secondary/60"
+                  : r.onTimePct >= 80 ? "text-success"
+                  : r.onTimePct >= 50 ? "text-warning" : "text-danger",
+              ].join(" ")}
+              title="Entregas dentro do prazo combinado"
+            >
+              {r.onTimePct === null ? "—" : `${r.onTimePct}%`}
+            </span>
+            <span className="text-[11px] text-text-secondary tabular-nums shrink-0 w-12 text-right" title="Tempo médio até a entrega">
+              {r.avgDays === null ? "—" : `${r.avgDays}d`}
+            </span>
+            <span className="text-[11px] text-text-secondary tabular-nums shrink-0 w-14 text-right hidden sm:block" title="Média de cobranças por tarefa">
+              {r.avgNudges === null ? "—" : `${r.avgNudges}×`}
+            </span>
+          </Link>
+        ))}
+      </div>
+      <p className="text-[10px] text-text-secondary/70 mt-3">
+        entregues · % no prazo · tempo médio · cobranças por tarefa
+      </p>
+    </div>
+  );
+}
+
 export function Logbook() {
-  const { getAllCompleted, deleteTask, permanentDeleteTask } = useTaskStore();
+  const { getAllCompleted, deleteTask, permanentDeleteTask, getDelegatedCompleted, getDelegated } = useTaskStore();
   const { areas } = useAreaStore();
+  const { collaborators } = useCollaboratorStore();
   const [confirmClear, setConfirmClear] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const tasks = getAllCompleted();
+  const delegatedDone = getDelegatedCompleted();
+  const delegatedOpen = getDelegated();
 
   const groups = tasks.reduce((acc, task) => {
     const day = task.completed_at.split("T")[0];
@@ -237,6 +319,9 @@ export function Logbook() {
             {showAdvanced ? "▲ Menos estatísticas" : "▼ Estatísticas avançadas"}
           </button>
           {showAdvanced && <AdvancedStats tasks={tasks} groups={groups} areas={areas} />}
+          {showAdvanced && (
+            <TeamStats collaborators={collaborators} done={delegatedDone} open={delegatedOpen} />
+          )}
         </div>
       )}
 

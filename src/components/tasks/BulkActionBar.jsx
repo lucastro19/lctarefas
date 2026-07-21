@@ -1,5 +1,8 @@
+import { useState, useRef, useEffect } from "react";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useTaskStore } from "../../store/taskStore";
+import { useCollaboratorStore } from "../../store/collaboratorStore";
+import { CollaboratorAvatar, inDays } from "../delegation/shared";
 
 const IconSun = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -37,9 +40,31 @@ const IconCalendar = () => (
   </svg>
 );
 
+const IconHandshake = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 12l-4-4-3 3-2-2-3 3-4-4"/><path d="M2 8v6l6 6 2-2 2 2 2-2 2 2 6-6V8"/>
+  </svg>
+);
+
 export function BulkActionBar() {
   const { selectedIds, clearAll } = useSelectionStore();
   const { bulkUpdate, bulkMoveToToday } = useTaskStore();
+  const { collaborators } = useCollaboratorStore();
+  const [showDelegate, setShowDelegate] = useState(false);
+  const delegateRef = useRef(null);
+
+  useEffect(() => {
+    if (!showDelegate) return;
+    const handler = (e) => {
+      if (delegateRef.current && !delegateRef.current.contains(e.target)) setShowDelegate(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [showDelegate]);
 
   const tomorrow = () => {
     const d = new Date();
@@ -78,6 +103,12 @@ export function BulkActionBar() {
       onClick: () => run({ project_id: null, area_id: null, someday: false, scheduled_date: null, scheduled_time: null }),
     },
     {
+      label: "Delegar",
+      icon: <IconHandshake />,
+      onClick: () => setShowDelegate((v) => !v),
+      disabled: collaborators.length === 0,
+    },
+    {
       label: "Arquivar",
       icon: <IconArchive />,
       onClick: () => run({ archived_at: new Date().toISOString() }),
@@ -92,7 +123,39 @@ export function BulkActionBar() {
 
   return (
     <div className="fixed bottom-20 md:bottom-6 left-2 right-2 md:left-auto md:right-auto md:w-auto md:translate-x-0 md:left-1/2 z-50 pointer-events-none flex justify-center">
-      <div className="pointer-events-auto flex items-center bg-card border border-border rounded-2xl shadow-xl px-2 py-1.5 gap-0.5 w-full md:w-auto">
+      <div className="pointer-events-auto relative flex items-center bg-card border border-border rounded-2xl shadow-xl px-2 py-1.5 gap-0.5 w-full md:w-auto">
+        {showDelegate && (
+          <div
+            ref={delegateRef}
+            className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-card border border-border rounded-xl shadow-xl py-1 min-w-[190px] max-h-56 overflow-y-auto"
+          >
+            <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+              Delegar {count} tarefa{count !== 1 ? "s" : ""} para
+            </p>
+            {collaborators.map((c) => (
+              <button
+                key={c.id}
+                onClick={async () => {
+                  await run({
+                    delegated_to: c.id,
+                    delegated_at: new Date().toISOString(),
+                    delegation_status: "pendente",
+                    follow_up_date: inDays(3),
+                    last_update_at: new Date().toISOString(),
+                    scheduled_date: null,
+                    scheduled_time: null,
+                    someday: false,
+                  });
+                  setShowDelegate(false);
+                }}
+                className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+              >
+                <CollaboratorAvatar collaborator={c} size={20} />
+                <span className="flex-1 truncate">{c.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {/* Contagem */}
         <span className="text-xs font-medium text-text-secondary px-2 shrink-0">
           <span className="md:hidden">{count} sel.</span>
@@ -106,12 +169,15 @@ export function BulkActionBar() {
           <button
             key={action.label}
             onClick={action.onClick}
-            title={action.label}
+            disabled={action.disabled}
+            title={action.disabled ? "Cadastre um colaborador primeiro" : action.label}
             className={[
               "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors flex-1 md:flex-none md:px-3 md:min-w-[52px]",
-              action.danger
-                ? "text-danger hover:bg-danger/10"
-                : "text-text-main hover:bg-bg",
+              action.disabled
+                ? "text-text-secondary/30 cursor-not-allowed"
+                : action.danger
+                  ? "text-danger hover:bg-danger/10"
+                  : "text-text-main hover:bg-bg",
             ].join(" ")}
           >
             {action.icon}

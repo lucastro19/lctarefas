@@ -9,6 +9,8 @@ import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { durationLabel, DURATION_PRESETS, useSettingsStore } from "../../store/settingsStore";
 import { useAreaStore } from "../../store/areaStore";
+import { useCollaboratorStore } from "../../store/collaboratorStore";
+import { CollaboratorAvatar, STATUS_META, agingDays, isFollowUpDue } from "../delegation/shared";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 import { useTemplateStore } from "../../store/templateStore";
 import { TimeSlotPickerModal } from "./TimeSlotPickerModal";
@@ -557,18 +559,20 @@ function FlyoutRow({ label, rowRef, open, onEnter, onLeave, onToggle, children }
 }
 
 function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }) {
-  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask } = useTaskStore();
+  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask, delegateTask, undelegateTask } = useTaskStore();
   const { tags, taskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
+  const { collaborators } = useCollaboratorStore();
   const { saveTemplate } = useTemplateStore();
   const menuSettings = useSettingsStore();
   const ref = useRef(null);
-  const [openSub,       setOpenSub]       = useState(null); // "date" | "tags" | "areas"
+  const [openSub,       setOpenSub]       = useState(null); // "date" | "tags" | "areas" | "delegate"
   const [openPeriod,    setOpenPeriod]    = useState(null); // "hoje" | "amanha" | "depois"
   const [periodSubSide, setPeriodSubSide] = useState({ left: "100%", top: 0 });
-  const dateRowRef   = useRef(null);
-  const tagsRowRef   = useRef(null);
-  const areasRowRef  = useRef(null);
+  const dateRowRef     = useRef(null);
+  const tagsRowRef     = useRef(null);
+  const areasRowRef    = useRef(null);
+  const delegateRowRef = useRef(null);
 
   useEffect(() => {
     const handler = (e) => {
@@ -824,6 +828,48 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
         })}
       </FlyoutRow>
 
+      {/* Delegar */}
+      <FlyoutRow
+        label="🤝 Delegar para"
+        rowRef={delegateRowRef}
+        open={openSub === "delegate"}
+        onEnter={() => setOpenSub("delegate")}
+        onLeave={() => setOpenSub(null)}
+        onToggle={() => setOpenSub(openSub === "delegate" ? null : "delegate")}
+      >
+        {collaborators.length === 0 && (
+          <p className="px-3 py-2 text-xs text-text-secondary">
+            Nenhum colaborador cadastrado
+          </p>
+        )}
+        {collaborators.map((c) => (
+          <button
+            key={c.id}
+            onClick={run(() => delegateTask(task.id, { collaboratorId: c.id }))}
+            className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+          >
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: c.color ?? "#8E8E93" }}
+            />
+            <span className="flex-1 truncate">{c.name}</span>
+            {task.delegated_to === c.id && <span className="text-primary text-xs">✓</span>}
+          </button>
+        ))}
+        {task.delegated_to && (
+          <>
+            <div className="h-px bg-border mx-2 my-1" />
+            <button
+              onClick={run(() => undelegateTask(task.id))}
+              className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
+            >
+              <span>✕</span>
+              <span className="flex-1 text-text-secondary">Remover delegação</span>
+            </button>
+          </>
+        )}
+      </FlyoutRow>
+
       {!isSomeday && (
         <button onClick={run(() => moveToSomeday(task.id))} className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors">
           🔮 Mover para Depois
@@ -870,6 +916,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const { completeTask, uncompleteTask, updateTask, deleteTask, deleteRecurrenceFuture, toggleSubtask, addSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
+  const { collaborators } = useCollaboratorStore();
   const { toggle, isSelected, selectedIds } = useSelectionStore();
   const { expandedTaskId, setExpandedTaskId, showToast, dismissToast } = useUiStore();
 
@@ -918,6 +965,9 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const contextLabel = taskProject ?? taskArea ?? null;
   const collapsedTags = taskTags[task.id] ?? [];
   const settings = useSettingsStore();
+  const taskCollaborator = task.delegated_to
+    ? collaborators.find((c) => c.id === task.delegated_to) ?? null
+    : null;
 
   const handleMoveToToday = () => {
     const { tasks: allTasks } = useTaskStore.getState();
@@ -1172,7 +1222,8 @@ export function TaskCard({ task, subtasks = [], onClick }) {
 
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
-    contextLabel || collapsedTags.length > 0 || task.priority || task.meeting_url;
+    contextLabel || collapsedTags.length > 0 || task.priority || task.meeting_url ||
+    task.delegated_to;
 
   const handleTouchStart = () => {
     if (anySelected) return;
@@ -1652,6 +1703,30 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                         />
                       </span>
                       <span className="text-[10px] text-text-secondary tabular-nums">{subtaskDone}/{subtaskTotal}</span>
+                    </span>
+                  )}
+                  {taskCollaborator && (
+                    <span
+                      className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full flex items-center gap-1"
+                      style={{
+                        color: taskCollaborator.color,
+                        backgroundColor: taskCollaborator.color + "22",
+                      }}
+                      title={`Delegada para ${taskCollaborator.name}`}
+                    >
+                      <CollaboratorAvatar collaborator={taskCollaborator} size={12} />
+                      {taskCollaborator.name.split(" ")[0]}
+                      {task.delegation_status && task.delegation_status !== "pendente" && (
+                        <span>{STATUS_META[task.delegation_status]?.icon}</span>
+                      )}
+                    </span>
+                  )}
+                  {task.delegated_to && isFollowUpDue(task) && !task.completed_at && (
+                    <span
+                      className="text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded-full bg-danger/15 text-danger"
+                      title="Cobrança em atraso"
+                    >
+                      🔔 cobrar · {agingDays(task)}d parada
                     </span>
                   )}
                   {contextLabel && (

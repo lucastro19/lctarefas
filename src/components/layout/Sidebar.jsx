@@ -9,12 +9,16 @@ import { SettingsModal } from "../settings/SettingsModal";
 import { useTagStore } from "../../store/tagStore";
 import { useUiStore } from "../../store/uiStore";
 import { usePlanLimits } from "../../hooks/usePlanLimits";
+import { useCollaboratorStore } from "../../store/collaboratorStore";
+import { CollaboratorModal } from "../delegation/CollaboratorModal";
+import { CollaboratorAvatar, isFollowUpDue } from "../delegation/shared";
 
 const NAV_ITEMS = [
   { to: "/inbox", icon: "📥", label: "Inbox", dropId: "inbox" },
   { to: "/today", icon: "☀️", label: "Hoje", dropId: "today" },
   { to: "/upcoming", icon: "⏰", label: "Em Breve" },
   { to: "/someday", icon: "🔮", label: "Depois", dropId: "someday" },
+  { to: "/delegadas", icon: "🤝", label: "Delegadas" },
   { to: "/calendar", icon: "📅", label: "Calendário" },
   { to: "/logbook", icon: "📋", label: "Histórico" },
   { to: "/booking-settings", icon: "🗓️", label: "Agendamento" },
@@ -54,13 +58,15 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
   const [newAreaName, setNewAreaName] = useState("");
   const [addingArea, setAddingArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showNewCollab, setShowNewCollab] = useState(false);
   const { areas, createArea, createProject, getProjectsByArea } = useAreaStore();
   const { tags } = useTagStore();
-  const { getInbox, getToday, getUpcoming, getSomeday, getTrash } = useTaskStore();
+  const { getInbox, getToday, getUpcoming, getSomeday, getTrash, getDelegated, getFollowUpsDue, getDelegatedBy } = useTaskStore();
+  const { collaborators } = useCollaboratorStore();
   const { user, signOut } = useAuthStore();
   const { closeDrawer, toggleFocusMode } = useUiStore();
   const navigate = useNavigate();
-  const { canAddArea, canAddProject, isPro } = usePlanLimits();
+  const { canAddArea, canAddProject, canAddCollaborator, isPro } = usePlanLimits();
 
   const handleAddArea = async (e) => {
     e.preventDefault();
@@ -134,10 +140,13 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
             "/today": todayTasks.length,
             "/upcoming": getUpcoming().length,
             "/someday": getSomeday().length,
+            "/delegadas": getDelegated().length,
             "/trash": getTrash().length,
           };
           const urgentCounts = {
             "/today": todayTasks.filter((t) => t.is_urgent).length,
+            // Badge vermelho quando há cobrança vencida
+            "/delegadas": getFollowUpsDue().length,
           };
           return (
             <NavItem
@@ -219,6 +228,40 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
             </p>
           </div>
         )}
+
+        {/* Equipe — arraste uma tarefa até a pessoa para delegar */}
+        <div className="h-px bg-border mx-2 my-2" />
+        <p className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-text-secondary/70 px-3 pt-2 pb-1">
+          Equipe
+        </p>
+
+        {collaborators.map((c) => (
+          <CollaboratorItem
+            key={c.id}
+            collaborator={c}
+            pending={getDelegatedBy(c.id)}
+            onNavigate={closeDrawer}
+          />
+        ))}
+
+        {canAddCollaborator ? (
+          <button
+            onClick={() => setShowNewCollab(true)}
+            className="sidebar-item w-full text-text-secondary hover:text-primary"
+          >
+            <span className="text-base w-5 text-center">+</span>
+            <span>Novo colaborador</span>
+          </button>
+        ) : (
+          <div className="px-3 py-1.5">
+            <p className="text-[10px] text-warning">
+              Limite de colaboradores atingido.{" "}
+              <button onClick={() => setShowSettings(true)} className="underline hover:text-primary transition-colors">
+                Ver Pro
+              </button>
+            </p>
+          </div>
+        )}
       </nav>
 
       {/* Atalhos rápidos */}
@@ -259,7 +302,65 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
       </div>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showNewCollab && <CollaboratorModal onClose={() => setShowNewCollab(false)} />}
     </aside>
+  );
+}
+
+function CollaboratorItem({ collaborator, pending, onNavigate }) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const { archiveCollaborator, deleteCollaborator } = useCollaboratorStore();
+  const navigate = useNavigate();
+  const { setNodeRef, isOver } = useDroppable({ id: `collab-${collaborator.id}` });
+
+  const overdue = pending.filter(isFollowUpDue).length;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={["relative flex items-center group rounded-lg transition-colors", isOver ? "ring-2 ring-primary bg-primary/5" : ""].join(" ")}
+    >
+      <NavLink
+        to={`/colaborador/${collaborator.id}`}
+        onClick={onNavigate}
+        className={({ isActive }) => ["sidebar-item flex-1 min-w-0", isActive ? "active" : ""].join(" ")}
+      >
+        <CollaboratorAvatar collaborator={collaborator} size={20} />
+        <span className="flex-1 truncate">{collaborator.name}</span>
+        {pending.length > 0 && (
+          <span className={[
+            "text-[11px] font-bold tabular-nums rounded-full px-1.5 min-w-[22px] text-center leading-5 shrink-0",
+            overdue > 0
+              ? "bg-danger text-white"
+              : "bg-[#8E8E93]/30 text-[#3C3C43] dark:bg-white/12 dark:text-white/65",
+          ].join(" ")}>
+            {pending.length}
+          </span>
+        )}
+      </NavLink>
+
+      <button
+        onClick={(e) => { e.preventDefault(); setShowMenu(!showMenu); }}
+        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-main px-1 py-1 rounded transition-opacity text-xs shrink-0"
+      >
+        ···
+      </button>
+
+      {showMenu && (
+        <ContextMenu
+          onClose={() => setShowMenu(false)}
+          items={[
+            { label: "Editar", action: () => setEditing(true) },
+            { label: "Ver pendências", action: () => navigate(`/colaborador/${collaborator.id}`) },
+            { label: "Arquivar", action: () => { archiveCollaborator(collaborator.id); navigate("/delegadas"); } },
+            { label: "Mover para lixeira", danger: true, action: () => { deleteCollaborator(collaborator.id); navigate("/delegadas"); } },
+          ]}
+        />
+      )}
+
+      {editing && <CollaboratorModal collaborator={collaborator} onClose={() => setEditing(false)} />}
+    </div>
   );
 }
 

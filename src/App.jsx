@@ -7,6 +7,7 @@ import { useUiStore } from "./store/uiStore";
 import { useTaskStore } from "./store/taskStore";
 import { useAreaStore } from "./store/areaStore";
 import { useTagStore } from "./store/tagStore";
+import { useCollaboratorStore } from "./store/collaboratorStore";
 import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
 import { Landing } from "./pages/Landing";
@@ -26,6 +27,8 @@ const Calendar       = lazy(() => import("./pages/Calendar").then((m) => ({ defa
 const AdminPage      = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const BookPage       = lazy(() => import("./pages/BookPage").then((m) => ({ default: m.BookPage })));
 const BookingSettings= lazy(() => import("./pages/BookingSettings").then((m) => ({ default: m.BookingSettings })));
+const Delegadas      = lazy(() => import("./pages/Delegadas").then((m) => ({ default: m.Delegadas })));
+const ColaboradorPage= lazy(() => import("./pages/ColaboradorPage").then((m) => ({ default: m.ColaboradorPage })));
 import { SearchModal } from "./components/search/SearchModal";
 import { QuickEntry } from "./components/quickentry/QuickEntry";
 import { ToastContainer } from "./components/ui/ToastContainer";
@@ -61,6 +64,7 @@ function AppRoutes() {
   const { tasks, fetchTasks, subscribeRealtime, unsubscribeRealtime, drainQueue } = useTaskStore();
   const { fetchAll } = useAreaStore();
   const { fetchTags, fetchAllTaskTags } = useTagStore();
+  const { fetchCollaborators } = useCollaboratorStore();
   const { clearAll } = useSelectionStore();
   const { theme } = useSettingsStore();
   const location = useLocation();
@@ -84,6 +88,7 @@ function AppRoutes() {
       fetchAll();
       fetchTags();
       fetchAllTaskTags();
+      fetchCollaborators();
       requestNotificationPermission();
       // Realtime sync entre dispositivos
       const unsub = subscribeRealtime();
@@ -200,6 +205,8 @@ function AppRoutes() {
             <Route path="/today" element={<Today />} />
             <Route path="/upcoming" element={<Upcoming />} />
             <Route path="/someday" element={<Someday />} />
+            <Route path="/delegadas" element={<Delegadas />} />
+            <Route path="/colaborador/:id" element={<ColaboradorPage />} />
             <Route path="/trash" element={<Trash />} />
             <Route path="/area/:id" element={<AreaPage />} />
             <Route path="/project/:id" element={<ProjectPage />} />

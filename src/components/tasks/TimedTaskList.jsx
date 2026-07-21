@@ -3,7 +3,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { TaskCard } from "./TaskCard";
 import { NewTaskInput } from "./NewTaskInput";
 import { BulkActionBar } from "./BulkActionBar";
-import { useTaskStore } from "../../store/taskStore";
+import { useTaskStore, isDelegated } from "../../store/taskStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -289,7 +289,8 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
 
   // ── MODO NORMAL — períodos sempre visíveis ──
   const allUrgentTasks = [...allStoreTasks]
-    .filter((t) => t.is_urgent && !t.completed_at && !t.deleted_at)
+    // Delegadas não entram no painel de execução — vivem em /delegadas
+    .filter((t) => t.is_urgent && !t.completed_at && !t.deleted_at && !isDelegated(t))
     .sort((a, b) => {
       const da = a.scheduled_date ?? "9999-99-99";
       const db = b.scheduled_date ?? "9999-99-99";

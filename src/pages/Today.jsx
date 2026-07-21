@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { TimedTaskList } from "../components/tasks/TimedTaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
+import { FollowUpPanel } from "../components/tasks/FollowUpPanel";
 import { useTaskStore } from "../store/taskStore";
 import { useUiStore } from "../store/uiStore";
 
@@ -160,6 +161,7 @@ export function Today() {
           </button>
         </div>
         <DaySummary total={total} done={completed.length} />
+        <FollowUpPanel onTaskClick={setSelectedTask} />
         <TimedTaskList
           tasks={todayTasks}
           overdueTasks={overdueTasks}

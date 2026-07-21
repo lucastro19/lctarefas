@@ -17,6 +17,13 @@ const inDays = (n) => {
 
 const active = (t) => !t.completed_at && !t.deleted_at && !t.archived_at;
 
+// Delegada e ainda em aberto — sai das listas de execução e vive em /delegadas
+export const isDelegated = (t) => !!t.delegated_to && t.delegation_status !== "concluida";
+
+// Dias corridos desde um timestamp ISO (aging). Retorna null quando não há referência.
+export const daysSince = (iso) =>
+  iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null;
+
 function nextSequentialTime(date, existingTasks) {
   const { dayStart, defaultDurationMinutes } = useSettingsStore.getState();
   const [h, m] = dayStart.split(":").map(Number);
@@ -25,7 +32,7 @@ function nextSequentialTime(date, existingTasks) {
   const dateTasks = existingTasks
     .filter((t) =>
       (isToday ? t.scheduled_date && t.scheduled_date <= date : t.scheduled_date === date) &&
-      !t.completed_at && !t.deleted_at && !t.archived_at
+      !t.completed_at && !t.deleted_at && !t.archived_at && !isDelegated(t)
     )
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   for (const t of dateTasks) {
@@ -300,6 +307,17 @@ export const useTaskStore = create(
               someday: false,
               position: 0,
               user_id: user.id,
+              // Rotina delegada continua delegada na próxima ocorrência
+              ...(task.delegated_to ? {
+                delegated_to: task.delegated_to,
+                delegated_at: new Date().toISOString(),
+                delegation_status: "pendente",
+                delegation_note: task.delegation_note,
+                last_update_at: new Date().toISOString(),
+                follow_up_date: next,
+                scheduled_date: null,
+                scheduled_time: null,
+              } : {}),
             }]).select().single();
             if (data) {
               set((s) => ({ tasks: [data, ...s.tasks] }));
@@ -335,6 +353,84 @@ export const useTaskStore = create(
       moveToSomeday: async (id) =>
         get().updateTask(id, { someday: true, scheduled_date: null, archived_at: null }),
 
+      // --- Delegação ---------------------------------------------------
+      // Delegar tira a tarefa das listas de execução (padrão GTD "Waiting For").
+      // O deadline é preservado: continua valendo, agora como prazo do colaborador.
+      delegateTask: async (id, { collaboratorId, followUpDate = null, note = null } = {}) => {
+        const task = get().tasks.find((t) => t.id === id);
+        const prev = task ? {
+          delegated_to: task.delegated_to ?? null,
+          delegated_at: task.delegated_at ?? null,
+          delegation_status: task.delegation_status ?? null,
+          follow_up_date: task.follow_up_date ?? null,
+          delegation_note: task.delegation_note ?? null,
+          scheduled_date: task.scheduled_date ?? null,
+          scheduled_time: task.scheduled_time ?? null,
+          someday: task.someday ?? false,
+        } : null;
+
+        const now = new Date().toISOString();
+        const result = await get().updateTask(id, {
+          delegated_to: collaboratorId,
+          delegated_at: now,
+          delegation_status: "pendente",
+          follow_up_date: followUpDate ?? inDays(3),
+          delegation_note: note,
+          last_update_at: now,
+          scheduled_date: null,
+          scheduled_time: null,
+          someday: false,
+        });
+
+        cancelNotification(id);
+        useUiStore.getState().showToast({
+          message: "Tarefa delegada 🤝",
+          action: "Desfazer",
+          onAction: () => (prev ? get().updateTask(id, prev) : get().undelegateTask(id)),
+        });
+        return result;
+      },
+
+      undelegateTask: async (id) =>
+        get().updateTask(id, {
+          delegated_to: null,
+          delegated_at: null,
+          delegation_status: null,
+          follow_up_date: null,
+          delegation_note: null,
+          last_update_at: null,
+          nudge_count: 0,
+          last_nudge_at: null,
+        }),
+
+      setDelegationStatus: async (id, status) =>
+        get().updateTask(id, {
+          delegation_status: status,
+          last_update_at: new Date().toISOString(),
+        }),
+
+      // Só o gestor fecha uma tarefa delegada — "ele diz que fez" ≠ "eu aceitei"
+      acceptDelegatedTask: async (id) => {
+        await get().updateTask(id, {
+          delegation_status: "concluida",
+          last_update_at: new Date().toISOString(),
+        });
+        await get().completeTask(id);
+      },
+
+      // Registra uma cobrança e empurra o próximo follow-up
+      registerNudge: async (id, nextFollowUp = null) => {
+        const task = get().tasks.find((t) => t.id === id);
+        return get().updateTask(id, {
+          nudge_count: (task?.nudge_count ?? 0) + 1,
+          last_nudge_at: new Date().toISOString(),
+          follow_up_date: nextFollowUp ?? task?.follow_up_date ?? null,
+        });
+      },
+
+      snoozeFollowUp: async (id, days) =>
+        get().updateTask(id, { follow_up_date: inDays(days) }),
+
       // --- Ações em lote ---
       bulkUpdate: async (ids, fields) => {
         // Otimismo local
@@ -361,7 +457,7 @@ export const useTaskStore = create(
           .filter((task) =>
             !ids.includes(task.id) &&
             task.scheduled_date && task.scheduled_date <= t &&
-            !task.completed_at && !task.deleted_at && !task.archived_at
+            !task.completed_at && !task.deleted_at && !task.archived_at && !isDelegated(task)
           )
           .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
@@ -590,14 +686,15 @@ export const useTaskStore = create(
       },
 
       // --- Filtered views ---
+      // As views de execução ignoram tarefas delegadas em aberto — elas vivem em /delegadas
       getInbox: () =>
         get().tasks.filter(
-          (t) => !t.project_id && !t.area_id && !t.someday && !t.scheduled_date && active(t)
+          (t) => !t.project_id && !t.area_id && !t.someday && !t.scheduled_date && active(t) && !isDelegated(t)
         ),
 
       getToday: () =>
         get().tasks.filter(
-          (t) => t.scheduled_date && t.scheduled_date <= today() && active(t)
+          (t) => t.scheduled_date && t.scheduled_date <= today() && active(t) && !isDelegated(t)
         ),
 
       getUpcoming: (days = null) =>
@@ -606,10 +703,10 @@ export const useTaskStore = create(
             t.scheduled_date &&
             t.scheduled_date > today() &&
             (days === null || t.scheduled_date <= inDays(days)) &&
-            active(t)
+            active(t) && !isDelegated(t)
         ),
 
-      getSomeday: () => get().tasks.filter((t) => t.someday && active(t)),
+      getSomeday: () => get().tasks.filter((t) => t.someday && active(t) && !isDelegated(t)),
 
       getTrash: () => {
         const limit = inDays(-30);
@@ -619,10 +716,34 @@ export const useTaskStore = create(
       getArchived: () => get().tasks.filter((t) => t.archived_at && !t.deleted_at),
 
       getByArea: (areaId) =>
-        get().tasks.filter((t) => t.area_id === areaId && !t.project_id && active(t)),
+        get().tasks.filter((t) => t.area_id === areaId && !t.project_id && active(t) && !isDelegated(t)),
 
       getByProject: (projectId) =>
-        get().tasks.filter((t) => t.project_id === projectId && active(t)),
+        get().tasks.filter((t) => t.project_id === projectId && active(t) && !isDelegated(t)),
+
+      // --- Delegadas ---------------------------------------------------
+      getDelegated: () => get().tasks.filter((t) => isDelegated(t) && active(t)),
+
+      getDelegatedBy: (collaboratorId) =>
+        get().getDelegated().filter((t) => t.delegated_to === collaboratorId),
+
+      // Cobranças vencidas ou marcadas para hoje — mais antigas primeiro
+      getFollowUpsDue: () =>
+        get()
+          .getDelegated()
+          .filter((t) => t.follow_up_date && t.follow_up_date <= today())
+          .sort((a, b) => a.follow_up_date.localeCompare(b.follow_up_date)),
+
+      getDelegatedCompleted: (collaboratorId = null) =>
+        get()
+          .tasks.filter(
+            (t) =>
+              t.delegated_to &&
+              !!t.completed_at &&
+              !t.deleted_at &&
+              (collaboratorId === null || t.delegated_to === collaboratorId)
+          )
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
 
       // --- Completed sections (sempre ordenadas por conclusão decrescente) ---
       getCompletedInbox: () =>

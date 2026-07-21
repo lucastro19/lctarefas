@@ -103,18 +103,27 @@ export default async function handler(req, res) {
     .is('completed_at', null)
     .is('deleted_at', null);
 
-  // ── 4 & 5. Deadline + Resumo matinal (só entre 08:00–08:16) ─
-  let tasksDeadline = [];
-  let tasksSummary  = [];
+  // ── 4, 5 & 6. Deadline + Resumo matinal + Cobranças (só entre 08:00–08:16) ─
+  let tasksDeadline   = [];
+  let tasksSummary    = [];
+  let tasksDelegation = [];
   if (hourBR === 8 && minBR < 16) {
-    const [{ data: dl }, { data: sm }] = await Promise.all([
+    const [{ data: dl }, { data: sm }, { data: dg }] = await Promise.all([
       supabase.from('tasks').select('id, title, user_id')
         .eq('deadline', todayBR).is('completed_at', null).is('deleted_at', null),
       supabase.from('tasks').select('id, title, user_id')
         .eq('scheduled_date', todayBR).is('completed_at', null).is('deleted_at', null),
+      // Delegadas cuja data de cobrança já chegou
+      supabase.from('tasks')
+        .select('id, title, user_id, follow_up_date, collaborators(name)')
+        .not('delegated_to', 'is', null)
+        .neq('delegation_status', 'concluida')
+        .lte('follow_up_date', todayBR)
+        .is('completed_at', null).is('deleted_at', null).is('archived_at', null),
     ]);
-    tasksDeadline = dl ?? [];
-    tasksSummary  = sm ?? [];
+    tasksDeadline   = dl ?? [];
+    tasksSummary    = sm ?? [];
+    tasksDelegation = dg ?? [];
   }
 
   // ── Coleta user_ids e subscriptions ─────────────────────────
@@ -124,6 +133,7 @@ export default async function handler(req, res) {
     ...(tasksEarly5  ?? []),
     ...tasksDeadline,
     ...tasksSummary,
+    ...tasksDelegation,
   ];
   if (!allTasks.length) {
     return res.status(200).json({ sent: 0, message: 'Sem notificações nesta janela' });
@@ -193,6 +203,19 @@ export default async function handler(req, res) {
       body  : tasks.slice(0,3).map((t) => `· ${t.title}`).join('\n') + (tasks.length > 3 ? `\n…e mais ${tasks.length - 3}` : ''),
       url   : '/today', tag: `summary-${uid}`,
     })),
+    // Cobranças de tarefas delegadas (agrupado por usuário)
+    ...Object.entries(
+      tasksDelegation.reduce((acc, t) => { (acc[t.user_id] ??= []).push(t); return acc; }, {})
+    ).map(([uid, tasks]) => {
+      const atrasadas = tasks.filter((t) => t.follow_up_date < todayBR).length;
+      return pushToUser(uid, {
+        title : `🤝 ${tasks.length} cobrança${tasks.length > 1 ? 's' : ''} pendente${tasks.length > 1 ? 's' : ''}`
+                + (atrasadas > 0 ? ` — ${atrasadas} atrasada${atrasadas > 1 ? 's' : ''}` : ''),
+        body  : tasks.slice(0,3).map((t) => `· ${t.collaborators?.name ?? 'Alguém'} — ${t.title}`).join('\n')
+                + (tasks.length > 3 ? `\n…e mais ${tasks.length - 3}` : ''),
+        url   : '/delegadas', tag: `delegation-${uid}`,
+      });
+    }),
   ]);
 
   return res.status(200).json({ sent, tasks: allTasks.length });

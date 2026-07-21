@@ -20,6 +20,7 @@ const ROUTE_OPTIONS = [
   { id: "today",    icon: "☀️", label: "Hoje" },
   { id: "upcoming", icon: "⏰", label: "Em Breve" },
   { id: "someday",  icon: "🔮", label: "Depois" },
+  { id: "delegadas", icon: "🤝", label: "Delegadas" },
   { id: "calendar", icon: "📅", label: "Calendário" },
   { id: "logbook",  icon: "📋", label: "Histórico" },
   { id: "trash",    icon: "🗑️", label: "Lixeira" },

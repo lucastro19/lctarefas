@@ -9,6 +9,7 @@ const ROUTE_TABS = {
   today:    { to: "/today",    icon: "☀️", label: "Hoje" },
   upcoming: { to: "/upcoming", icon: "⏰", label: "Em Breve" },
   someday:  { to: "/someday",  icon: "🔮", label: "Depois" },
+  delegadas:{ to: "/delegadas", icon: "🤝", label: "Delegadas" },
   calendar: { to: "/calendar", icon: "📅", label: "Calendário" },
   logbook:  { to: "/logbook",  icon: "📋", label: "Histórico" },
   trash:    { to: "/trash",    icon: "🗑️", label: "Lixeira" },
@@ -16,7 +17,7 @@ const ROUTE_TABS = {
 };
 
 export function MobileTabBar() {
-  const { getInbox, getToday } = useTaskStore();
+  const { getInbox, getToday, getDelegated, getFollowUpsDue } = useTaskStore();
   const { openQuickEntry } = useUiStore();
   const { tabBarIds } = useSettingsStore();
   const { tags } = useTagStore();
@@ -25,8 +26,10 @@ export function MobileTabBar() {
   const counts = {
     inbox: getInbox().length,
     today: todayTasks.length,
+    delegadas: getDelegated().length,
   };
   const urgentTodayCount = todayTasks.filter((t) => t.is_urgent).length;
+  const dueNudgeCount = getFollowUpsDue().length;
 
   const tabs = tabBarIds.map((id) => {
     if (id.startsWith("tag:")) {
@@ -62,6 +65,9 @@ export function MobileTabBar() {
             </span>
           )}
           {id === "today" && urgentTodayCount > 0 && (
+            <span className="absolute top-1 left-3 w-2 h-2 bg-danger rounded-full border border-card" />
+          )}
+          {id === "delegadas" && dueNudgeCount > 0 && (
             <span className="absolute top-1 left-3 w-2 h-2 bg-danger rounded-full border border-card" />
           )}
         </NavLink>

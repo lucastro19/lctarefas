@@ -6,7 +6,7 @@ import { Sidebar } from "./Sidebar";
 import { MobileTabBar } from "./MobileTabBar";
 import { MobileHeader } from "./MobileHeader";
 import { MobileDrawer } from "./MobileDrawer";
-import { useTaskStore } from "../../store/taskStore";
+import { useTaskStore, isDelegated } from "../../store/taskStore";
 import { useSettingsStore, minutesToTime } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { TaskDetail } from "../tasks/TaskDetail";
@@ -23,7 +23,7 @@ export function Layout({ children }) {
   const touchYRef = useRef(null);
   const autoScrollRAF = useRef(null);
   const isDraggingRef = useRef(false);
-  const { tasks, updateTask, reorderTasks } = useTaskStore();
+  const { tasks, updateTask, reorderTasks, delegateTask } = useTaskStore();
   const { calcTimes } = useSettingsStore();
   const { pendingTask, clearPendingTask, focusMode, toggleFocusMode, showToast } = useUiStore();
 
@@ -112,7 +112,7 @@ export function Layout({ children }) {
       const [h, m] = dayStart.split(":").map(Number);
       let cursor = h * 60 + m;
       const otherTasks = tasks
-        .filter((task) => task.id !== taskId && task.scheduled_date && task.scheduled_date <= t && !task.completed_at && !task.deleted_at && !task.archived_at)
+        .filter((task) => task.id !== taskId && task.scheduled_date && task.scheduled_date <= t && !task.completed_at && !task.deleted_at && !task.archived_at && !isDelegated(task))
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
       for (const task of otherTasks) cursor += task.duration_minutes ?? defaultDurationMinutes;
       updateTask(taskId, { scheduled_date: t, someday: false, archived_at: null, scheduled_time: minutesToTime(cursor) });
@@ -132,6 +132,11 @@ export function Layout({ children }) {
     if (target.startsWith("project-")) {
       updateTask(taskId, { project_id: target.slice(8), area_id: null, someday: false, scheduled_time: null });
       if (prevFields) showToast({ message: "Tarefa movida para projeto", action: "Desfazer", onAction: () => updateTask(taskId, prevFields) });
+      return;
+    }
+    if (target.startsWith("collab-")) {
+      // O toast com "Desfazer" já vem do próprio delegateTask
+      delegateTask(taskId, { collaboratorId: target.slice(7) });
       return;
     }
 

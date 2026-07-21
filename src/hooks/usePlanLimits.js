@@ -1,11 +1,12 @@
 import { useAuthStore } from "../store/authStore";
 import { useTaskStore } from "../store/taskStore";
 import { useAreaStore } from "../store/areaStore";
+import { useCollaboratorStore } from "../store/collaboratorStore";
 
 const LIMITS = {
-  free:  { tasks: 150, areas: 3, projects: 10, tags: 10 },
-  pro:   { tasks: Infinity, areas: Infinity, projects: Infinity, tags: Infinity },
-  admin: { tasks: Infinity, areas: Infinity, projects: Infinity, tags: Infinity },
+  free:  { tasks: 150, areas: 3, projects: 10, tags: 10, collaborators: 2 },
+  pro:   { tasks: Infinity, areas: Infinity, projects: Infinity, tags: Infinity, collaborators: Infinity },
+  admin: { tasks: Infinity, areas: Infinity, projects: Infinity, tags: Infinity, collaborators: Infinity },
 };
 
 export function usePlanLimits() {
@@ -13,6 +14,7 @@ export function usePlanLimits() {
   const tasks   = useTaskStore((s) => s.tasks);
   const areas   = useAreaStore((s) => s.areas);
   const projects = useAreaStore((s) => s.projects);
+  const collaborators = useCollaboratorStore((s) => s.collaborators);
 
   const plan   = profile?.role ?? "free";
   const isPro  = plan === "pro" || plan === "admin";
@@ -22,6 +24,7 @@ export function usePlanLimits() {
   const activeTasks   = tasks.filter((t) => !t.completed_at && !t.deleted_at).length;
   const activeAreas   = (areas ?? []).filter((a) => !a.deleted_at).length;
   const activeProjects = (projects ?? []).filter((p) => !p.deleted_at).length;
+  const activeCollaborators = (collaborators ?? []).filter((c) => !c.deleted_at).length;
 
   return {
     plan,
@@ -32,10 +35,12 @@ export function usePlanLimits() {
       tasks:    activeTasks,
       areas:    activeAreas,
       projects: activeProjects,
+      collaborators: activeCollaborators,
     },
     canAddTask:    isPro || activeTasks    < limits.tasks,
     canAddArea:    isPro || activeAreas    < limits.areas,
     canAddProject: isPro || activeProjects < limits.projects,
+    canAddCollaborator: isPro || activeCollaborators < limits.collaborators,
     taskUsagePct: isPro ? 0 : Math.min(100, Math.round((activeTasks / limits.tasks) * 100)),
   };
 }
