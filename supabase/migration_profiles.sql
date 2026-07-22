@@ -22,9 +22,11 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 -- Usuário lê e edita apenas o próprio perfil
+drop policy if exists "profile_select_own" on public.profiles;
 create policy "profile_select_own" on public.profiles
   for select using (auth.uid() = id);
 
+drop policy if exists "profile_update_own" on public.profiles;
 create policy "profile_update_own" on public.profiles
   for update using (auth.uid() = id);
 
@@ -41,9 +43,11 @@ as $$
   );
 $$;
 
+drop policy if exists "profile_select_admin" on public.profiles;
 create policy "profile_select_admin" on public.profiles
   for select using (public.is_admin());
 
+drop policy if exists "profile_update_admin" on public.profiles;
 create policy "profile_update_admin" on public.profiles
   for update using (public.is_admin());
 
@@ -161,6 +165,17 @@ begin
   where id = target_id;
 end;
 $$;
+
+-- 7. Backfill: o trigger só dispara para contas criadas DEPOIS dele existir.
+-- Usuários que já tinham conta (ex.: você mesmo) precisam do perfil criado manualmente aqui.
+insert into public.profiles (id, full_name, avatar_url, email)
+select
+  u.id,
+  coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name'),
+  u.raw_user_meta_data->>'avatar_url',
+  u.email
+from auth.users u
+on conflict (id) do nothing;
 
 -- ================================================================
 -- PASSO FINAL (manual): defina você mesmo como admin
