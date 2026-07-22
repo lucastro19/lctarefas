@@ -44,11 +44,13 @@ export const useAuthStore = create((set, get) => ({
     if (data) set({ profile: data });
   },
 
-  signInWithGoogle: async () => {
+  signInWithGoogle: async (redirectTo) => {
+    // Aceita string opcional; ignora eventos de clique passados por onClick={signInWithGoogle}
+    const dest = typeof redirectTo === "string" ? redirectTo : window.location.origin;
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: dest,
         scopes: "https://www.googleapis.com/auth/calendar.events",
         queryParams: { access_type: "offline", prompt: "consent" },
       },

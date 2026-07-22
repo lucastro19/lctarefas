@@ -65,6 +65,14 @@ supabase/         # schema.sql + migration_*.sql (rodados no SQL Editor manualme
   delegation_status !== 'concluida'`, e todos os `get*` de execução o excluem. Ela reaparece em
   Hoje pelo `FollowUpPanel` quando `follow_up_date <= hoje`. Só o gestor fecha: `acceptDelegatedTask`.
   Cobrança por `wa.me` (`utils/nudge.js`) + resumo diário às 08:00 no cron de push.
+- **Organização (Fase 2.0):** camada multi-tenant em construção (`migration_org_foundation.sql`).
+  Tabelas `organizations`, `org_members` (com `manager_id` = árvore de reporte), `teams`,
+  `team_members`, `demand_types`, `org_invites`. `orgStore.js` gerencia; tela `/organizacao`
+  (semente do painel de config da org). Convite = link `/convite/:token` compartilhado manualmente,
+  aceito via RPC `accept_org_invite`. **A RLS de `tasks` NÃO foi tocada** — `org_id`/`assignee_id`/
+  `demand_type_id` entraram como colunas nullable que nada lê ainda (o roll-up hierárquico é a Fase 2.1).
+  Isolamento entre orgs via `is_org_member()` (security definer). Blueprint completo: artifact
+  `LCTarefas — Blueprint Fase 2`.
 
 ## Convenções e gotchas (aprendidos na prática)
 

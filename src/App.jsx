@@ -8,6 +8,7 @@ import { useTaskStore } from "./store/taskStore";
 import { useAreaStore } from "./store/areaStore";
 import { useTagStore } from "./store/tagStore";
 import { useCollaboratorStore } from "./store/collaboratorStore";
+import { useOrgStore } from "./store/orgStore";
 import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
 import { Landing } from "./pages/Landing";
@@ -29,6 +30,8 @@ const BookPage       = lazy(() => import("./pages/BookPage").then((m) => ({ defa
 const BookingSettings= lazy(() => import("./pages/BookingSettings").then((m) => ({ default: m.BookingSettings })));
 const Delegadas      = lazy(() => import("./pages/Delegadas").then((m) => ({ default: m.Delegadas })));
 const ColaboradorPage= lazy(() => import("./pages/ColaboradorPage").then((m) => ({ default: m.ColaboradorPage })));
+const OrganizacaoPage= lazy(() => import("./pages/OrganizacaoPage").then((m) => ({ default: m.OrganizacaoPage })));
+const AcceptInvite   = lazy(() => import("./pages/AcceptInvite").then((m) => ({ default: m.AcceptInvite })));
 import { SearchModal } from "./components/search/SearchModal";
 import { QuickEntry } from "./components/quickentry/QuickEntry";
 import { ToastContainer } from "./components/ui/ToastContainer";
@@ -65,6 +68,7 @@ function AppRoutes() {
   const { fetchAll } = useAreaStore();
   const { fetchTags, fetchAllTaskTags } = useTagStore();
   const { fetchCollaborators } = useCollaboratorStore();
+  const { fetchOrganization } = useOrgStore();
   const { clearAll } = useSelectionStore();
   const { theme } = useSettingsStore();
   const location = useLocation();
@@ -89,6 +93,7 @@ function AppRoutes() {
       fetchTags();
       fetchAllTaskTags();
       fetchCollaborators();
+      fetchOrganization();
       requestNotificationPermission();
       // Realtime sync entre dispositivos
       const unsub = subscribeRealtime();
@@ -167,10 +172,14 @@ function AppRoutes() {
 
   if (!user) {
     return (
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Landing />} />
-      </Routes>
+      <Suspense fallback={<div className="min-h-screen bg-bg flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" /></div>}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          {/* Convite acessível sem login — a própria tela oferece o botão de entrar */}
+          <Route path="/convite/:token" element={<AcceptInvite />} />
+          <Route path="*" element={<Landing />} />
+        </Routes>
+      </Suspense>
     );
   }
 
@@ -215,6 +224,8 @@ function AppRoutes() {
             <Route path="/tag/:id" element={<TagPage />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/organizacao" element={<OrganizacaoPage />} />
+            <Route path="/convite/:token" element={<AcceptInvite />} />
             <Route path="/booking-settings" element={<BookingSettings />} />
           </Routes>
         </Suspense>
