@@ -80,11 +80,17 @@ export const useTaskStore = create(
       // --- Load ---
       fetchTasks: async () => {
         set({ loading: true });
-        const { data, error } = await supabase
+        const uid = useAuthStore.getState().user?.id;
+        // Filtro explícito de posse: as views pessoais (Hoje/Inbox/áreas) só
+        // carregam MINHAS tarefas. Sem isso, quando a RLS de roll-up (Fase 2.1)
+        // passar a devolver tarefas da equipe, elas vazariam pro store pessoal.
+        // A consulta de equipe (cockpit) é um caminho separado — Fase 2.5.
+        let query = supabase
           .from("tasks")
           .select("*, projects(deleted_at), areas(deleted_at)")
-          .is("deleted_at", null)
-          .order("position", { ascending: true });
+          .is("deleted_at", null);
+        if (uid) query = query.or(`user_id.eq.${uid},assignee_id.eq.${uid}`);
+        const { data, error } = await query.order("position", { ascending: true });
 
         if (!error && data) {
           const tasks = data
@@ -677,6 +683,11 @@ export const useTaskStore = create(
           .on("postgres_changes", { event: "INSERT", schema: "public", table: "tasks" }, (payload) => {
             // Ignora se já temos (pode ser nossa própria criação)
             if (get().tasks.find((t) => t.id === payload.new.id)) return;
+            // Só injeta no store pessoal se a tarefa é minha. Com a RLS de
+            // roll-up (Fase 2.1), o realtime pode entregar INSERTs de tarefas
+            // da equipe — que não podem poluir as views pessoais.
+            const uid = useAuthStore.getState().user?.id;
+            if (uid && payload.new.user_id !== uid && payload.new.assignee_id !== uid) return;
             set((s) => ({ tasks: [payload.new, ...s.tasks] }));
           })
           .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tasks" }, (payload) => {
