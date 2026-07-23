@@ -281,14 +281,14 @@ export const useTaskStore = create(
       },
 
       // --- Complete/Uncomplete ---
-      completeTask: async (id) => {
+      completeTask: async (id, { onUndo } = {}) => {
         const task = get().tasks.find((t) => t.id === id);
         cancelNotification(id);
         await get().updateTask(id, { completed_at: new Date().toISOString() });
         useUiStore.getState().showToast({
           message: "Tarefa concluída",
           action: "Desfazer",
-          onAction: () => get().uncompleteTask(id),
+          onAction: onUndo ?? (() => get().uncompleteTask(id)),
         });
         if (task?.recurrence) {
           const next = nextRecurrenceDate(task.recurrence, task.scheduled_date);
@@ -411,11 +411,32 @@ export const useTaskStore = create(
 
       // Só o gestor fecha uma tarefa delegada — "ele diz que fez" ≠ "eu aceitei"
       acceptDelegatedTask: async (id) => {
+        const task = get().tasks.find((t) => t.id === id);
+        const prevStatus = task?.delegation_status ?? "pendente";
         await get().updateTask(id, {
           delegation_status: "concluida",
           last_update_at: new Date().toISOString(),
         });
-        await get().completeTask(id);
+        // "Desfazer" do toast de conclusão também precisa devolver o status de
+        // delegação anterior — senão a tarefa volta a aparecer como "não concluída"
+        // mas já fora da lista de Delegadas (isDelegated exige status !== "concluida").
+        await get().completeTask(id, {
+          onUndo: () => {
+            get().uncompleteTask(id);
+            get().updateTask(id, { delegation_status: prevStatus });
+          },
+        });
+      },
+
+      // Reverte um aceite já consolidado (fora da janela do toast de "Desfazer"):
+      // desfaz a conclusão e devolve a tarefa para "pendente" em Delegadas.
+      revertAcceptedDelegation: async (id) => {
+        await get().uncompleteTask(id);
+        await get().updateTask(id, {
+          delegation_status: "pendente",
+          last_update_at: new Date().toISOString(),
+        });
+        useUiStore.getState().showToast({ message: "Aceite revertido — tarefa voltou para Delegadas" });
       },
 
       // Registra uma cobrança e empurra o próximo follow-up

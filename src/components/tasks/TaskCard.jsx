@@ -463,7 +463,7 @@ function ReminderField({ value, onChange }) {
 }
 
 /* ── Menu contextual ── */
-function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos, onSelect, onMoveToToday }) {
+function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos, onSelect, onMoveToToday, stageField }) {
   const [pos, setPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
@@ -491,7 +491,7 @@ function TaskMenuPortal({ task, buttonId, onClose, onRecurrenceDelete, cursorPos
 
   return (
     <div style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 9999 }}>
-      <TaskMenu task={task} onClose={onClose} onRecurrenceDelete={onRecurrenceDelete} onSelect={onSelect} onMoveToToday={onMoveToToday} />
+      <TaskMenu task={task} onClose={onClose} onRecurrenceDelete={onRecurrenceDelete} onSelect={onSelect} onMoveToToday={onMoveToToday} stageField={stageField} />
     </div>
   );
 }
@@ -558,11 +558,12 @@ function FlyoutRow({ label, rowRef, open, onEnter, onLeave, onToggle, children }
   );
 }
 
-function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }) {
-  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask, delegateTask, undelegateTask } = useTaskStore();
+function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday, stageField }) {
+  const { deleteTask, archiveTask, unarchiveTask, moveToToday, moveToSomeday, duplicateTask, updateTask, undelegateTask } = useTaskStore();
   const { tags, taskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { collaborators } = useCollaboratorStore();
+  const { openDelegateFlow } = useUiStore();
   const { saveTemplate } = useTemplateStore();
   const menuSettings = useSettingsStore();
   const ref = useRef(null);
@@ -587,6 +588,9 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
   }, [onClose]);
 
   const run = (fn) => async (e) => { e?.stopPropagation(); await fn(); onClose(); };
+  // Data/hora/área mudam a posição da tarefa: se o menu foi aberto num card
+  // expandido, adia via stageField (aplicado só ao recolher); senão, instantâneo.
+  const applyPosition = (fields) => stageField ? stageField(fields) : updateTask(task.id, fields);
   const isSomeday  = task.someday;
   const isArchived = !!task.archived_at;
   const activeTags = taskTags[task.id] ?? [];
@@ -618,8 +622,8 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
 
   // Itens simples (sem período)
   const SIMPLE_DATE_OPTIONS = [
-    { label: "Próximo Fim de Semana", icon: "🏖️", apply: () => updateTask(task.id, { scheduled_date: nextWeekday(6), scheduled_time: "09:00", someday: false }) },
-    { label: "Próxima Semana",        icon: "📆", apply: () => updateTask(task.id, { scheduled_date: nextWeekday(1), scheduled_time: "09:00", someday: false }) },
+    { label: "Próximo Fim de Semana", icon: "🏖️", apply: () => applyPosition({ scheduled_date: nextWeekday(6), scheduled_time: "09:00", someday: false }) },
+    { label: "Próxima Semana",        icon: "📆", apply: () => applyPosition({ scheduled_date: nextWeekday(1), scheduled_time: "09:00", someday: false }) },
   ];
 
   return (
@@ -649,7 +653,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
       >
         {/* Nenhum */}
         <button
-          onClick={run(() => updateTask(task.id, { scheduled_date: null, scheduled_time: null, someday: false }))}
+          onClick={run(() => applyPosition({ scheduled_date: null, scheduled_time: null, someday: false }))}
           className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
         >
           <span>✕</span><span>Nenhum</span>
@@ -676,7 +680,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
                       <button key={p.key}
                         onClick={run(() => {
                           const d = opt.getDate();
-                          updateTask(task.id, { scheduled_date: d, scheduled_time: nextSlotInPeriod(d, p.key), someday: false });
+                          applyPosition({ scheduled_date: d, scheduled_time: nextSlotInPeriod(d, p.key), someday: false });
                         })}
                         className="menu-item w-full text-left pl-7 pr-3 py-2.5 text-sm transition-colors flex items-center gap-2"
                       >
@@ -711,7 +715,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
                     <button key={p.key}
                       onClick={run(() => {
                         const d = opt.getDate();
-                        updateTask(task.id, { scheduled_date: d, scheduled_time: nextSlotInPeriod(d, p.key), someday: false });
+                        applyPosition({ scheduled_date: d, scheduled_time: nextSlotInPeriod(d, p.key), someday: false });
                       })}
                       className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
                     >
@@ -781,7 +785,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
       >
         {/* Sem área */}
         <button
-          onClick={run(() => updateTask(task.id, { area_id: null, project_id: null }))}
+          onClick={run(() => applyPosition({ area_id: null, project_id: null }))}
           className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
         >
           <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-border" />
@@ -798,7 +802,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
             <div key={area.id}>
               {/* Área */}
               <button
-                onClick={run(() => updateTask(task.id, { area_id: area.id, project_id: null }))}
+                onClick={run(() => applyPosition({ area_id: area.id, project_id: null }))}
                 className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
               >
                 <span
@@ -812,7 +816,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
               {areaProjects.map((proj) => (
                 <button
                   key={proj.id}
-                  onClick={run(() => updateTask(task.id, { project_id: proj.id, area_id: area.id }))}
+                  onClick={run(() => applyPosition({ project_id: proj.id, area_id: area.id }))}
                   className="menu-item w-full text-left pl-7 pr-3 py-2 text-sm transition-colors flex items-center gap-2"
                 >
                   <span
@@ -845,7 +849,7 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday }
         {collaborators.map((c) => (
           <button
             key={c.id}
-            onClick={run(() => delegateTask(task.id, { collaboratorId: c.id }))}
+            onClick={run(() => openDelegateFlow(task.id, c.id))}
             className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"
           >
             <span
@@ -933,6 +937,10 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const [time, setTime] = useState(task.scheduled_time ?? "");
   const [duration, setDuration] = useState(task.duration_minutes ?? "");
   const [reminder, setReminder] = useState(task.reminder_minutes ?? null);
+  // Campos que mudam a POSIÇÃO da tarefa (data/hora/duração/lembrete/área) ficam
+  // aqui até o card recolher — só então um único updateTask os aplica de uma vez.
+  const pendingFieldsRef = useRef({});
+  const stageField = (fields) => { pendingFieldsRef.current = { ...pendingFieldsRef.current, ...fields }; };
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showSlotPicker, setShowSlotPicker] = useState(false);
   const [meetQuick, setMeetQuick] = useState(false);
@@ -990,9 +998,14 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     data: { task },
   });
 
-  // Sincroniza estado local quando a prop muda (e não está editando)
+  // Recolheu: aplica de uma vez os campos de posição pendentes (data/hora/duração/
+  // lembrete/área), depois sincroniza o estado local com a tarefa já atualizada.
   useEffect(() => {
     if (!expanded) {
+      if (Object.keys(pendingFieldsRef.current).length > 0) {
+        updateTask(task.id, pendingFieldsRef.current);
+        pendingFieldsRef.current = {};
+      }
       setTitleDraft(task.title);
       setNotesDraft(task.notes ?? "");
       setDate(task.scheduled_date ?? "");
@@ -1436,13 +1449,13 @@ export function TaskCard({ task, subtasks = [], onClick }) {
               >
                 <DateField
                   value={date}
-                  onChange={(v) => { setDate(v); updateTask(task.id, { scheduled_date: v || null }); }}
+                  onChange={(v) => { setDate(v); stageField({ scheduled_date: v || null }); }}
                 />
                 <TimeField
                   value={time}
                   onChange={(v) => {
                     setTime(v);
-                    updateTask(task.id, { scheduled_time: v || null });
+                    stageField({ scheduled_time: v || null });
                     if (v && getPeriod(v, settings) === "almoco") {
                       const nextAvail = settings.lunchEnd ?? "13:00";
                       const toastId = showToast({
@@ -1451,7 +1464,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                         onAction: () => {
                           dismissToast(toastId);
                           setTime(nextAvail);
-                          updateTask(task.id, { scheduled_time: nextAvail });
+                          stageField({ scheduled_time: nextAvail });
                         },
                         duration: 7000,
                       });
@@ -1463,7 +1476,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                 {time && (
                   <ReminderField
                     value={reminder}
-                    onChange={(v) => { setReminder(v); updateTask(task.id, { reminder_minutes: v }); }}
+                    onChange={(v) => { setReminder(v); stageField({ reminder_minutes: v }); }}
                   />
                 )}
                 <select
@@ -1471,7 +1484,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                   onChange={(e) => {
                     const v = e.target.value ? Number(e.target.value) : null;
                     setDuration(v ?? "");
-                    updateTask(task.id, { duration_minutes: v });
+                    stageField({ duration_minutes: v });
                   }}
                   className={[
                     "text-xs rounded-full px-2 py-0.5 outline-none cursor-pointer",
@@ -1894,6 +1907,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
               cursorPos={contextPos}
               onSelect={() => toggle(task.id)}
               onMoveToToday={handleMoveToToday}
+              stageField={expanded ? stageField : undefined}
             />,
             document.body
           )}

@@ -27,6 +27,11 @@ export const useUiStore = create((set) => ({
   openSearch: () => set({ showSearch: true }),
   closeSearch: () => set({ showSearch: false }),
 
+  // Modal de data de cobrança, aberto sempre que uma tarefa é delegada
+  delegateFlow: null, // { taskId, collaboratorId, note } | null
+  openDelegateFlow: (taskId, collaboratorId, note = null) => set({ delegateFlow: { taskId, collaboratorId, note } }),
+  closeDelegateFlow: () => set({ delegateFlow: null }),
+
   toasts: [],
   showToast: ({ message, action, onAction, duration = 4500 }) => {
     const id = Date.now();

@@ -13,9 +13,9 @@ import {
 */
 export function DelegationSection({ taskId, fallbackTask }) {
   const task = useTaskStore((s) => s.tasks.find((t) => t.id === taskId)) ?? fallbackTask;
-  const { delegateTask, undelegateTask, setDelegationStatus, acceptDelegatedTask, registerNudge, updateTask } = useTaskStore();
+  const { undelegateTask, setDelegationStatus, acceptDelegatedTask, registerNudge, updateTask } = useTaskStore();
   const { collaborators } = useCollaboratorStore();
-  const { showToast } = useUiStore();
+  const { showToast, openDelegateFlow } = useUiStore();
 
   const [note, setNote] = useState(task?.delegation_note ?? "");
   const [picking, setPicking] = useState(false);
@@ -71,7 +71,7 @@ export function DelegationSection({ taskId, fallbackTask }) {
                 <button
                   key={c.id}
                   onClick={() => {
-                    delegateTask(task.id, { collaboratorId: c.id, note: note || null });
+                    openDelegateFlow(task.id, c.id, note || null);
                     setPicking(false);
                   }}
                   className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"

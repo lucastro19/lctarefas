@@ -16,7 +16,7 @@ import { CollaboratorAvatar, isFollowUpDue } from "../delegation/shared";
 const NAV_ITEMS = [
   { to: "/inbox", icon: "📥", label: "Inbox", dropId: "inbox" },
   { to: "/today", icon: "☀️", label: "Hoje", dropId: "today" },
-  { to: "/upcoming", icon: "⏰", label: "Em Breve" },
+  { to: "/upcoming", icon: "⏰", label: "Em Breve", dropId: "upcoming" },
   { to: "/someday", icon: "🔮", label: "Depois", dropId: "someday" },
   { to: "/delegadas", icon: "🤝", label: "Delegadas" },
   { to: "/calendar", icon: "📅", label: "Calendário" },

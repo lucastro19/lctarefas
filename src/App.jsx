@@ -34,6 +34,7 @@ const OrganizacaoPage= lazy(() => import("./pages/OrganizacaoPage").then((m) => 
 const AcceptInvite   = lazy(() => import("./pages/AcceptInvite").then((m) => ({ default: m.AcceptInvite })));
 import { SearchModal } from "./components/search/SearchModal";
 import { QuickEntry } from "./components/quickentry/QuickEntry";
+import { DelegateFollowUpModal } from "./components/delegation/DelegateFollowUpModal";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { requestNotificationPermission, scheduleTaskNotifications } from "./services/notifications";
 
@@ -233,6 +234,7 @@ function AppRoutes() {
 
       {showSearch && <SearchModal onClose={closeSearch} />}
       {showQuickEntry && <QuickEntry onClose={closeQuickEntry} />}
+      <DelegateFollowUpModal />
       <ToastContainer />
     </>
   );

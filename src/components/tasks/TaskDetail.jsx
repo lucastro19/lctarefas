@@ -147,6 +147,8 @@ export function TaskDetail({ task, onClose }) {
   const [meetingError, setMeetingError] = useState("");
   const contextPickerRef = useRef(null);
   const titleRef = useRef(null);
+  const handleCloseRef = useRef(null); // sempre a versão mais recente de handleClose (evita closure obsoleta no ESC)
+  const panelRef = useRef(null);
   const resizeTitle = (el) => { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
   const [localAreaId, setLocalAreaId] = useState(task.area_id ?? null);
   const [localProjectId, setLocalProjectId] = useState(task.project_id ?? null);
@@ -180,16 +182,47 @@ export function TaskDetail({ task, onClose }) {
       if (e.key === "Escape") {
         if (showCustomModal) { setShowCustomModal(false); return; }
         if (showRecurrenceModal) { setShowRecurrenceModal(false); return; }
-        onClose();
+        // handleCloseRef sempre aponta pra versão atual (evita fechar sobre estado antigo)
+        handleCloseRef.current?.();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [showCustomModal, showRecurrenceModal, onClose]);
+  }, [showCustomModal, showRecurrenceModal]);
 
+  // Clique fora do painel → salva o pendente e fecha (a página que renderiza o
+  // TaskDetail também tem seu próprio onClick de fundo pra fechar; esse listener
+  // garante que o flush aconteça antes, independente de qual dos dois disparar primeiro)
+  useEffect(() => {
+    const handler = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        handleCloseRef.current?.();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, []);
+
+  // Bundleia tudo que só deve persistir quando o painel fecha (data/hora/duração/
+  // lembrete/área) num único updateTask — evita a lista reordenar no meio da edição.
   const save = async (extra = {}) => {
     setSaving(true);
-    await updateTask(task.id, { title, notes: notes || null, scheduled_date: scheduledDate || null, deadline: deadline || null, someday, ...extra });
+    await updateTask(task.id, {
+      title, notes: notes || null,
+      scheduled_date: scheduledDate || null,
+      scheduled_time: scheduledTime || null,
+      duration_minutes: durationMinutes || null,
+      reminder_minutes: reminderMinutes,
+      area_id: localAreaId,
+      project_id: localProjectId,
+      deadline: deadline || null,
+      someday,
+      ...extra,
+    });
     setSaving(false);
   };
 
@@ -226,32 +259,38 @@ export function TaskDetail({ task, onClose }) {
     }
   };
 
-  const handleContextChange = async (val) => {
+  // Área/projeto só persistem ao fechar o painel (save() já inclui localAreaId/localProjectId)
+  const handleContextChange = (val) => {
     if (val === "") {
       setLocalAreaId(null);
       setLocalProjectId(null);
-      await updateTask(task.id, { project_id: null, area_id: null });
     } else if (val.startsWith("area:")) {
-      const id = val.replace("area:", "");
-      setLocalAreaId(id);
+      setLocalAreaId(val.replace("area:", ""));
       setLocalProjectId(null);
-      await updateTask(task.id, { area_id: id, project_id: null });
     } else if (val.startsWith("project:")) {
-      const id = val.replace("project:", "");
-      setLocalProjectId(id);
+      setLocalProjectId(val.replace("project:", ""));
       setLocalAreaId(null);
-      await updateTask(task.id, { project_id: id, area_id: null });
     }
   };
+
+  // Fechamento "normal" (ESC, X, clique fora): dispara o save pendente sem esperar a
+  // rede (updateTask já aplica o estado local na hora) e fecha o painel imediatamente —
+  // aguardar o await aqui deixava o ESC "travado" até a resposta do Supabase chegar.
+  const handleClose = () => {
+    save();
+    onClose();
+  };
+  handleCloseRef.current = handleClose;
 
   const availableTags = tags.filter((t) => !taskTagList.find((tt) => tt.id === t.id));
   const isDone = !!task.completed_at;
 
-  const handleComplete = async () => {
+  const handleComplete = () => {
     if (isDone) {
-      await uncompleteTask(task.id);
+      uncompleteTask(task.id);
     } else {
-      await completeTask(task.id);
+      save(); // preserva data/hora/etc. ajustados antes de concluir
+      completeTask(task.id);
       onClose();
     }
   };
@@ -356,6 +395,7 @@ export function TaskDetail({ task, onClose }) {
   return (
     <>
       <aside
+        ref={panelRef}
         className="fixed inset-0 z-[100] md:static md:inset-auto md:z-auto md:w-96 md:border-l border-border bg-bg md:bg-card md:h-full flex flex-col animate-slide-up md:[animation:none]"
         onClick={e => e.stopPropagation()}
       >
@@ -372,7 +412,7 @@ export function TaskDetail({ task, onClose }) {
             <button
               type="button"
               onPointerDown={e => e.stopPropagation()}
-              onClick={onClose}
+              onClick={handleClose}
               className="w-9 h-9 flex items-center justify-center rounded-full bg-card/80 text-text-secondary hover:text-text-main transition-colors"
             >
               <svg width="18" height="15" viewBox="0 0 18 15" fill="none">
@@ -422,8 +462,8 @@ export function TaskDetail({ task, onClose }) {
                       <span className="text-[12px] text-primary mr-2 truncate max-w-[130px]">{fmtDate(scheduledDate)}</span>
                     )}
                     <Toggle on={!!scheduledDate} onChange={v => {
-                      if (v) { const d = localDateStr(); setScheduledDate(d); updateTask(task.id, { scheduled_date: d }); }
-                      else { setScheduledDate(""); updateTask(task.id, { scheduled_date: null }); }
+                      if (v) { setScheduledDate(localDateStr()); }
+                      else { setScheduledDate(""); }
                     }} />
                   </div>
                   {scheduledDate && (
@@ -431,7 +471,7 @@ export function TaskDetail({ task, onClose }) {
                       <input
                         type="date"
                         value={scheduledDate}
-                        onChange={e => { setScheduledDate(e.target.value); updateTask(task.id, { scheduled_date: e.target.value || null }); }}
+                        onChange={e => setScheduledDate(e.target.value)}
                         className="w-full text-sm bg-bg border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
                       />
                       <div className="flex gap-1.5">
@@ -440,7 +480,7 @@ export function TaskDetail({ task, onClose }) {
                           { l: "Amanhã", d: () => addDays(1) },
                           { l: "Prox. seg.", d: nextMonday },
                         ].map(({ l, d }) => (
-                          <button key={l} onClick={() => { const dt = d(); setScheduledDate(dt); updateTask(task.id, { scheduled_date: dt }); }}
+                          <button key={l} onClick={() => setScheduledDate(d())}
                             className={["flex-1 text-[11px] py-1.5 rounded-lg border transition-colors",
                               scheduledDate === d() ? "bg-primary/10 text-primary border-primary/40 font-medium" : "text-text-secondary border-border",
                             ].join(" ")}>{l}</button>
@@ -459,8 +499,8 @@ export function TaskDetail({ task, onClose }) {
                       <span className="text-[12px] text-primary mr-2">{scheduledTime.slice(0, 5)}</span>
                     )}
                     <Toggle on={!!scheduledTime} onChange={v => {
-                      if (v) { setScheduledTime("09:00"); updateTask(task.id, { scheduled_time: "09:00" }); }
-                      else { setScheduledTime(""); updateTask(task.id, { scheduled_time: null }); }
+                      if (v) { setScheduledTime("09:00"); }
+                      else { setScheduledTime(""); }
                     }} />
                   </div>
                   {scheduledTime && (
@@ -469,7 +509,6 @@ export function TaskDetail({ task, onClose }) {
                         type="time"
                         value={scheduledTime}
                         onChange={e => setScheduledTime(e.target.value)}
-                        onBlur={e => updateTask(task.id, { scheduled_time: e.target.value || null })}
                         className="w-full text-sm bg-bg border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
                       />
                     </div>
@@ -684,7 +723,6 @@ export function TaskDetail({ task, onClose }) {
                       if (e.target.value === "custom") { setCustomDuration(true); return; }
                       const v = e.target.value ? Number(e.target.value) : null;
                       setDurationMinutes(v ?? "");
-                      updateTask(task.id, { duration_minutes: v });
                     }}
                     className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
                   >
@@ -707,7 +745,6 @@ export function TaskDetail({ task, onClose }) {
                         const total = h * 60 + m;
                         setDurationMinutes(total || "");
                         setCustomDuration(false);
-                        updateTask(task.id, { duration_minutes: total || null });
                       }} />
                   </div>
                 )}
@@ -751,7 +788,6 @@ export function TaskDetail({ task, onClose }) {
                     onChange={e => {
                       const v = e.target.value === "" ? null : Number(e.target.value);
                       setReminderMinutes(v);
-                      updateTask(task.id, { reminder_minutes: v });
                     }}
                     className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
                   >

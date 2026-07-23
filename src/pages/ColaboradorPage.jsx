@@ -74,7 +74,7 @@ function computeScore(open, done) {
 
 export function ColaboradorPage() {
   const { id } = useParams();
-  const { getDelegatedBy, getDelegatedCompleted } = useTaskStore();
+  const { getDelegatedBy, getDelegatedCompleted, revertAcceptedDelegation } = useTaskStore();
   const { getById } = useCollaboratorStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [editing, setEditing] = useState(false);
@@ -190,13 +190,20 @@ export function ColaboradorPage() {
                   {recentDone.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-card bg-card/60 border border-border min-w-0"
+                      className="flex items-center gap-2 px-3 py-2 rounded-card bg-card/60 border border-border min-w-0 group"
                     >
                       <span className="text-success text-xs shrink-0">✓</span>
                       <span className="text-[13px] text-text-secondary line-through truncate flex-1">{t.title}</span>
                       <span className="text-[10px] text-text-secondary/70 shrink-0 tabular-nums">
                         {fmtShortDate(t.completed_at.slice(0, 10))}
                       </span>
+                      <button
+                        onClick={() => revertAcceptedDelegation(t.id)}
+                        title="Reverter aceite — volta para Delegadas, pendente"
+                        className="opacity-0 group-hover:opacity-100 text-[10px] text-text-secondary hover:text-warning transition-all shrink-0"
+                      >
+                        ↺ Reverter
+                      </button>
                     </div>
                   ))}
                 </div>

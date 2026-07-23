@@ -16,6 +16,14 @@ const todayStr = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+// Próximo dia útil (pula sábado/domingo) — usado ao arrastar para "Em Breve"
+const nextBusinessDayStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 export function Layout({ children }) {
   const location = useLocation();
   const [activeTask, setActiveTask] = useState(null);
@@ -23,9 +31,9 @@ export function Layout({ children }) {
   const touchYRef = useRef(null);
   const autoScrollRAF = useRef(null);
   const isDraggingRef = useRef(false);
-  const { tasks, updateTask, reorderTasks, delegateTask } = useTaskStore();
+  const { tasks, updateTask, reorderTasks } = useTaskStore();
   const { calcTimes } = useSettingsStore();
-  const { pendingTask, clearPendingTask, focusMode, toggleFocusMode, showToast } = useUiStore();
+  const { pendingTask, clearPendingTask, focusMode, toggleFocusMode, showToast, openDelegateFlow } = useUiStore();
 
   // Rastreia Y em capture phase (antes de qualquer stopPropagation do dnd-kit)
   useEffect(() => {
@@ -124,6 +132,19 @@ export function Layout({ children }) {
       if (prevFields) showToast({ message: "Tarefa movida para Depois", action: "Desfazer", onAction: () => updateTask(taskId, prevFields) });
       return;
     }
+    if (target === "upcoming") {
+      const t = nextBusinessDayStr();
+      const { dayStart, defaultDurationMinutes } = useSettingsStore.getState();
+      const [h, m] = dayStart.split(":").map(Number);
+      let cursor = h * 60 + m;
+      const otherTasks = tasks
+        .filter((task) => task.id !== taskId && task.scheduled_date === t && !task.completed_at && !task.deleted_at && !task.archived_at && !isDelegated(task))
+        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      for (const task of otherTasks) cursor += task.duration_minutes ?? defaultDurationMinutes;
+      updateTask(taskId, { scheduled_date: t, someday: false, archived_at: null, scheduled_time: minutesToTime(cursor) });
+      if (prevFields) showToast({ message: "Tarefa movida para o próximo dia útil", action: "Desfazer", onAction: () => updateTask(taskId, prevFields) });
+      return;
+    }
     if (target.startsWith("area-")) {
       updateTask(taskId, { area_id: target.slice(5), project_id: null, someday: false, scheduled_time: null });
       if (prevFields) showToast({ message: "Tarefa movida para área", action: "Desfazer", onAction: () => updateTask(taskId, prevFields) });
@@ -135,8 +156,8 @@ export function Layout({ children }) {
       return;
     }
     if (target.startsWith("collab-")) {
-      // O toast com "Desfazer" já vem do próprio delegateTask
-      delegateTask(taskId, { collaboratorId: target.slice(7) });
+      // Abre o modal de data de cobrança — delegateTask só roda quando confirmar lá
+      openDelegateFlow(taskId, target.slice(7));
       return;
     }
 
