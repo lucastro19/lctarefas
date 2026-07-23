@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useTaskStore } from "../../store/taskStore";
+import { useTaskStore, isAssignedToMe } from "../../store/taskStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAreaStore } from "../../store/areaStore";
 import { useAuthStore } from "../../store/authStore";
@@ -96,7 +96,7 @@ function SectionLabel({ children }) {
 }
 
 export function TaskDetail({ task, onClose }) {
-  const { updateTask, deleteTask, deleteRecurrenceFuture, archiveTask, completeTask, uncompleteTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
+  const { updateTask, deleteTask, deleteRecurrenceFuture, archiveTask, completeTask, uncompleteTask, completeAssignedTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, fetchTags, createTag, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { getGoogleToken, connectGoogleCalendar } = useAuthStore();
@@ -284,10 +284,16 @@ export function TaskDetail({ task, onClose }) {
 
   const availableTags = tags.filter((t) => !taskTagList.find((tt) => tt.id === t.id));
   const isDone = !!task.completed_at;
+  const assignedToMe = isAssignedToMe(task, useAuthStore.getState().user?.id);
 
   const handleComplete = () => {
     if (isDone) {
       uncompleteTask(task.id);
+    } else if (assignedToMe) {
+      // Executor: conclui = manda pro aceite do gestor (não fecha de vez)
+      save();
+      completeAssignedTask(task.id);
+      onClose();
     } else {
       save(); // preserva data/hora/etc. ajustados antes de concluir
       completeTask(task.id);

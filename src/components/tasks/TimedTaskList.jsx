@@ -3,7 +3,8 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { TaskCard } from "./TaskCard";
 import { NewTaskInput } from "./NewTaskInput";
 import { BulkActionBar } from "./BulkActionBar";
-import { useTaskStore, isDelegated } from "../../store/taskStore";
+import { useTaskStore, isDelegatedByMe, isAssignedToMe } from "../../store/taskStore";
+import { useAuthStore } from "../../store/authStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -86,9 +87,10 @@ function PeriodSeparator({ icon, label, count = 0 }) {
 }
 
 function UrgentRow({ task, subtasks = [], onClick }) {
-  const { completeTask, uncompleteTask } = useTaskStore();
+  const { completeTask, uncompleteTask, completeAssignedTask } = useTaskStore();
   const [completing, setCompleting] = useState(false);
   const isDone = !!task.completed_at;
+  const assignedToMe = isAssignedToMe(task, useAuthStore.getState().user?.id);
   const timeLabel = task.scheduled_time ? task.scheduled_time.slice(0, 5) : null;
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((s) => s.completed).length;
@@ -97,6 +99,7 @@ function UrgentRow({ task, subtasks = [], onClick }) {
     e.stopPropagation();
     setCompleting(true);
     if (isDone) await uncompleteTask(task.id);
+    else if (assignedToMe) await completeAssignedTask(task.id); // vai pro aceite do gestor
     else await completeTask(task.id);
     setCompleting(false);
   };
@@ -288,9 +291,11 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   }
 
   // ── MODO NORMAL — períodos sempre visíveis ──
+  const myId = useAuthStore.getState().user?.id;
   const allUrgentTasks = [...allStoreTasks]
-    // Delegadas não entram no painel de execução — vivem em /delegadas
-    .filter((t) => t.is_urgent && !t.completed_at && !t.deleted_at && !isDelegated(t))
+    // Tarefas que EU deleguei não entram no painel de execução (vivem em
+    // /delegadas); as atribuídas a mim aparecem, pois são trabalho meu.
+    .filter((t) => t.is_urgent && !t.completed_at && !t.deleted_at && !isDelegatedByMe(t, myId))
     .sort((a, b) => {
       const da = a.scheduled_date ?? "9999-99-99";
       const db = b.scheduled_date ?? "9999-99-99";

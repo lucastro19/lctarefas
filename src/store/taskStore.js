@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase";
 import { useSettingsStore, minutesToTime } from "./settingsStore";
 import { useUiStore } from "./uiStore";
 import { useAuthStore } from "./authStore";
+import { useOrgStore } from "./orgStore";
+import { useCollaboratorStore } from "./collaboratorStore";
 import { cancelNotification } from "../services/notifications";
 
 const localDate = (d = new Date()) =>
@@ -19,6 +21,17 @@ const active = (t) => !t.completed_at && !t.deleted_at && !t.archived_at;
 
 // Delegada e ainda em aberto — sai das listas de execução e vive em /delegadas
 export const isDelegated = (t) => !!t.delegated_to && t.delegation_status !== "concluida";
+
+// Relativos ao usuário atual (Fase 2.3): a MESMA tarefa é "delegada por mim"
+// (some das minhas listas, vai pra /delegadas) para o gestor, e "atribuída a
+// mim" (trabalho meu, aparece nas minhas listas) para o executor vinculado.
+export const isDelegatedByMe = (t, myId) => isDelegated(t) && t.user_id === myId;
+export const isAssignedToMe = (t, myId) => !!t.assignee_id && t.assignee_id === myId && t.user_id !== myId;
+
+// Sai das MINHAS listas de execução se: eu deleguei (waiting-for), ou é atribuída
+// a mim e eu já mandei pro aceite do gestor (aguardando_aceite — feito, esperando).
+export const hiddenFromMyLists = (t, myId) =>
+  isDelegatedByMe(t, myId) || (isAssignedToMe(t, myId) && t.delegation_status === "aguardando_aceite");
 
 // Dias corridos desde um timestamp ISO (aging). Retorna null quando não há referência.
 export const daysSince = (iso) =>
@@ -373,7 +386,19 @@ export const useTaskStore = create(
           scheduled_date: task.scheduled_date ?? null,
           scheduled_time: task.scheduled_time ?? null,
           someday: task.someday ?? false,
+          assignee_id: task.assignee_id ?? null,
+          org_id: task.org_id ?? null,
         } : null;
+
+        // Fase 2.3: se o colaborador é um usuário real vinculado E o gestor tem
+        // org, a tarefa vira "corporativa" — assignee_id + org_id fazem ela
+        // espelhar na lista pessoal do executor e subir no roll-up. Sem vínculo
+        // ou sem org, segue como delegação local da Fase 1 (campos nulos).
+        const collaborator = useCollaboratorStore.getState().collaborators.find((c) => c.id === collaboratorId);
+        const orgId = useOrgStore.getState().organization?.id ?? null;
+        const mirror = collaborator?.linked_user_id && orgId
+          ? { assignee_id: collaborator.linked_user_id, org_id: orgId }
+          : { assignee_id: null, org_id: null };
 
         const now = new Date().toISOString();
         const result = await get().updateTask(id, {
@@ -386,6 +411,7 @@ export const useTaskStore = create(
           scheduled_date: null,
           scheduled_time: null,
           someday: false,
+          ...mirror,
         });
 
         cancelNotification(id);
@@ -407,6 +433,8 @@ export const useTaskStore = create(
           last_update_at: null,
           nudge_count: 0,
           last_nudge_at: null,
+          assignee_id: null, // desfaz o espelhamento (Fase 2.3)
+          org_id: null,
         }),
 
       setDelegationStatus: async (id, status) =>
@@ -414,6 +442,22 @@ export const useTaskStore = create(
           delegation_status: status,
           last_update_at: new Date().toISOString(),
         }),
+
+      // Fase 2.3: o executor "conclui" uma tarefa atribuída a ele → vira
+      // "aguardando aceite" e volta pro gestor fechar (portão "só o gestor
+      // fecha"). Não seta completed_at — quem fecha é acceptDelegatedTask.
+      completeAssignedTask: async (id) => {
+        cancelNotification(id);
+        await get().updateTask(id, {
+          delegation_status: "aguardando_aceite",
+          last_update_at: new Date().toISOString(),
+        });
+        useUiStore.getState().showToast({
+          message: "Enviada para aceite do gestor 👍",
+          action: "Desfazer",
+          onAction: () => get().updateTask(id, { delegation_status: "em_andamento" }),
+        });
+      },
 
       // Só o gestor fecha uma tarefa delegada — "ele diz que fez" ≠ "eu aceitei"
       acceptDelegatedTask: async (id) => {
@@ -693,10 +737,15 @@ export const useTaskStore = create(
           .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tasks" }, (payload) => {
             // Não sobrescreve se há item pendente na fila para esta tarefa
             const hasPending = get().offlineQueue.some((q) => q.taskId === payload.new.id);
-            if (!hasPending) {
-              set((s) => ({
-                tasks: s.tasks.map((t) => (t.id === payload.new.id ? payload.new : t)),
-              }));
+            if (hasPending) return;
+            const uid = useAuthStore.getState().user?.id;
+            const known = get().tasks.find((t) => t.id === payload.new.id);
+            if (known) {
+              set((s) => ({ tasks: s.tasks.map((t) => (t.id === payload.new.id ? payload.new : t)) }));
+            } else if (uid && payload.new.assignee_id === uid) {
+              // Fase 2.3: gestor acabou de me atribuir esta tarefa (UPDATE que
+              // setou assignee_id) — chega ao vivo na minha lista pessoal.
+              set((s) => ({ tasks: [payload.new, ...s.tasks] }));
             }
           })
           .on("postgres_changes", { event: "DELETE", schema: "public", table: "tasks" }, (payload) => {
@@ -718,27 +767,38 @@ export const useTaskStore = create(
       },
 
       // --- Filtered views ---
-      // As views de execução ignoram tarefas delegadas em aberto — elas vivem em /delegadas
-      getInbox: () =>
-        get().tasks.filter(
-          (t) => !t.project_id && !t.area_id && !t.someday && !t.scheduled_date && active(t) && !isDelegated(t)
-        ),
+      // As views de execução ignoram tarefas que EU deleguei (vivem em /delegadas),
+      // mas MOSTRAM tarefas atribuídas a mim por um gestor (trabalho meu). Por isso
+      // o filtro é relativo ao usuário atual: !hiddenFromMyLists(t, myId).
+      getInbox: () => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter(
+          (t) => !t.project_id && !t.area_id && !t.someday && !t.scheduled_date && active(t) && !hiddenFromMyLists(t, myId)
+        );
+      },
 
-      getToday: () =>
-        get().tasks.filter(
-          (t) => t.scheduled_date && t.scheduled_date <= today() && active(t) && !isDelegated(t)
-        ),
+      getToday: () => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter(
+          (t) => t.scheduled_date && t.scheduled_date <= today() && active(t) && !hiddenFromMyLists(t, myId)
+        );
+      },
 
-      getUpcoming: (days = null) =>
-        get().tasks.filter(
+      getUpcoming: (days = null) => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter(
           (t) =>
             t.scheduled_date &&
             t.scheduled_date > today() &&
             (days === null || t.scheduled_date <= inDays(days)) &&
-            active(t) && !isDelegated(t)
-        ),
+            active(t) && !hiddenFromMyLists(t, myId)
+        );
+      },
 
-      getSomeday: () => get().tasks.filter((t) => t.someday && active(t) && !isDelegated(t)),
+      getSomeday: () => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter((t) => t.someday && active(t) && !hiddenFromMyLists(t, myId));
+      },
 
       getTrash: () => {
         const limit = inDays(-30);
@@ -747,14 +807,22 @@ export const useTaskStore = create(
 
       getArchived: () => get().tasks.filter((t) => t.archived_at && !t.deleted_at),
 
-      getByArea: (areaId) =>
-        get().tasks.filter((t) => t.area_id === areaId && !t.project_id && active(t) && !isDelegated(t)),
+      getByArea: (areaId) => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter((t) => t.area_id === areaId && !t.project_id && active(t) && !hiddenFromMyLists(t, myId));
+      },
 
-      getByProject: (projectId) =>
-        get().tasks.filter((t) => t.project_id === projectId && active(t) && !isDelegated(t)),
+      getByProject: (projectId) => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter((t) => t.project_id === projectId && active(t) && !hiddenFromMyLists(t, myId));
+      },
 
       // --- Delegadas ---------------------------------------------------
-      getDelegated: () => get().tasks.filter((t) => isDelegated(t) && active(t)),
+      // Só as que EU deleguei (o executor não vê a própria tarefa atribuída aqui).
+      getDelegated: () => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter((t) => isDelegated(t) && t.user_id === myId && active(t));
+      },
 
       getDelegatedBy: (collaboratorId) =>
         get().getDelegated().filter((t) => t.delegated_to === collaboratorId),
@@ -766,16 +834,19 @@ export const useTaskStore = create(
           .filter((t) => t.follow_up_date && t.follow_up_date <= today())
           .sort((a, b) => a.follow_up_date.localeCompare(b.follow_up_date)),
 
-      getDelegatedCompleted: (collaboratorId = null) =>
-        get()
+      getDelegatedCompleted: (collaboratorId = null) => {
+        const myId = useAuthStore.getState().user?.id;
+        return get()
           .tasks.filter(
             (t) =>
               t.delegated_to &&
+              t.user_id === myId && // só as que EU deleguei
               !!t.completed_at &&
               !t.deleted_at &&
               (collaboratorId === null || t.delegated_to === collaboratorId)
           )
-          .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at));
+      },
 
       // --- Completed sections (sempre ordenadas por conclusão decrescente) ---
       getCompletedInbox: () =>

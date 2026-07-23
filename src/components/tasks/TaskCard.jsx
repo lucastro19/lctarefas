@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "../ui/Checkbox";
-import { useTaskStore } from "../../store/taskStore";
+import { useTaskStore, isAssignedToMe } from "../../store/taskStore";
+import { useOrgStore } from "../../store/orgStore";
 import { useTagStore } from "../../store/tagStore";
 import { useSelectionStore } from "../../store/selectionStore";
 import { useUiStore } from "../../store/uiStore";
@@ -917,12 +918,21 @@ function TaskMenu({ task, onClose, onRecurrenceDelete, onSelect, onMoveToToday, 
 
 /* ── Componente principal ── */
 export function TaskCard({ task, subtasks = [], onClick }) {
-  const { completeTask, uncompleteTask, updateTask, deleteTask, deleteRecurrenceFuture, toggleSubtask, addSubtask } = useTaskStore();
+  const { completeTask, uncompleteTask, completeAssignedTask, updateTask, deleteTask, deleteRecurrenceFuture, toggleSubtask, addSubtask } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { collaborators } = useCollaboratorStore();
   const { toggle, isSelected, selectedIds } = useSelectionStore();
   const { expandedTaskId, setExpandedTaskId, showToast, dismissToast } = useUiStore();
+  const { user } = useAuthStore();
+  const orgMembers = useOrgStore((s) => s.members);
+
+  // Fase 2.3: tarefa que um gestor delegou a MIM (sou o executor) — aparece
+  // nas minhas listas como trabalho meu, com badge de quem delegou.
+  const assignedToMe = isAssignedToMe(task, user?.id);
+  const delegatorName = assignedToMe
+    ? (orgMembers.find((m) => m.user_id === task.user_id)?.profile?.full_name?.split(" ")[0] ?? null)
+    : null;
 
   const [completing, setCompleting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -1207,6 +1217,12 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const doComplete = async (checked) => {
     setCompleting(true);
     setConfirmComplete(false);
+    // Executor concluindo tarefa atribuída → vai pro aceite do gestor (não fecha).
+    if (checked && assignedToMe) {
+      await completeAssignedTask(task.id);
+      setCompleting(false);
+      return;
+    }
     if (checked) {
       await completeTask(task.id);
       // Toast com Desfazer — desfaz a conclusão se clicado dentro do timeout
@@ -1716,6 +1732,14 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                         />
                       </span>
                       <span className="text-[10px] text-text-secondary tabular-nums">{subtaskDone}/{subtaskTotal}</span>
+                    </span>
+                  )}
+                  {assignedToMe && (
+                    <span
+                      className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full flex items-center gap-1 text-primary bg-primary/10"
+                      title={delegatorName ? `Delegada a você por ${delegatorName}` : "Delegada a você"}
+                    >
+                      🤝 {delegatorName ? `de ${delegatorName}` : "delegada a você"}
                     </span>
                   )}
                   {taskCollaborator && (
