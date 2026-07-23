@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTaskStore } from "../../store/taskStore";
 import { useCollaboratorStore } from "../../store/collaboratorStore";
@@ -21,6 +21,14 @@ export function DelegateFollowUpModal() {
   const delegateTask = useTaskStore((s) => s.delegateTask);
   const collaborators = useCollaboratorStore((s) => s.collaborators);
   const [date, setDate] = useState(inDays(3));
+
+  // ESC aborta a delegação (mesmo efeito do clique fora/Cancelar) — não chama delegateTask
+  useEffect(() => {
+    if (!delegateFlow) return;
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); closeDelegateFlow(); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [delegateFlow, closeDelegateFlow]);
 
   if (!delegateFlow) return null;
   const { taskId, collaboratorId, note } = delegateFlow;
