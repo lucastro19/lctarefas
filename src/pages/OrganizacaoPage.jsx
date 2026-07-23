@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore, ROLE_LABELS, DEMAND_COLORS } from "../store/orgStore";
+import { useCollaboratorStore } from "../store/collaboratorStore";
+import { usePlanLimits } from "../hooks/usePlanLimits";
+import { CollaboratorModal } from "../components/delegation/CollaboratorModal";
 
 function Avatar({ name, url }) {
   if (url) return <img src={url} alt={name} className="w-9 h-9 rounded-full object-cover shrink-0" />;
@@ -28,6 +31,48 @@ function RoleBadge({ role }) {
 }
 
 const memberName = (m) => m?.profile?.full_name ?? m?.profile?.email ?? "Usuário";
+
+// ─── Sem organização: sua equipe de contatos locais (Fase 1), sempre disponível ───
+function TeamSection() {
+  const { collaborators } = useCollaboratorStore();
+  const { canAddCollaborator } = usePlanLimits();
+  const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  return (
+    <div className="max-w-md mx-auto px-4 pt-8">
+      <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-text-main">Sua equipe</h3>
+          {canAddCollaborator && (
+            <button onClick={() => setShowNew(true)} className="text-xs font-medium text-primary hover:underline">
+              + Nova pessoa
+            </button>
+          )}
+        </div>
+        {collaborators.length === 0 ? (
+          <p className="text-xs text-text-secondary">Nenhuma pessoa cadastrada ainda — cadastre contatos para delegar tarefas.</p>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {collaborators.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setEditing(c)}
+                className="w-full flex items-center gap-3 py-2 text-left"
+              >
+                <Avatar name={c.name} url={c.avatar_url} />
+                <span className="flex-1 text-sm text-text-main truncate">{c.name}</span>
+                <span className="text-xs text-text-secondary shrink-0">Editar</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {showNew && <CollaboratorModal onClose={() => setShowNew(false)} />}
+      {editing && <CollaboratorModal collaborator={editing} onClose={() => setEditing(null)} />}
+    </div>
+  );
+}
 
 // ─── Sem organização: formulário de criação ───
 function CreateOrgForm() {
@@ -85,6 +130,7 @@ function MembersTab({ isOwner }) {
     members, invites, inviteMember, revokeInvite, inviteLink, fetchInvites,
     updateMemberRole, updateMemberManager, removeMember,
   } = useOrgStore();
+  const { collaborators } = useCollaboratorStore();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("membro");
@@ -93,7 +139,14 @@ function MembersTab({ isOwner }) {
   const [lastLink, setLastLink] = useState(null);
   const [copied, setCopied] = useState(false);
 
+  const [showNewLocal, setShowNewLocal] = useState(false);
+  const [editingLocal, setEditingLocal] = useState(null);
+  const [prefillFor, setPrefillFor] = useState(null); // membro sem contato local, "adotando" um
+
   useEffect(() => { if (isOwner) fetchInvites(); }, [isOwner]);
+
+  const hasLocalContact = (m) => collaborators.some((c) => c.linked_user_id === m.user_id);
+  const localOnly = collaborators.filter((c) => !c.linked_user_id);
 
   const possibleManagers = useMemo(
     () => members.filter((m) => m.role === "estrategico" || m.role === "supervisor"),
@@ -183,10 +236,49 @@ function MembersTab({ isOwner }) {
                 ) : (
                   <RoleBadge role={m.role} />
                 )}
+                {!hasLocalContact(m) && (
+                  <button
+                    onClick={() => setPrefillFor(m)}
+                    title="Ninguém em Colaboradores locais está vinculado a esta pessoa — sem contato local, ela não aparece pra delegar tarefas"
+                    className="text-[10px] font-medium text-primary hover:underline shrink-0"
+                  >
+                    + Criar contato
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
+      </section>
+
+      {/* Colaboradores locais — contatos sem conta, usados pra delegar (Fase 1) */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary">Colaboradores locais</h3>
+          <button onClick={() => setShowNewLocal(true)} className="text-xs font-medium text-primary hover:underline">
+            + Nova pessoa
+          </button>
+        </div>
+        {localOnly.length === 0 ? (
+          <p className="text-xs text-text-secondary">Nenhum contato só local no momento.</p>
+        ) : (
+          <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
+            {localOnly.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setEditingLocal(c)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg transition-colors"
+              >
+                <Avatar name={c.name} url={c.avatar_url} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-text-main truncate">{c.name}</p>
+                  {c.email && <p className="text-xs text-text-secondary truncate">{c.email}</p>}
+                </div>
+                <span className="text-xs text-text-secondary shrink-0">Editar</span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Convidar — só o dono */}
@@ -289,6 +381,15 @@ function MembersTab({ isOwner }) {
             </div>
           )}
         </section>
+      )}
+
+      {showNewLocal && <CollaboratorModal onClose={() => setShowNewLocal(false)} />}
+      {editingLocal && <CollaboratorModal collaborator={editingLocal} onClose={() => setEditingLocal(null)} />}
+      {prefillFor && (
+        <CollaboratorModal
+          prefill={{ name: memberName(prefillFor), email: prefillFor.profile?.email ?? "" }}
+          onClose={() => setPrefillFor(null)}
+        />
       )}
     </div>
   );
@@ -681,7 +782,10 @@ export function OrganizacaoPage() {
       ) : organization ? (
         <ManageOrg />
       ) : (
-        <CreateOrgForm />
+        <>
+          <TeamSection />
+          <CreateOrgForm />
+        </>
       )}
     </div>
   );

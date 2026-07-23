@@ -212,7 +212,7 @@ export function SettingsModal({ onClose }) {
                 onClick={() => { onClose(); navigate("/organizacao"); }}
                 className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-text-main hover:bg-bg transition-colors"
               >
-                <span className="flex items-center gap-2">🏛️ Organização</span>
+                <span className="flex items-center gap-2">👥 Equipe</span>
                 <span className="text-text-secondary text-xs">→</span>
               </button>
               {isAdmin && (

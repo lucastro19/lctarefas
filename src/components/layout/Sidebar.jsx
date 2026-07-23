@@ -61,7 +61,6 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
   const [newAreaName, setNewAreaName] = useState("");
   const [addingArea, setAddingArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showNewCollab, setShowNewCollab] = useState(false);
   const { areas, createArea, createProject, getProjectsByArea } = useAreaStore();
   const { tags } = useTagStore();
   const { getInbox, getToday, getUpcoming, getSomeday, getTrash, getDelegated, getFollowUpsDue, getDelegatedBy } = useTaskStore();
@@ -70,7 +69,7 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
   const { user, signOut } = useAuthStore();
   const { closeDrawer, toggleFocusMode } = useUiStore();
   const navigate = useNavigate();
-  const { canAddArea, canAddProject, canAddCollaborator, isPro } = usePlanLimits();
+  const { canAddArea, canAddProject, isPro } = usePlanLimits();
 
   const handleAddArea = async (e) => {
     e.preventDefault();
@@ -251,24 +250,13 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
           />
         ))}
 
-        {canAddCollaborator ? (
-          <button
-            onClick={() => setShowNewCollab(true)}
-            className="sidebar-item w-full text-text-secondary hover:text-primary"
-          >
-            <span className="text-base w-5 text-center">+</span>
-            <span>Novo colaborador</span>
-          </button>
-        ) : (
-          <div className="px-3 py-1.5">
-            <p className="text-[10px] text-warning">
-              Limite de colaboradores atingido.{" "}
-              <button onClick={() => setShowSettings(true)} className="underline hover:text-primary transition-colors">
-                Ver Pro
-              </button>
-            </p>
-          </div>
-        )}
+        <button
+          onClick={() => { navigate("/organizacao"); closeDrawer(); }}
+          className="sidebar-item w-full text-text-secondary hover:text-primary"
+        >
+          <span className="text-base w-5 text-center">👥</span>
+          <span>Gerenciar equipe</span>
+        </button>
       </nav>
 
       {/* Atalhos rápidos */}
@@ -309,7 +297,6 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
       </div>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-      {showNewCollab && <CollaboratorModal onClose={() => setShowNewCollab(false)} />}
     </aside>
   );
 }
