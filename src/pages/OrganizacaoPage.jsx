@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { useOrgStore, ROLE_LABELS } from "../store/orgStore";
+import { useOrgStore, ROLE_LABELS, DEMAND_COLORS } from "../store/orgStore";
 
 function Avatar({ name, url }) {
   if (url) return <img src={url} alt={name} className="w-9 h-9 rounded-full object-cover shrink-0" />;
@@ -26,6 +26,8 @@ function RoleBadge({ role }) {
     </span>
   );
 }
+
+const memberName = (m) => m?.profile?.full_name ?? m?.profile?.email ?? "Usuário";
 
 // ─── Sem organização: formulário de criação ───
 function CreateOrgForm() {
@@ -76,11 +78,13 @@ function CreateOrgForm() {
   );
 }
 
-// ─── Com organização: membros + convite ───
-function ManageOrg() {
+// ─── Aba: Membros + convites ───
+function MembersTab({ isOwner }) {
   const { user } = useAuthStore();
-  const { organization, members, invites, inviteMember, revokeInvite, inviteLink, fetchInvites } = useOrgStore();
-  const isOwner = organization?.owner_id === user?.id;
+  const {
+    members, invites, inviteMember, revokeInvite, inviteLink, fetchInvites,
+    updateMemberRole, updateMemberManager, removeMember,
+  } = useOrgStore();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("membro");
@@ -91,12 +95,10 @@ function ManageOrg() {
 
   useEffect(() => { if (isOwner) fetchInvites(); }, [isOwner]);
 
-  // Só estratégico/supervisor podem ser gestores de um membro
   const possibleManagers = useMemo(
     () => members.filter((m) => m.role === "estrategico" || m.role === "supervisor"),
     [members]
   );
-
   const pendingInvites = invites.filter((i) => i.status === "pending");
 
   const submitInvite = async (e) => {
@@ -125,41 +127,65 @@ function ManageOrg() {
     } catch { /* clipboard indisponível — usuário copia manualmente */ }
   };
 
-  const memberName = (m) => m.profile?.full_name ?? m.profile?.email ?? "Usuário";
-
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-      {/* Cabeçalho da org */}
-      <div className="flex items-center gap-3">
-        <span className="text-3xl">🏛️</span>
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-text-main truncate">{organization.name}</h2>
-          <p className="text-xs text-text-secondary">
-            {members.length} membro{members.length !== 1 ? "s" : ""}
-            {!isOwner && " · você é membro desta organização"}
-          </p>
-        </div>
-      </div>
-
-      {/* Membros */}
+    <div className="space-y-6">
+      {/* Lista de membros */}
       <section className="space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary">Membros</h3>
         <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
-          {members.map((m) => (
-            <div key={m.id} className="flex items-center gap-3 px-4 py-3">
-              <Avatar name={memberName(m)} url={m.profile?.avatar_url} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-main truncate">
-                  {memberName(m)}
-                  {m.user_id === user?.id && (
-                    <span className="ml-2 text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">VOCÊ</span>
-                  )}
-                </p>
-                {m.profile?.email && <p className="text-xs text-text-secondary truncate">{m.profile.email}</p>}
+          {members.map((m) => {
+            const isSelf = m.user_id === user?.id;
+            const canManage = isOwner && !isSelf;
+            return (
+              <div key={m.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <Avatar name={memberName(m)} url={m.profile?.avatar_url} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-main truncate">
+                    {memberName(m)}
+                    {isSelf && (
+                      <span className="ml-2 text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">VOCÊ</span>
+                    )}
+                  </p>
+                  {m.profile?.email && <p className="text-xs text-text-secondary truncate">{m.profile.email}</p>}
+                </div>
+
+                {canManage ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={m.role}
+                      onChange={(e) => updateMemberRole(m.id, e.target.value)}
+                      className="text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+                    >
+                      <option value="estrategico">Estratégico</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="membro">Membro</option>
+                    </select>
+                    <select
+                      value={m.manager_id ?? ""}
+                      onChange={(e) => updateMemberManager(m.id, e.target.value)}
+                      title="Reporta a"
+                      className="text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main max-w-[130px]"
+                    >
+                      <option value="">Sem gestor</option>
+                      {possibleManagers
+                        .filter((pm) => pm.id !== m.id)
+                        .map((pm) => (
+                          <option key={pm.id} value={pm.id}>↳ {memberName(pm)}</option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={() => { if (confirm(`Remover ${memberName(m)} da organização?`)) removeMember(m.id); }}
+                      className="text-xs text-danger hover:underline shrink-0"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ) : (
+                  <RoleBadge role={m.role} />
+                )}
               </div>
-              <RoleBadge role={m.role} />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -237,7 +263,6 @@ function ManageOrg() {
             )}
           </form>
 
-          {/* Convites pendentes */}
           {pendingInvites.length > 0 && (
             <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
               {pendingInvites.map((inv) => (
@@ -265,6 +290,367 @@ function ManageOrg() {
           )}
         </section>
       )}
+    </div>
+  );
+}
+
+// ─── Aba: Times ───
+function TeamCard({ team, members }) {
+  const { renameTeam, setTeamLead, deleteTeam, addTeamMember, removeTeamMember } = useOrgStore();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(team.name);
+  const [addId, setAddId] = useState("");
+
+  const memberIds = new Set((team.team_members ?? []).map((tm) => tm.org_member_id));
+  const teamMembers = members.filter((m) => memberIds.has(m.id));
+  const available = members.filter((m) => !memberIds.has(m.id));
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        {editing ? (
+          <input
+            value={name}
+            autoFocus
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => { if (name.trim() && name !== team.name) renameTeam(team.id, name); setEditing(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(team.name); setEditing(false); } }}
+            className="flex-1 text-sm font-semibold bg-bg border border-primary rounded-lg px-2 py-1 outline-none text-text-main"
+          />
+        ) : (
+          <h4 className="flex-1 text-sm font-semibold text-text-main truncate">{team.name}</h4>
+        )}
+        <button onClick={() => setEditing((v) => !v)} className="text-[11px] text-text-secondary hover:text-primary">✎</button>
+        <button
+          onClick={() => { if (confirm(`Excluir o time "${team.name}"?`)) deleteTeam(team.id); }}
+          className="text-[11px] text-text-secondary hover:text-danger"
+        >
+          🗑
+        </button>
+      </div>
+
+      {/* Líder */}
+      <label className="flex items-center gap-2 text-xs text-text-secondary">
+        <span className="shrink-0">Líder:</span>
+        <select
+          value={team.lead_id ?? ""}
+          onChange={(e) => setTeamLead(team.id, e.target.value)}
+          className="flex-1 text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+        >
+          <option value="">Sem líder</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>{memberName(m)}</option>
+          ))}
+        </select>
+      </label>
+
+      {/* Membros do time */}
+      <div className="flex flex-wrap gap-1.5">
+        {teamMembers.length === 0 && <span className="text-[11px] text-text-secondary">Nenhum membro ainda.</span>}
+        {teamMembers.map((m) => (
+          <span key={m.id} className="flex items-center gap-1 text-[11px] bg-bg border border-border rounded-full pl-2 pr-1 py-0.5">
+            {memberName(m)}
+            <button onClick={() => removeTeamMember(team.id, m.id)} className="text-text-secondary hover:text-danger px-0.5">×</button>
+          </span>
+        ))}
+      </div>
+
+      {available.length > 0 && (
+        <div className="flex gap-2">
+          <select
+            value={addId}
+            onChange={(e) => setAddId(e.target.value)}
+            className="flex-1 text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+          >
+            <option value="">Adicionar membro…</option>
+            {available.map((m) => (
+              <option key={m.id} value={m.id}>{memberName(m)}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { if (addId) { addTeamMember(team.id, addId); setAddId(""); } }}
+            disabled={!addId}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-white disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+          >
+            Adicionar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamsTab() {
+  const { teams, members, createTeam } = useOrgStore();
+  const [newName, setNewName] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    await createTeam(newName);
+    setNewName("");
+  };
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="Nome do novo time (ex.: Comercial)"
+          className="flex-1 text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main"
+        />
+        <button
+          type="submit"
+          disabled={!newName.trim()}
+          className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+        >
+          Criar time
+        </button>
+      </form>
+
+      {teams.length === 0 ? (
+        <p className="text-sm text-text-secondary text-center py-8">Nenhum time ainda. Crie o primeiro acima.</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {teams.map((t) => <TeamCard key={t.id} team={t} members={members} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Aba: Tipos de demanda ───
+function DemandTypeRow({ dt }) {
+  const { updateDemandType, archiveDemandType, unarchiveDemandType } = useOrgStore();
+  const [label, setLabel] = useState(dt.label);
+  const isArchived = !!dt.archived_at;
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2.5">
+      <div className="flex gap-1 shrink-0">
+        {DEMAND_COLORS.map((c) => (
+          <button
+            key={c}
+            onClick={() => !isArchived && updateDemandType(dt.id, { color: c })}
+            disabled={isArchived}
+            className={["w-4 h-4 rounded-full border-2 transition-transform", dt.color === c ? "border-white scale-125" : "border-transparent", isArchived ? "opacity-40" : ""].join(" ")}
+            style={{ backgroundColor: c }}
+          />
+        ))}
+      </div>
+      <input
+        value={label}
+        disabled={isArchived}
+        onChange={(e) => setLabel(e.target.value)}
+        onBlur={() => { if (label.trim() && label !== dt.label) updateDemandType(dt.id, { label: label.trim() }); }}
+        className={["flex-1 text-sm bg-transparent outline-none text-text-main min-w-0", isArchived ? "line-through text-text-secondary" : ""].join(" ")}
+      />
+      {isArchived ? (
+        <button onClick={() => unarchiveDemandType(dt.id)} className="text-[11px] text-primary hover:underline shrink-0">Reativar</button>
+      ) : (
+        <button onClick={() => archiveDemandType(dt.id)} className="text-[11px] text-text-secondary hover:text-danger shrink-0">Arquivar</button>
+      )}
+    </div>
+  );
+}
+
+function DemandTypesTab() {
+  const { demandTypes, createDemandType } = useOrgStore();
+  const [label, setLabel] = useState("");
+  const [color, setColor] = useState(DEMAND_COLORS[0]);
+
+  const active = demandTypes.filter((d) => !d.archived_at);
+  const archived = demandTypes.filter((d) => d.archived_at);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!label.trim()) return;
+    await createDemandType({ label, color });
+    setLabel("");
+    setColor(DEMAND_COLORS[0]);
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-text-secondary">
+        Taxonomia compartilhada entre tarefas e atendimentos. Ex.: Suporte, Vendas, Financeiro.
+      </p>
+
+      <form onSubmit={submit} className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        <div className="flex gap-1 flex-wrap">
+          {DEMAND_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setColor(c)}
+              className={["w-5 h-5 rounded-full border-2 transition-transform", color === c ? "border-white scale-125" : "border-transparent"].join(" ")}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Nome do tipo de demanda"
+            className="flex-1 text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main"
+          />
+          <button
+            type="submit"
+            disabled={!label.trim()}
+            className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+          >
+            Criar
+          </button>
+        </div>
+      </form>
+
+      {active.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
+          {active.map((dt) => <DemandTypeRow key={dt.id} dt={dt} />)}
+        </div>
+      )}
+
+      {archived.length > 0 && (
+        <details className="text-sm">
+          <summary className="text-xs font-bold uppercase tracking-widest text-text-secondary cursor-pointer">
+            Arquivados ({archived.length})
+          </summary>
+          <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden mt-2">
+            {archived.map((dt) => <DemandTypeRow key={dt.id} dt={dt} />)}
+          </div>
+        </details>
+      )}
+
+      {demandTypes.length === 0 && (
+        <p className="text-sm text-text-secondary text-center py-8">Nenhum tipo de demanda ainda.</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Aba: Configurações (gamificação/alertas) ───
+const ROTATING_CATEGORIES = [
+  { key: "mais_atendimentos", label: "Mais atendimentos" },
+  { key: "melhor_csat",       label: "Melhor CSAT" },
+  { key: "mais_pontual",      label: "Mais pontual" },
+  { key: "maior_evolucao",    label: "Maior evolução do mês" },
+];
+
+function SettingsTab() {
+  const { organization, updateOrgSettings } = useOrgStore();
+  const settings = organization?.settings ?? {};
+  const overload = settings.overloadThreshold ?? 8;
+  const categories = settings.rotatingCategories ?? {};
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-warning/10 border border-warning/30 rounded-xl px-4 py-3">
+        <p className="text-xs text-warning">
+          ⚠️ Estes ajustes ficam guardados, mas só terão efeito quando os painéis de Carga
+          (Fase 2.7) e Gamificação (Fase 2.9) forem construídos.
+        </p>
+      </div>
+
+      {/* Alerta de sobrecarga */}
+      <section className="bg-card border border-border rounded-2xl p-4 space-y-2">
+        <h3 className="text-sm font-semibold text-text-main">Alerta de sobrecarga</h3>
+        <p className="text-xs text-text-secondary">
+          Avisar quando uma pessoa acumular mais do que este número de tarefas ativas.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            value={overload}
+            onChange={(e) => updateOrgSettings({ overloadThreshold: Number(e.target.value) || 1 })}
+            className="w-20 text-sm bg-bg border border-border rounded-lg px-3 py-2 outline-none focus:border-primary text-text-main text-center"
+          />
+          <span className="text-xs text-text-secondary">tarefas ativas por pessoa</span>
+        </div>
+      </section>
+
+      {/* Categorias rotativas */}
+      <section className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-text-main">Categorias rotativas (reconhecimento)</h3>
+        <p className="text-xs text-text-secondary">
+          Quais categorias aparecem no painel público. Rotativas de propósito — sem um “top 1” fixo.
+        </p>
+        <div className="space-y-1.5">
+          {ROTATING_CATEGORIES.map((cat) => {
+            const on = categories[cat.key] ?? true;
+            return (
+              <label key={cat.key} className="flex items-center justify-between gap-3 cursor-pointer">
+                <span className="text-sm text-text-main">{cat.label}</span>
+                <button
+                  type="button"
+                  onClick={() => updateOrgSettings({ rotatingCategories: { ...categories, [cat.key]: !on } })}
+                  className={["w-11 h-6 rounded-full transition-colors relative shrink-0", on ? "bg-success" : "bg-[#C7C7CC]"].join(" ")}
+                >
+                  <span className={["absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform", on ? "translate-x-5" : "translate-x-0.5"].join(" ")} />
+                </button>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ─── Com organização: cabeçalho + abas ───
+const OWNER_TABS = [
+  { id: "membros",  label: "Membros" },
+  { id: "times",    label: "Times" },
+  { id: "demandas", label: "Tipos de demanda" },
+  { id: "config",   label: "Configurações" },
+];
+
+function ManageOrg() {
+  const { user } = useAuthStore();
+  const { organization, members } = useOrgStore();
+  const isOwner = organization?.owner_id === user?.id;
+  const [tab, setTab] = useState("membros");
+
+  const tabs = isOwner ? OWNER_TABS : OWNER_TABS.filter((t) => t.id === "membros");
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      {/* Cabeçalho da org */}
+      <div className="flex items-center gap-3">
+        <span className="text-3xl">🏛️</span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold text-text-main truncate">{organization.name}</h2>
+          <p className="text-xs text-text-secondary">
+            {members.length} membro{members.length !== 1 ? "s" : ""}
+            {!isOwner && " · você é membro desta organização"}
+          </p>
+        </div>
+      </div>
+
+      {/* Abas */}
+      {tabs.length > 1 && (
+        <div className="flex gap-1 border-b border-border">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={[
+                "text-sm px-3 py-2 border-b-2 -mb-px transition-colors",
+                tab === t.id ? "border-primary text-text-main font-medium" : "border-transparent text-text-secondary hover:text-text-main",
+              ].join(" ")}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === "membros"  && <MembersTab isOwner={isOwner} />}
+      {tab === "times"    && isOwner && <TeamsTab />}
+      {tab === "demandas" && isOwner && <DemandTypesTab />}
+      {tab === "config"   && isOwner && <SettingsTab />}
     </div>
   );
 }
