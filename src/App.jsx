@@ -31,6 +31,7 @@ const BookingSettings= lazy(() => import("./pages/BookingSettings").then((m) => 
 const Delegadas      = lazy(() => import("./pages/Delegadas").then((m) => ({ default: m.Delegadas })));
 const ColaboradorPage= lazy(() => import("./pages/ColaboradorPage").then((m) => ({ default: m.ColaboradorPage })));
 const OrganizacaoPage= lazy(() => import("./pages/OrganizacaoPage").then((m) => ({ default: m.OrganizacaoPage })));
+const Cockpit        = lazy(() => import("./pages/Cockpit").then((m) => ({ default: m.Cockpit })));
 const AcceptInvite   = lazy(() => import("./pages/AcceptInvite").then((m) => ({ default: m.AcceptInvite })));
 import { SearchModal } from "./components/search/SearchModal";
 import { QuickEntry } from "./components/quickentry/QuickEntry";
@@ -217,6 +218,7 @@ function AppRoutes() {
             <Route path="/someday" element={<Someday />} />
             <Route path="/delegadas" element={<Delegadas />} />
             <Route path="/colaborador/:id" element={<ColaboradorPage />} />
+            <Route path="/cockpit" element={<Cockpit />} />
             <Route path="/trash" element={<Trash />} />
             <Route path="/area/:id" element={<AreaPage />} />
             <Route path="/project/:id" element={<ProjectPage />} />

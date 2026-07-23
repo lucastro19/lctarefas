@@ -19,6 +19,7 @@ export const useOrgStore = create((set, get) => ({
   invites: [],          // convites da org (para o dono ver pendentes)
   teams: [],            // times da org (com team_members embutidos)
   demandTypes: [],      // tipos de demanda da org
+  teamTasks: [],        // roll-up hierárquico p/ o Cockpit (Fase 2.5) — tarefas da equipe, não as minhas
   loading: false,
   loaded: false,        // já tentou buscar ao menos uma vez
 
@@ -154,6 +155,33 @@ export const useOrgStore = create((set, get) => ({
   inviteLink: (token) => `${window.location.origin}/convite/${token}`,
 
   getMemberByUserId: (userId) => get().members.find((m) => m.user_id === userId) ?? null,
+
+  // ─── Cockpit do gestor (Fase 2.5) ───
+  // Roll-up hierárquico: a RLS de tasks (Fase 2.1, is_manager_of) já garante que só voltam
+  // linhas que o usuário tem direito de ver (próprias + da árvore de reporte). Aqui só filtramos
+  // por org e removemos o que é execução pessoal do próprio gestor (assignee_id === eu) — isso já
+  // aparece nas listas pessoais dele; o cockpit é só o trabalho de terceiros.
+  fetchTeamTasks: async () => {
+    const org = get().organization;
+    const uid = useAuthStore.getState().user?.id;
+    if (!org || !uid) return;
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*, projects(deleted_at), areas(deleted_at)")
+      .eq("org_id", org.id)
+      .is("deleted_at", null)
+      .is("completed_at", null)
+      .is("archived_at", null)
+      .order("delegated_at", { ascending: false });
+    if (error) { console.error("fetchTeamTasks error:", error); return; }
+
+    const teamTasks = (data ?? [])
+      .filter((t) => !t.projects?.deleted_at && !t.areas?.deleted_at)
+      .filter((t) => t.assignee_id !== uid)
+      .map(({ projects: _p, areas: _a, ...t }) => t);
+    set({ teamTasks });
+  },
 
   // ─── Gestão de membros (só o dono; coberto por org_members_owner_*) ───
   updateMemberRole: async (memberId, role) => {

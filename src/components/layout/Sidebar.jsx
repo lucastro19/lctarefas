@@ -10,6 +10,7 @@ import { useTagStore } from "../../store/tagStore";
 import { useUiStore } from "../../store/uiStore";
 import { usePlanLimits } from "../../hooks/usePlanLimits";
 import { useCollaboratorStore } from "../../store/collaboratorStore";
+import { useOrgStore } from "../../store/orgStore";
 import { CollaboratorModal } from "../delegation/CollaboratorModal";
 import { CollaboratorAvatar, isFollowUpDue } from "../delegation/shared";
 
@@ -25,6 +26,8 @@ const NAV_ITEMS = [
   { to: "/trash", icon: "🗑️", label: "Lixeira" },
   { to: "/archive", icon: "📦", label: "Arquivo" },
 ];
+
+const COCKPIT_ITEM = { to: "/cockpit", icon: "🧭", label: "Cockpit" };
 
 function NavItem({ to, icon, label, count, urgentCount = 0, dropId, onNavigate }) {
   const { setNodeRef, isOver } = useDroppable({ id: dropId ?? `nav-${to}`, disabled: !dropId });
@@ -63,6 +66,7 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
   const { tags } = useTagStore();
   const { getInbox, getToday, getUpcoming, getSomeday, getTrash, getDelegated, getFollowUpsDue, getDelegatedBy } = useTaskStore();
   const { collaborators } = useCollaboratorStore();
+  const { organization } = useOrgStore();
   const { user, signOut } = useAuthStore();
   const { closeDrawer, toggleFocusMode } = useUiStore();
   const navigate = useNavigate();
@@ -133,7 +137,10 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-1 md:space-y-0.5">
-        {NAV_ITEMS.map((item) => {
+        {(organization
+          ? [...NAV_ITEMS.slice(0, 5), COCKPIT_ITEM, ...NAV_ITEMS.slice(5)]
+          : NAV_ITEMS
+        ).map((item) => {
           const todayTasks = getToday();
           const counts = {
             "/inbox": getInbox().length,
