@@ -50,6 +50,12 @@ export function SettingsModal({ onClose }) {
   const [addingTag, setAddingTag] = useState(false);
 
   useEffect(() => { fetchTags(); }, []);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const { session, profile, signOut } = useAuthStore();
   const { plan, isPro, isAdmin, limits, usage, taskUsagePct } = usePlanLimits();
 
@@ -410,7 +416,7 @@ export function SettingsModal({ onClose }) {
                         onChange={(e) => setEditingTagName(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") { updateTag(tag.id, { name: editingTagName.trim(), color: editingTagColor }); setEditingTagId(null); }
-                          if (e.key === "Escape") setEditingTagId(null);
+                          if (e.key === "Escape") { e.stopPropagation(); setEditingTagId(null); }
                         }}
                         className="flex-1 text-xs bg-bg border border-primary rounded px-2 py-1 outline-none text-text-main"
                       />
@@ -448,7 +454,7 @@ export function SettingsModal({ onClose }) {
                       onChange={(e) => setNewTagName(e.target.value)}
                       onKeyDown={async (e) => {
                         if (e.key === "Enter" && newTagName.trim()) { await createTag(newTagName.trim(), newTagColor); setNewTagName(""); setNewTagColor("#4F8EF7"); setAddingTag(false); }
-                        if (e.key === "Escape") setAddingTag(false);
+                        if (e.key === "Escape") { e.stopPropagation(); setAddingTag(false); }
                       }}
                       placeholder="Nome da etiqueta"
                       className="flex-1 text-xs bg-bg border border-border rounded px-2 py-1 outline-none focus:border-primary text-text-main"
