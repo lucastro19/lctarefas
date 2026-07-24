@@ -525,6 +525,7 @@ function TeamsTab() {
 function DemandTypeRow({ dt }) {
   const { updateDemandType, archiveDemandType, unarchiveDemandType } = useOrgStore();
   const [label, setLabel] = useState(dt.label);
+  const [deadlineHours, setDeadlineHours] = useState(dt.default_deadline_hours ?? "");
   const isArchived = !!dt.archived_at;
 
   return (
@@ -547,6 +548,20 @@ function DemandTypeRow({ dt }) {
         onBlur={() => { if (label.trim() && label !== dt.label) updateDemandType(dt.id, { label: label.trim() }); }}
         className={["flex-1 text-sm bg-transparent outline-none text-text-main min-w-0", isArchived ? "line-through text-text-secondary" : ""].join(" ")}
       />
+      <input
+        type="number"
+        min={1}
+        value={dt.default_deadline_hours ?? ""}
+        disabled={isArchived}
+        onChange={(e) => setDeadlineHours(e.target.value)}
+        onBlur={() => {
+          const n = deadlineHours === "" ? null : Number(deadlineHours);
+          if (n !== (dt.default_deadline_hours ?? null)) updateDemandType(dt.id, { default_deadline_hours: n });
+        }}
+        placeholder="prazo (h)"
+        title="Prazo padrão em horas"
+        className="w-20 shrink-0 text-xs bg-bg border border-border/60 rounded-lg px-2 py-1 outline-none focus:border-primary text-text-main text-center"
+      />
       {isArchived ? (
         <button onClick={() => unarchiveDemandType(dt.id)} className="text-[11px] text-primary hover:underline shrink-0">Reativar</button>
       ) : (
@@ -560,6 +575,7 @@ function DemandTypesTab() {
   const { demandTypes, createDemandType } = useOrgStore();
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(DEMAND_COLORS[0]);
+  const [deadlineHours, setDeadlineHours] = useState("");
 
   const active = demandTypes.filter((d) => !d.archived_at);
   const archived = demandTypes.filter((d) => d.archived_at);
@@ -567,9 +583,13 @@ function DemandTypesTab() {
   const submit = async (e) => {
     e.preventDefault();
     if (!label.trim()) return;
-    await createDemandType({ label, color });
+    await createDemandType({
+      label, color,
+      default_deadline_hours: deadlineHours === "" ? null : Number(deadlineHours),
+    });
     setLabel("");
     setColor(DEMAND_COLORS[0]);
+    setDeadlineHours("");
   };
 
   return (
@@ -596,6 +616,15 @@ function DemandTypesTab() {
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Nome do tipo de demanda"
             className="flex-1 text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main"
+          />
+          <input
+            type="number"
+            min={1}
+            value={deadlineHours}
+            onChange={(e) => setDeadlineHours(e.target.value)}
+            placeholder="Prazo (h)"
+            title="Prazo padrão em horas"
+            className="w-24 text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main text-center"
           />
           <button
             type="submit"

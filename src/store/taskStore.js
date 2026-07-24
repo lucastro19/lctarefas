@@ -5,6 +5,7 @@ import { useSettingsStore, minutesToTime } from "./settingsStore";
 import { useUiStore } from "./uiStore";
 import { useAuthStore } from "./authStore";
 import { useOrgStore } from "./orgStore";
+import { useAreaStore } from "./areaStore";
 import { useCollaboratorStore } from "./collaboratorStore";
 import { cancelNotification } from "../services/notifications";
 
@@ -191,7 +192,20 @@ export const useTaskStore = create(
           const autoTime = fields.scheduled_date && !fields.scheduled_time
             ? { scheduled_time: nextSequentialTime(fields.scheduled_date, get().tasks) }
             : {};
-          const fullFields = { duration_minutes: 30, ...autoTime, ...fields, user_id: user.id };
+
+          // Fase 2.6: área/projeto organizacional (org_id setado) faz a tarefa nascer
+          // corporativa mesmo sem delegação — quem cria já é o executor atual, então
+          // assignee_id = o próprio criador (é isso que o RLS/Cockpit já reconhecem).
+          let orgInherit = {};
+          if (fields.org_id === undefined) {
+            const { areas, projects } = useAreaStore.getState();
+            const area = fields.area_id ? areas.find((a) => a.id === fields.area_id) : null;
+            const project = fields.project_id ? projects.find((p) => p.id === fields.project_id) : null;
+            const inheritedOrgId = project?.org_id ?? area?.org_id ?? null;
+            if (inheritedOrgId) orgInherit = { org_id: inheritedOrgId, assignee_id: user.id };
+          }
+
+          const fullFields = { duration_minutes: 30, ...autoTime, ...orgInherit, ...fields, user_id: user.id };
 
           // Otimismo: adiciona IMEDIATAMENTE com ID temporário, antes de qualquer await
           const tempId = `temp_${Date.now()}`;

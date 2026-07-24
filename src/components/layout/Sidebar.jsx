@@ -395,6 +395,7 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState(area.name);
   const { archiveArea, deleteArea, updateArea } = useAreaStore();
+  const { organization } = useOrgStore();
 
   const commitRename = async () => {
     if (renameDraft.trim() && renameDraft.trim() !== area.name)
@@ -402,6 +403,7 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
     setRenaming(false);
   };
   const { setNodeRef: areaDropRef, isOver: isOverArea } = useDroppable({ id: `area-${area.id}` });
+  const linkedToOrg = organization && area.org_id === organization.id;
 
   const handleAddProject = async (e) => {
     e.preventDefault();
@@ -461,6 +463,10 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
           items={[
             { label: "Renomear", action: () => { setRenameDraft(area.name); setRenaming(true); } },
             { label: "Novo projeto", action: () => setAddingProject(true) },
+            ...(organization ? [{
+              label: linkedToOrg ? "Desvincular da organização" : "Vincular à organização",
+              action: () => updateArea(area.id, { org_id: linkedToOrg ? null : organization.id }),
+            }] : []),
             { label: "Arquivar área", action: () => { archiveArea(area.id); navigate("/inbox"); } },
             { label: "Mover para lixeira", danger: true, action: () => { deleteArea(area.id); navigate("/inbox"); } },
           ]}
@@ -503,6 +509,7 @@ function ProjectItem({ project, navigate }) {
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState(project.name);
   const { archiveProject, deleteProject, updateProject } = useAreaStore();
+  const { organization } = useOrgStore();
 
   const commitRename = async () => {
     if (renameDraft.trim() && renameDraft.trim() !== project.name)
@@ -510,6 +517,7 @@ function ProjectItem({ project, navigate }) {
     setRenaming(false);
   };
   const { setNodeRef: projectDropRef, isOver: isOverProject } = useDroppable({ id: `project-${project.id}` });
+  const linkedToOrg = organization && project.org_id === organization.id;
   const { getByProject, getCompletedByProject } = useTaskStore();
   const active = getByProject(project.id).length;
   const done = getCompletedByProject(project.id).length;
@@ -562,6 +570,10 @@ function ProjectItem({ project, navigate }) {
           onClose={() => setShowMenu(false)}
           items={[
             { label: "Renomear", action: () => { setRenameDraft(project.name); setRenaming(true); } },
+            ...(organization ? [{
+              label: linkedToOrg ? "Desvincular da organização" : "Vincular à organização",
+              action: () => updateProject(project.id, { org_id: linkedToOrg ? null : organization.id }),
+            }] : []),
             { label: "Arquivar projeto", action: () => { archiveProject(project.id); navigate("/inbox"); } },
             { label: "Mover para lixeira", danger: true, action: () => { deleteProject(project.id); navigate("/inbox"); } },
           ]}

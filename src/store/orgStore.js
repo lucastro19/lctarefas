@@ -282,14 +282,17 @@ export const useOrgStore = create((set, get) => ({
     set({ demandTypes: data ?? [] });
   },
 
-  createDemandType: async ({ key, label, color }) => {
+  createDemandType: async ({ key, label, color, default_deadline_hours }) => {
     const org = get().organization;
     if (!org || !label?.trim()) return null;
     // key = slug do label quando não informado (unique por org)
     const slug = (key?.trim() || label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
     const { data, error } = await supabase
       .from("demand_types")
-      .insert([{ org_id: org.id, key: slug, label: label.trim(), color: color ?? DEMAND_COLORS[0] }])
+      .insert([{
+        org_id: org.id, key: slug, label: label.trim(), color: color ?? DEMAND_COLORS[0],
+        default_deadline_hours: default_deadline_hours ?? null,
+      }])
       .select()
       .single();
     if (error) { console.error("createDemandType error:", error); return null; }

@@ -3,6 +3,7 @@ import { useTaskStore, isAssignedToMe } from "../../store/taskStore";
 import { useTagStore } from "../../store/tagStore";
 import { useAreaStore } from "../../store/areaStore";
 import { useAuthStore } from "../../store/authStore";
+import { useOrgStore } from "../../store/orgStore";
 import { DURATION_PRESETS, durationLabel } from "../../store/settingsStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 import { DelegationSection } from "../delegation/DelegationSection";
@@ -100,6 +101,7 @@ export function TaskDetail({ task, onClose }) {
   const { tags, taskTags, fetchTaskTags, fetchTags, createTag, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { getGoogleToken, connectGoogleCalendar } = useAuthStore();
+  const { demandTypes } = useOrgStore();
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
 
   // Custom recurrence
@@ -527,6 +529,36 @@ export function TaskDetail({ task, onClose }) {
                   <span className={["flex-1 text-[16px]", isUrgent ? "text-[#FF3B30] font-medium" : "text-text-main"].join(" ")}>Urgente</span>
                   <Toggle on={isUrgent} red onChange={async v => { setIsUrgent(v); await updateTask(task.id, { is_urgent: v }); }} />
                 </div>
+
+                {/* Tipo de demanda (Fase 2.6) — só em tarefa organizacional */}
+                {task.org_id && (
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🏷️</span>
+                    <span className="flex-1 text-[14px] text-text-main">Tipo de demanda</span>
+                    <select
+                      value={task.demand_type_id ?? ""}
+                      onChange={async (e) => {
+                        const demandTypeId = e.target.value || null;
+                        const dt = demandTypes.find((d) => d.id === demandTypeId);
+                        const patch = { demand_type_id: demandTypeId };
+                        // Pré-calcula o prazo pelo padrão do tipo, só se ainda não houver um definido
+                        if (dt?.default_deadline_hours && !deadline) {
+                          const d = new Date(Date.now() + dt.default_deadline_hours * 3600000);
+                          const newDeadline = localDateStr(d);
+                          setDeadline(newDeadline);
+                          patch.deadline = newDeadline;
+                        }
+                        await updateTask(task.id, patch);
+                      }}
+                      className="text-[13px] bg-bg border border-border/60 rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main max-w-[160px]"
+                    >
+                      <option value="">Nenhum</option>
+                      {demandTypes.filter((d) => !d.archived_at).map((dt) => (
+                        <option key={dt.id} value={dt.id}>{dt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Prazo */}
                 <div>

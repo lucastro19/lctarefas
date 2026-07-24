@@ -59,7 +59,7 @@ export function CollaboratorModal({ collaborator = null, prefill = null, onClose
 
   const alreadyLinked = !!collaborator?.linked_user_id;
   const pendingInvite = invites.find(
-    (i) => i.status === "pending" && email.trim() && i.email.toLowerCase() === email.trim().toLowerCase()
+    (i) => i.status === "pending" && email.trim() && i.email?.toLowerCase() === email.trim().toLowerCase()
   );
   const possibleManagers = members.filter((m) => m.role === "estrategico" || m.role === "supervisor");
 

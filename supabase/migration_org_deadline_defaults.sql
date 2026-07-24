@@ -1,0 +1,11 @@
+-- ================================================================
+-- FASE 2.6 — Áreas/projetos organizacionais + prazo padrão por tipo
+-- de demanda.
+--
+-- `areas.org_id`/`projects.org_id` já existem desde a Fase 2.0
+-- (migration_org_foundation.sql) — essa migration só adiciona o prazo
+-- padrão em demand_types. A UI (toggle "Vincular à organização" em
+-- área/projeto, herança de org_id/assignee_id em createTask, seletor
+-- de tipo de demanda em TaskDetail) é só client, sem mais SQL.
+-- ================================================================
+alter table demand_types add column if not exists default_deadline_hours integer;
