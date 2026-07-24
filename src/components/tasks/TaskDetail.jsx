@@ -97,7 +97,7 @@ function SectionLabel({ children }) {
 }
 
 export function TaskDetail({ task, onClose }) {
-  const { updateTask, deleteTask, deleteRecurrenceFuture, archiveTask, completeTask, uncompleteTask, completeAssignedTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask } = useTaskStore();
+  const { updateTask, deleteTask, deleteRecurrenceFuture, archiveTask, completeTask, uncompleteTask, completeAssignedTask, subtasks, fetchSubtasks, createSubtask, toggleSubtask, updateSubtask, deleteSubtask, requestDeadlineExtension } = useTaskStore();
   const { tags, taskTags, fetchTaskTags, fetchTags, createTag, addTagToTask, removeTagFromTask } = useTagStore();
   const { areas, projects } = useAreaStore();
   const { getGoogleToken, connectGoogleCalendar } = useAuthStore();
@@ -579,9 +579,26 @@ export function TaskDetail({ task, onClose }) {
                         type="date"
                         value={deadline}
                         onChange={e => setDeadline(e.target.value)}
-                        onBlur={() => save()}
+                        onBlur={async () => {
+                          // Fase 2.8: em tarefa organizacional, só ADIAR (nunca antecipar) passa
+                          // por aprovação — quem delegou o elo ativo, ou o gestor direto de quem
+                          // criou. Sem prazo anterior definido não conta como adiamento.
+                          if (task.org_id && task.deadline && deadline > task.deadline) {
+                            const result = await requestDeadlineExtension(task.id, deadline);
+                            if (!result || result.pending_deadline_extension_id) {
+                              setDeadline(task.deadline ?? "");
+                            }
+                          } else {
+                            save();
+                          }
+                        }}
                         className="w-full text-sm bg-bg border border-border/60 rounded-xl px-3 py-2 outline-none focus:border-[#FF3B30]"
                       />
+                      {task.pending_deadline_extension_id && (
+                        <p className="text-[11px] text-text-secondary mt-1">
+                          🕓 Aguardando aprovação para adiar
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

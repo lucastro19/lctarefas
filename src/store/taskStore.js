@@ -552,6 +552,65 @@ export const useTaskStore = create(
         return data ?? [];
       },
 
+      // Fase 2.8: pede prorrogação de prazo numa tarefa organizacional — só
+      // usado ao ADIAR (antecipar continua salvando direto via updateTask).
+      // O aprovador é resolvido no servidor (delegador do elo ativo, ou
+      // gestor direto de quem criou a tarefa); sem ninguém pra aprovar, o
+      // RPC já aplica o novo prazo direto.
+      requestDeadlineExtension: async (id, requestedDeadline, reason = null) => {
+        const { data, error } = await supabase.rpc("request_deadline_extension", {
+          p_task_id: id,
+          p_requested_deadline: requestedDeadline,
+          p_reason: reason,
+        });
+        if (error) {
+          console.error("requestDeadlineExtension:", error.message);
+          useUiStore.getState().showToast({ message: "Não foi possível pedir prorrogação: " + error.message });
+          return null;
+        }
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
+        useUiStore.getState().showToast({
+          message: data.pending_deadline_extension_id ? "Prazo aguardando aprovação 🕓" : "Prazo adiado",
+        });
+        return data;
+      },
+
+      // Aprovador resolve um pedido pendente (seção do Cockpit). Reflete a
+      // tarefa localmente se ela já estiver carregada no store.
+      resolveDeadlineExtension: async (requestId, approve) => {
+        const { data, error } = await supabase.rpc("resolve_deadline_extension", {
+          p_request_id: requestId,
+          p_approve: approve,
+        });
+        if (error) {
+          console.error("resolveDeadlineExtension:", error.message);
+          useUiStore.getState().showToast({ message: "Não foi possível resolver o pedido: " + error.message });
+          return null;
+        }
+        set((s) => ({
+          tasks: s.tasks.map((t) =>
+            t.id === data.task_id
+              ? { ...t, pending_deadline_extension_id: null, ...(approve ? { deadline: data.requested_deadline } : {}) }
+              : t
+          ),
+        }));
+        return data;
+      },
+
+      // Pedidos de prorrogação pendentes onde EU sou o aprovador (Cockpit).
+      fetchPendingDeadlineExtensions: async () => {
+        const user = useAuthStore.getState().user;
+        if (!user) return [];
+        const { data, error } = await supabase
+          .from("deadline_extension_requests")
+          .select("*, tasks(title)")
+          .eq("status", "pendente")
+          .eq("approver_id", user.id)
+          .order("created_at", { ascending: true });
+        if (error) { console.error("fetchPendingDeadlineExtensions:", error.message); return []; }
+        return data ?? [];
+      },
+
       // --- Ações em lote ---
       bulkUpdate: async (ids, fields) => {
         // Otimismo local

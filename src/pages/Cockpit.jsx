@@ -1,6 +1,67 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useOrgStore, ROLE_LABELS } from "../store/orgStore";
+import { useTaskStore } from "../store/taskStore";
 import { CollaboratorAvatar, StatusPill, AgingLabel, FollowUpLabel, NudgeCountLabel, agingDays, isFollowUpDue } from "../components/delegation/shared";
+
+function fmtShortDate(iso) {
+  if (!iso) return "";
+  return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+}
+
+// Fase 2.8: pedidos de prorrogação de prazo onde o gestor logado é o
+// aprovador — só aparece quando há algo pendente, sem seção vazia.
+function DeadlineExtensionRequests() {
+  const { fetchPendingDeadlineExtensions, resolveDeadlineExtension } = useTaskStore();
+  const [requests, setRequests] = useState([]);
+  const [resolvingId, setResolvingId] = useState(null);
+
+  const load = () => fetchPendingDeadlineExtensions().then(setRequests);
+  useEffect(() => { load(); }, []);
+
+  const handleResolve = async (id, approve) => {
+    setResolvingId(id);
+    await resolveDeadlineExtension(id, approve);
+    setRequests((prev) => prev.filter((r) => r.id !== id));
+    setResolvingId(null);
+  };
+
+  if (requests.length === 0) return null;
+
+  return (
+    <section className="mb-6">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary px-1 pb-1.5">
+        Pedidos de prorrogação
+      </p>
+      <div className="space-y-1.5">
+        {requests.map((r) => (
+          <div key={r.id} className="flex items-center gap-2 px-3 py-2.5 rounded-card bg-card border border-border min-w-0">
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] text-text-main truncate leading-tight">{r.tasks?.title ?? "Tarefa"}</p>
+              <p className="text-[11px] text-text-secondary mt-0.5">
+                {fmtShortDate(r.current_deadline)} → {fmtShortDate(r.requested_deadline)}
+                {r.reason && ` · "${r.reason}"`}
+              </p>
+            </div>
+            <button
+              onClick={() => handleResolve(r.id, false)}
+              disabled={resolvingId === r.id}
+              className="text-[11px] font-medium px-2 py-1 rounded-lg text-danger bg-danger/10 hover:bg-danger/20 transition-colors disabled:opacity-50"
+            >
+              Recusar
+            </button>
+            <button
+              onClick={() => handleResolve(r.id, true)}
+              disabled={resolvingId === r.id}
+              className="text-[11px] font-medium px-2 py-1 rounded-lg text-success bg-success/10 hover:bg-success/20 transition-colors disabled:opacity-50"
+            >
+              Aprovar
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 // Linha somente-leitura: o gestor no roll-up não é dono nem executor da tarefa,
 // então não há ação possível aqui (RLS bloqueia update de qualquer forma) — só acompanhamento.
@@ -93,15 +154,20 @@ export function Cockpit() {
           <span className="text-4xl block">🧭</span>
           <p className="text-[15px] font-medium text-text-main">Você ainda não faz parte de uma organização</p>
         </div>
-      ) : groups.length === 0 ? (
-        <div className="text-center py-16 space-y-3">
-          <span className="text-4xl block">🧭</span>
-          <p className="text-[15px] font-medium text-text-main">Sua equipe não tem tarefas corporativas em aberto</p>
-        </div>
       ) : (
-        groups.map((g) => (
-          <PersonGroup key={g.member?.id ?? "orphan"} member={g.member} tasks={g.tasks} getMemberByUserId={getMemberByUserId} />
-        ))
+        <>
+          <DeadlineExtensionRequests />
+          {groups.length === 0 ? (
+            <div className="text-center py-16 space-y-3">
+              <span className="text-4xl block">🧭</span>
+              <p className="text-[15px] font-medium text-text-main">Sua equipe não tem tarefas corporativas em aberto</p>
+            </div>
+          ) : (
+            groups.map((g) => (
+              <PersonGroup key={g.member?.id ?? "orphan"} member={g.member} tasks={g.tasks} getMemberByUserId={getMemberByUserId} />
+            ))
+          )}
+        </>
       )}
     </div>
   );
