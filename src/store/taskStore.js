@@ -943,6 +943,20 @@ export const useTaskStore = create(
           .filter((t) => t.follow_up_date && t.follow_up_date <= today())
           .sort((a, b) => a.follow_up_date.localeCompare(b.follow_up_date)),
 
+      // Painel "Revisar hoje": cobranças de delegação vencidas + qualquer tarefa minha (ou
+      // atribuída a mim) com prazo vencido. Usa o mesmo filtro de visibilidade das listas de
+      // execução (hiddenFromMyLists) — por construção nunca sobrepõe getFollowUpsDue, que só
+      // pega o que EU deleguei (já escondido das minhas próprias listas).
+      getReviewToday: () => {
+        const myId = useAuthStore.getState().user?.id;
+        const overdueDeadline = get().tasks.filter(
+          (t) => active(t) && !hiddenFromMyLists(t, myId) && t.deadline && t.deadline < today()
+        );
+        return [...get().getFollowUpsDue(), ...overdueDeadline].sort((a, b) =>
+          (a.follow_up_date ?? a.deadline).localeCompare(b.follow_up_date ?? b.deadline)
+        );
+      },
+
       getDelegatedCompleted: (collaboratorId = null) => {
         const myId = useAuthStore.getState().user?.id;
         return get()
