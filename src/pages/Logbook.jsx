@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTaskStore } from "../store/taskStore";
 import { useAreaStore } from "../store/areaStore";
+import { useOrgStore } from "../store/orgStore";
 import { useCollaboratorStore } from "../store/collaboratorStore";
 import { CollaboratorAvatar } from "../components/delegation/shared";
 
@@ -79,7 +80,7 @@ function WeekChart({ days, groups }) {
 
 const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-function AdvancedStats({ tasks, groups, areas }) {
+function AdvancedStats({ tasks, groups, areas, demandTypes }) {
   // Best weekday
   const byWeekday = Array(7).fill(0);
   tasks.forEach((t) => { byWeekday[new Date(t.completed_at).getDay()]++; });
@@ -107,6 +108,18 @@ function AdvancedStats({ tasks, groups, areas }) {
     .slice(0, 5)
     .map(([id, cnt]) => ({ area: areas.find((a) => a.id === id), cnt }))
     .filter((e) => e.area);
+
+  // By demand type — só tarefas organizacionais têm demand_type_id setado.
+  const byDemandType = {};
+  tasks.forEach((t) => {
+    if (!t.demand_type_id) return;
+    byDemandType[t.demand_type_id] = (byDemandType[t.demand_type_id] ?? 0) + 1;
+  });
+  const demandTypeEntries = Object.entries(byDemandType)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id, cnt]) => ({ demandType: demandTypes.find((d) => d.id === id), cnt }))
+    .filter((e) => e.demandType);
 
   return (
     <div className="space-y-3 mb-6">
@@ -150,6 +163,25 @@ function AdvancedStats({ tasks, groups, areas }) {
               <div key={area.id} className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
                 <span className="text-xs text-text-main flex-1 truncate">{area.name}</span>
+                <span className="text-xs font-medium text-text-secondary shrink-0">{cnt}</span>
+                <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden shrink-0">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((cnt / tasks.length) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* By demand type */}
+      {demandTypeEntries.length > 0 && (
+        <div className="bg-card border border-border rounded-card px-4 py-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary mb-3">Por tipo de demanda</p>
+          <div className="space-y-2">
+            {demandTypeEntries.map(({ demandType, cnt }) => (
+              <div key={demandType.id} className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: demandType.color }} />
+                <span className="text-xs text-text-main flex-1 truncate">{demandType.label}</span>
                 <span className="text-xs font-medium text-text-secondary shrink-0">{cnt}</span>
                 <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden shrink-0">
                   <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((cnt / tasks.length) * 100)}%` }} />
@@ -242,6 +274,7 @@ function TeamStats({ collaborators, done, open }) {
 export function Logbook() {
   const { getAllCompleted, deleteTask, permanentDeleteTask, getDelegatedCompleted, getDelegated } = useTaskStore();
   const { areas } = useAreaStore();
+  const { demandTypes } = useOrgStore();
   const { collaborators } = useCollaboratorStore();
   const [confirmClear, setConfirmClear] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -318,7 +351,7 @@ export function Logbook() {
           >
             {showAdvanced ? "▲ Menos estatísticas" : "▼ Estatísticas avançadas"}
           </button>
-          {showAdvanced && <AdvancedStats tasks={tasks} groups={groups} areas={areas} />}
+          {showAdvanced && <AdvancedStats tasks={tasks} groups={groups} areas={areas} demandTypes={demandTypes} />}
           {showAdvanced && (
             <TeamStats collaborators={collaborators} done={delegatedDone} open={delegatedOpen} />
           )}
