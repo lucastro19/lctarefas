@@ -28,8 +28,9 @@ export const useUiStore = create((set) => ({
   closeSearch: () => set({ showSearch: false }),
 
   // Modal de data de cobrança, aberto sempre que uma tarefa é delegada
-  delegateFlow: null, // { taskId, collaboratorId, note } | null
-  openDelegateFlow: (taskId, collaboratorId, note = null) => set({ delegateFlow: { taskId, collaboratorId, note } }),
+  delegateFlow: null, // { taskId, collaboratorId, note, watcherCollaboratorId } | null
+  openDelegateFlow: (taskId, collaboratorId, note = null, watcherCollaboratorId = null) =>
+    set({ delegateFlow: { taskId, collaboratorId, note, watcherCollaboratorId } }),
   closeDelegateFlow: () => set({ delegateFlow: null }),
 
   toasts: [],

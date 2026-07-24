@@ -31,13 +31,13 @@ export function DelegateFollowUpModal() {
   }, [delegateFlow, closeDelegateFlow]);
 
   if (!delegateFlow) return null;
-  const { taskId, collaboratorId, note } = delegateFlow;
+  const { taskId, collaboratorId, note, watcherCollaboratorId } = delegateFlow;
   const task = tasks.find((t) => t.id === taskId);
   const collaborator = collaborators.find((c) => c.id === collaboratorId);
   if (!task) return null;
 
   const confirm = () => {
-    delegateTask(taskId, { collaboratorId, followUpDate: date, note });
+    delegateTask(taskId, { collaboratorId, followUpDate: date, note, watcherCollaboratorId });
     closeDelegateFlow();
   };
 

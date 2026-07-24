@@ -48,7 +48,7 @@ const IconHandshake = () => (
 
 export function BulkActionBar() {
   const { selectedIds, clearAll } = useSelectionStore();
-  const { bulkUpdate, bulkMoveToToday } = useTaskStore();
+  const { bulkUpdate, bulkMoveToToday, delegateTask } = useTaskStore();
   const { collaborators } = useCollaboratorStore();
   const [showDelegate, setShowDelegate] = useState(false);
   const delegateRef = useRef(null);
@@ -136,16 +136,14 @@ export function BulkActionBar() {
               <button
                 key={c.id}
                 onClick={async () => {
-                  await run({
-                    delegated_to: c.id,
-                    delegated_at: new Date().toISOString(),
-                    delegation_status: "pendente",
-                    follow_up_date: inDays(3),
-                    last_update_at: new Date().toISOString(),
-                    scheduled_date: null,
-                    scheduled_time: null,
-                    someday: false,
-                  });
+                  // Fase 2.7: delegação em massa precisa passar pela mesma RPC
+                  // que a delegação individual — bulkUpdate escreveria os
+                  // campos direto na tabela, sem criar o elo em
+                  // task_delegations (quebrando aceite/cobrança depois).
+                  await Promise.all(
+                    selectedIds.map((id) => delegateTask(id, { collaboratorId: c.id, followUpDate: inDays(3) }))
+                  );
+                  clearAll();
                   setShowDelegate(false);
                 }}
                 className="menu-item w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2"

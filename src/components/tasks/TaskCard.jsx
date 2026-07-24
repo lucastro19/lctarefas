@@ -931,7 +931,10 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   // nas minhas listas como trabalho meu, com badge de quem delegou.
   const assignedToMe = isAssignedToMe(task, user?.id);
   const delegatorName = assignedToMe
-    ? (orgMembers.find((m) => m.user_id === task.user_id)?.profile?.full_name?.split(" ")[0] ?? null)
+    // Fase 2.7: current_delegator_id é o delegador do ELO ATIVO, não sempre
+    // o dono original (task.user_id) — importa quando a tarefa já foi
+    // redelegada mais de uma vez.
+    ? (orgMembers.find((m) => m.user_id === (task.current_delegator_id ?? task.user_id))?.profile?.full_name?.split(" ")[0] ?? null)
     : null;
 
   const [completing, setCompleting] = useState(false);

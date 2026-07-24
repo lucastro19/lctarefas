@@ -4,9 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useSettingsStore, minutesToTime } from "./settingsStore";
 import { useUiStore } from "./uiStore";
 import { useAuthStore } from "./authStore";
-import { useOrgStore } from "./orgStore";
 import { useAreaStore } from "./areaStore";
-import { useCollaboratorStore } from "./collaboratorStore";
 import { cancelNotification } from "../services/notifications";
 
 const localDate = (d = new Date()) =>
@@ -323,51 +321,55 @@ export const useTaskStore = create(
           action: "Desfazer",
           onAction: onUndo ?? (() => get().uncompleteTask(id)),
         });
-        if (task?.recurrence) {
-          const next = nextRecurrenceDate(task.recurrence, task.scheduled_date);
-          if (next) {
-            const user = useAuthStore.getState().user;
-            if (!user?.id) return;
-            const { data } = await supabase.from("tasks").insert([{
-              title: task.title,
-              notes: task.notes,
-              area_id: task.area_id,
-              project_id: task.project_id,
-              scheduled_date: next,
-              scheduled_time: task.scheduled_time,
-              duration_minutes: task.duration_minutes,
-              recurrence: task.recurrence,
-              someday: false,
-              position: 0,
-              user_id: user.id,
-              // Rotina delegada continua delegada na próxima ocorrência
-              ...(task.delegated_to ? {
-                delegated_to: task.delegated_to,
-                delegated_at: new Date().toISOString(),
-                delegation_status: "pendente",
-                delegation_note: task.delegation_note,
-                last_update_at: new Date().toISOString(),
-                follow_up_date: next,
-                scheduled_date: null,
-                scheduled_time: null,
-              } : {}),
-            }]).select().single();
-            if (data) {
-              set((s) => ({ tasks: [data, ...s.tasks] }));
-              const { data: tagRows } = await supabase
-                .from("task_tags")
-                .select("tag_id")
-                .eq("task_id", id);
-              if (tagRows?.length) {
-                await supabase.from("task_tags").insert(
-                  tagRows.map((r) => ({ task_id: data.id, tag_id: r.tag_id }))
-                );
-              }
-            }
-          }
-        }
+        await get()._recreateRecurrence(task);
       },
       uncompleteTask: async (id) => get().updateTask(id, { completed_at: null }),
+
+      // Duplica a tarefa recorrente na próxima data, se houver. Extraído de
+      // completeTask pra ser reaproveitado por acceptDelegatedTask (Fase 2.7)
+      // — a rotina delegada reinicia a cadeia do zero (create_delegation_link
+      // trata a nova ocorrência como 1ª delegação, já que nasce sem
+      // delegated_to) em vez de copiar campos de delegação manualmente.
+      _recreateRecurrence: async (task) => {
+        if (!task?.recurrence) return;
+        const next = nextRecurrenceDate(task.recurrence, task.scheduled_date);
+        if (!next) return;
+        const user = useAuthStore.getState().user;
+        if (!user?.id) return;
+        const { data } = await supabase.from("tasks").insert([{
+          title: task.title,
+          notes: task.notes,
+          area_id: task.area_id,
+          project_id: task.project_id,
+          scheduled_date: next,
+          scheduled_time: task.scheduled_time,
+          duration_minutes: task.duration_minutes,
+          recurrence: task.recurrence,
+          someday: false,
+          position: 0,
+          user_id: user.id,
+        }]).select().single();
+        if (!data) return;
+
+        set((s) => ({ tasks: [data, ...s.tasks] }));
+        const { data: tagRows } = await supabase
+          .from("task_tags")
+          .select("tag_id")
+          .eq("task_id", task.id);
+        if (tagRows?.length) {
+          await supabase.from("task_tags").insert(
+            tagRows.map((r) => ({ task_id: data.id, tag_id: r.tag_id }))
+          );
+        }
+        // Rotina delegada continua delegada na próxima ocorrência
+        if (task.delegated_to) {
+          await get().delegateTask(data.id, {
+            collaboratorId: task.delegated_to,
+            followUpDate: next,
+            note: task.delegation_note,
+          });
+        }
+      },
 
       // --- Archive ---
       archiveTask: async (id) => get().updateTask(id, { archived_at: new Date().toISOString() }),
@@ -386,114 +388,124 @@ export const useTaskStore = create(
       moveToSomeday: async (id) =>
         get().updateTask(id, { someday: true, scheduled_date: null, archived_at: null }),
 
-      // --- Delegação ---------------------------------------------------
+      // --- Delegação (Fase 2.7 — cadeia de elos) ------------------------
       // Delegar tira a tarefa das listas de execução (padrão GTD "Waiting For").
-      // O deadline é preservado: continua valendo, agora como prazo do colaborador.
-      delegateTask: async (id, { collaboratorId, followUpDate = null, note = null } = {}) => {
+      // Toda escrita passa por RPCs security definer (task_delegations é a
+      // fonte de verdade do histórico; os campos em `tasks` seguem existindo
+      // como espelho do elo ativo, é por isso que o resto do app — TaskCard,
+      // Delegadas, ColaboradorPage, Cockpit — não precisou mudar).
+      delegateTask: async (id, { collaboratorId, followUpDate = null, note = null, watcherCollaboratorId = null } = {}) => {
         const task = get().tasks.find((t) => t.id === id);
-        const prev = task ? {
-          delegated_to: task.delegated_to ?? null,
-          delegated_at: task.delegated_at ?? null,
-          delegation_status: task.delegation_status ?? null,
-          follow_up_date: task.follow_up_date ?? null,
-          delegation_note: task.delegation_note ?? null,
-          scheduled_date: task.scheduled_date ?? null,
-          scheduled_time: task.scheduled_time ?? null,
-          someday: task.someday ?? false,
-          assignee_id: task.assignee_id ?? null,
-          org_id: task.org_id ?? null,
-        } : null;
+        const wasFirstDelegation = !task?.delegated_to;
 
-        // Fase 2.3: se o colaborador é um usuário real vinculado E o gestor tem
-        // org, a tarefa vira "corporativa" — assignee_id + org_id fazem ela
-        // espelhar na lista pessoal do executor e subir no roll-up. Sem vínculo
-        // ou sem org, segue como delegação local da Fase 1 (campos nulos).
-        const collaborator = useCollaboratorStore.getState().collaborators.find((c) => c.id === collaboratorId);
-        const orgId = useOrgStore.getState().organization?.id ?? null;
-        const mirror = collaborator?.linked_user_id && orgId
-          ? { assignee_id: collaborator.linked_user_id, org_id: orgId }
-          : { assignee_id: null, org_id: null };
-
-        const now = new Date().toISOString();
-        const result = await get().updateTask(id, {
-          delegated_to: collaboratorId,
-          delegated_at: now,
-          delegation_status: "pendente",
-          follow_up_date: followUpDate ?? inDays(3),
-          delegation_note: note,
-          last_update_at: now,
-          scheduled_date: null,
-          scheduled_time: null,
-          someday: false,
-          ...mirror,
+        const { data, error } = await supabase.rpc("create_delegation_link", {
+          p_task_id: id,
+          p_collaborator_id: collaboratorId,
+          p_follow_up_date: followUpDate,
+          p_note: note,
+          p_watcher_collaborator_id: watcherCollaboratorId,
         });
+        if (error) {
+          console.error("delegateTask (create_delegation_link):", error.message);
+          useUiStore.getState().showToast({ message: "Não foi possível delegar: " + error.message });
+          return null;
+        }
 
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
         cancelNotification(id);
         useUiStore.getState().showToast({
-          message: "Tarefa delegada 🤝",
-          action: "Desfazer",
-          onAction: () => (prev ? get().updateTask(id, prev) : get().undelegateTask(id)),
+          message: wasFirstDelegation ? "Tarefa delegada 🤝" : "Redelegada 🤝",
+          // "Desfazer" só é seguro pro 1º elo (cancel_delegation_link não
+          // suporta desfazer redelegações intermediárias — ver migration).
+          ...(wasFirstDelegation ? { action: "Desfazer", onAction: () => get().undelegateTask(id) } : {}),
         });
-        return result;
+        return data;
       },
 
-      undelegateTask: async (id) =>
-        get().updateTask(id, {
-          delegated_to: null,
-          delegated_at: null,
-          delegation_status: null,
-          follow_up_date: null,
-          delegation_note: null,
-          last_update_at: null,
-          nudge_count: 0,
-          last_nudge_at: null,
-          assignee_id: null, // desfaz o espelhamento (Fase 2.3)
-          org_id: null,
-        }),
+      undelegateTask: async (id) => {
+        const { data, error } = await supabase.rpc("cancel_delegation_link", { p_task_id: id });
+        if (error) {
+          console.error("undelegateTask (cancel_delegation_link):", error.message);
+          useUiStore.getState().showToast({ message: "Não foi possível remover: " + error.message });
+          return null;
+        }
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
+        return data;
+      },
 
-      setDelegationStatus: async (id, status) =>
-        get().updateTask(id, {
-          delegation_status: status,
-          last_update_at: new Date().toISOString(),
-        }),
+      // Usado tanto pelo delegador (gerencia status manualmente, inclusive
+      // pra colaborador local sem conta) quanto pelo executor vinculado.
+      setDelegationStatus: async (id, status) => {
+        const task = get().tasks.find((t) => t.id === id);
+        if (!task?.current_delegation_id) return null;
+        const { data, error } = await supabase.rpc("update_delegation_link_status", {
+          p_delegation_id: task.current_delegation_id,
+          p_status: status,
+        });
+        if (error) { console.error("setDelegationStatus:", error.message); return null; }
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
+        return data;
+      },
 
       // Fase 2.3: o executor "conclui" uma tarefa atribuída a ele → vira
-      // "aguardando aceite" e volta pro gestor fechar (portão "só o gestor
-      // fecha"). Não seta completed_at — quem fecha é acceptDelegatedTask.
+      // "aguardando aceite" e volta pro delegador daquele elo fechar (portão
+      // "só quem delegou fecha"). Não seta completed_at — quem fecha de
+      // verdade é acceptDelegatedTask, e só quando é o elo raiz.
       completeAssignedTask: async (id) => {
+        const task = get().tasks.find((t) => t.id === id);
+        if (!task?.current_delegation_id) return;
         cancelNotification(id);
-        await get().updateTask(id, {
-          delegation_status: "aguardando_aceite",
-          last_update_at: new Date().toISOString(),
+        const { data, error } = await supabase.rpc("update_delegation_link_status", {
+          p_delegation_id: task.current_delegation_id,
+          p_status: "aguardando_aceite",
         });
+        if (error) { console.error("completeAssignedTask:", error.message); return; }
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
         useUiStore.getState().showToast({
           message: "Enviada para aceite do gestor 👍",
           action: "Desfazer",
-          onAction: () => get().updateTask(id, { delegation_status: "em_andamento" }),
+          onAction: () => get().setDelegationStatus(id, "em_andamento"),
         });
       },
 
-      // Só o gestor fecha uma tarefa delegada — "ele diz que fez" ≠ "eu aceitei"
+      // Aceite em cascata reversa: fecha o elo atual e "libera" o elo
+      // anterior (quem delegou antes precisa aceitar também), um nível por
+      // vez, até chegar no elo raiz — só aí a tarefa fecha de verdade.
       acceptDelegatedTask: async (id) => {
         const task = get().tasks.find((t) => t.id === id);
-        const prevStatus = task?.delegation_status ?? "pendente";
-        await get().updateTask(id, {
-          delegation_status: "concluida",
-          last_update_at: new Date().toISOString(),
+        if (!task?.current_delegation_id) return null;
+
+        const { data, error } = await supabase.rpc("accept_delegation_link", {
+          p_delegation_id: task.current_delegation_id,
         });
-        // "Desfazer" do toast de conclusão também precisa devolver o status de
-        // delegação anterior — senão a tarefa volta a aparecer como "não concluída"
-        // mas já fora da lista de Delegadas (isDelegated exige status !== "concluida").
-        await get().completeTask(id, {
-          onUndo: () => {
-            get().uncompleteTask(id);
-            get().updateTask(id, { delegation_status: prevStatus });
-          },
-        });
+        if (error) {
+          console.error("acceptDelegatedTask (accept_delegation_link):", error.message);
+          useUiStore.getState().showToast({ message: "Não foi possível aceitar: " + error.message });
+          return null;
+        }
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
+
+        if (data.completed_at) {
+          // Elo raiz aceito — fechou de vez.
+          cancelNotification(id);
+          useUiStore.getState().showToast({
+            message: "Tarefa concluída",
+            action: "Desfazer",
+            onAction: () => {
+              get().uncompleteTask(id);
+              get().updateTask(id, { delegation_status: "aguardando_aceite" });
+            },
+          });
+          await get()._recreateRecurrence(data);
+        } else {
+          useUiStore.getState().showToast({ message: "Aceito — devolvido pra quem delegou antes 🤝" });
+        }
+        return data;
       },
 
       // Reverte um aceite já consolidado (fora da janela do toast de "Desfazer"):
       // desfaz a conclusão e devolve a tarefa para "pendente" em Delegadas.
+      // Só se aplica ao elo raiz (mesmo caso que acceptDelegatedTask fecha).
       revertAcceptedDelegation: async (id) => {
         await get().uncompleteTask(id);
         await get().updateTask(id, {
@@ -503,18 +515,42 @@ export const useTaskStore = create(
         useUiStore.getState().showToast({ message: "Aceite revertido — tarefa voltou para Delegadas" });
       },
 
-      // Registra uma cobrança e empurra o próximo follow-up
+      // Delegador do elo ativo registra uma cobrança e empurra o próximo follow-up
       registerNudge: async (id, nextFollowUp = null) => {
         const task = get().tasks.find((t) => t.id === id);
-        return get().updateTask(id, {
-          nudge_count: (task?.nudge_count ?? 0) + 1,
-          last_nudge_at: new Date().toISOString(),
-          follow_up_date: nextFollowUp ?? task?.follow_up_date ?? null,
+        if (!task?.current_delegation_id) return null;
+        const { data, error } = await supabase.rpc("register_delegation_nudge", {
+          p_delegation_id: task.current_delegation_id,
+          p_next_follow_up: nextFollowUp,
         });
+        if (error) { console.error("registerNudge:", error.message); return null; }
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
+        return data;
       },
 
-      snoozeFollowUp: async (id, days) =>
-        get().updateTask(id, { follow_up_date: inDays(days) }),
+      snoozeFollowUp: async (id, days) => {
+        const task = get().tasks.find((t) => t.id === id);
+        if (!task?.current_delegation_id) return null;
+        const { data, error } = await supabase.rpc("snooze_delegation_followup", {
+          p_delegation_id: task.current_delegation_id,
+          p_days: days,
+        });
+        if (error) { console.error("snoozeFollowUp:", error.message); return null; }
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? data : t)) }));
+        return data;
+      },
+
+      // Histórico completo da cadeia de delegação de uma tarefa (Fase 2.7),
+      // usado pelo DelegationSection pra mostrar quem delegou pra quem.
+      fetchDelegationChain: async (taskId) => {
+        const { data, error } = await supabase
+          .from("task_delegations")
+          .select("*")
+          .eq("task_id", taskId)
+          .order("chain_position", { ascending: true });
+        if (error) { console.error("fetchDelegationChain:", error.message); return []; }
+        return data ?? [];
+      },
 
       // --- Ações em lote ---
       bulkUpdate: async (ids, fields) => {
