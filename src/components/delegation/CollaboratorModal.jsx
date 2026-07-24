@@ -57,7 +57,9 @@ export function CollaboratorModal({ collaborator = null, prefill = null, onClose
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const alreadyLinked = !!collaborator?.linked_user_id;
+  // prefill.linkedUserId vem do botão "+ Criar contato" (membro sem contato local): a pessoa já
+  // é da organização, então o vínculo é direto — sem passar pelo fluxo de convite.
+  const alreadyLinked = !!collaborator?.linked_user_id || !!prefill?.linkedUserId;
   const pendingInvite = invites.find(
     (i) => i.status === "pending" && email.trim() && i.email?.toLowerCase() === email.trim().toLowerCase()
   );
@@ -82,6 +84,7 @@ export function CollaboratorModal({ collaborator = null, prefill = null, onClose
       email: email.trim() || null,
       phone: phone.replace(/\D/g, "") || null,
       color,
+      ...(!editing && prefill?.linkedUserId ? { linked_user_id: prefill.linkedUserId } : {}),
     };
     if (editing) await updateCollaborator(collaborator.id, fields);
     else await createCollaborator(fields);

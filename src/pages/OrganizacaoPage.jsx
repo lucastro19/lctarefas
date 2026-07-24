@@ -387,7 +387,7 @@ function MembersTab({ isOwner }) {
       {editingLocal && <CollaboratorModal collaborator={editingLocal} onClose={() => setEditingLocal(null)} />}
       {prefillFor && (
         <CollaboratorModal
-          prefill={{ name: memberName(prefillFor), email: prefillFor.profile?.email ?? "" }}
+          prefill={{ name: memberName(prefillFor), email: prefillFor.profile?.email ?? "", linkedUserId: prefillFor.user_id }}
           onClose={() => setPrefillFor(null)}
         />
       )}
