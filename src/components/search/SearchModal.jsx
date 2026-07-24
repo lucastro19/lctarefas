@@ -4,6 +4,7 @@ import { useTaskStore } from "../../store/taskStore";
 import { useAreaStore } from "../../store/areaStore";
 import { useTagStore } from "../../store/tagStore";
 import { useUiStore } from "../../store/uiStore";
+import { useOrgStore } from "../../store/orgStore";
 
 function highlight(text, query) {
   if (!query) return text;
@@ -26,16 +27,18 @@ export function SearchModal({ onClose }) {
   const [filterStatus, setFilterStatus] = useState("all"); // all | pending | done | archived
   const [filterPriority, setFilterPriority] = useState(""); // "" | high | medium | low
   const [filterArea, setFilterArea] = useState("");
+  const [filterDemandType, setFilterDemandType] = useState("");
   const inputRef = useRef(null);
   const navigate = useNavigate();
 
   const { tasks } = useTaskStore();
   const { areas, projects } = useAreaStore();
   const { tags, taskTags } = useTagStore();
+  const { demandTypes } = useOrgStore();
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  const hasFilters = filterStatus !== "all" || filterPriority || filterArea;
+  const hasFilters = filterStatus !== "all" || filterPriority || filterArea || filterDemandType;
 
   const results = (query.trim().length < 1 && !hasFilters) ? [] : tasks
     .filter((t) => {
@@ -53,11 +56,13 @@ export function SearchModal({ onClose }) {
       if (filterPriority && t.priority !== filterPriority) return false;
       // area filter
       if (filterArea && t.area_id !== filterArea && t.project_id !== filterArea) return false;
+      // demand type filter
+      if (filterDemandType && t.demand_type_id !== filterDemandType) return false;
       return true;
     })
     .slice(0, 12);
 
-  useEffect(() => { setSelected(0); }, [query, filterStatus, filterPriority, filterArea]);
+  useEffect(() => { setSelected(0); }, [query, filterStatus, filterPriority, filterArea, filterDemandType]);
 
   const getContext = (task) => {
     if (task.project_id) {
@@ -143,6 +148,21 @@ export function SearchModal({ onClose }) {
               {areas.map((a) => (
                 <Chip key={a.id} active={filterArea === a.id} onClick={() => setFilterArea(filterArea === a.id ? "" : a.id)}>
                   {a.name}
+                </Chip>
+              ))}
+            </>
+          )}
+          {demandTypes.filter((d) => !d.archived_at).length > 0 && (
+            <>
+              <span className="w-px h-3 bg-border shrink-0" />
+              {demandTypes.filter((d) => !d.archived_at).map((dt) => (
+                <Chip
+                  key={dt.id}
+                  active={filterDemandType === dt.id}
+                  color={dt.color}
+                  onClick={() => setFilterDemandType(filterDemandType === dt.id ? "" : dt.id)}
+                >
+                  {dt.label}
                 </Chip>
               ))}
             </>
