@@ -156,6 +156,16 @@ export const useOrgStore = create((set, get) => ({
 
   getMemberByUserId: (userId) => get().members.find((m) => m.user_id === userId) ?? null,
 
+  // Resolve os user_ids dos membros de um time (join client-side: team_members.org_member_id
+  // -> org_members.user_id). teams/members já vêm carregados por fetchOrganization, sem fetch novo.
+  getTeamMemberUserIds: (teamId) => {
+    const team = get().teams.find((t) => t.id === teamId);
+    if (!team) return [];
+    return (team.team_members ?? [])
+      .map((tm) => get().members.find((m) => m.id === tm.org_member_id)?.user_id)
+      .filter(Boolean);
+  },
+
   // ─── Cockpit do gestor (Fase 2.5) ───
   // Roll-up hierárquico: a RLS de tasks (Fase 2.1, is_manager_of) já garante que só voltam
   // linhas que o usuário tem direito de ver (próprias + da árvore de reporte). Aqui só filtramos

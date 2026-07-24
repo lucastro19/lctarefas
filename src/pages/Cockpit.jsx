@@ -67,6 +67,8 @@ function DeadlineExtensionRequests() {
 // então não há ação possível aqui (RLS bloqueia update de qualquer forma) — só acompanhamento.
 function TeamTaskRow({ task, delegator }) {
   const status = task.delegation_status ?? "pendente";
+  const demandTypes = useOrgStore((s) => s.demandTypes);
+  const demandType = task.demand_type_id ? demandTypes.find((d) => d.id === task.demand_type_id) : null;
   return (
     <div className="flex items-center gap-2 px-3 py-2.5 rounded-card bg-card border border-border min-w-0">
       <div className="flex-1 min-w-0">
@@ -76,6 +78,14 @@ function TeamTaskRow({ task, delegator }) {
           <AgingLabel task={task} />
           <FollowUpLabel task={task} />
           <NudgeCountLabel task={task} />
+          {demandType && (
+            <span
+              className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full shrink-0"
+              style={{ color: demandType.color, backgroundColor: demandType.color + "22" }}
+            >
+              {demandType.label}
+            </span>
+          )}
           {delegator && (
             <span className="text-[10px] text-text-secondary shrink-0" title="Quem delegou">
               via {delegator.profile?.full_name ?? "?"}
@@ -116,7 +126,8 @@ function PersonGroup({ member, tasks, getMemberByUserId }) {
 }
 
 export function Cockpit() {
-  const { organization, loaded, teamTasks, fetchOrganization, fetchTeamTasks, getMemberByUserId } = useOrgStore();
+  const { organization, loaded, teamTasks, fetchOrganization, fetchTeamTasks, getMemberByUserId, teams, getTeamMemberUserIds } = useOrgStore();
+  const [teamFilter, setTeamFilter] = useState("");
 
   useEffect(() => {
     if (!loaded) fetchOrganization();
@@ -142,6 +153,12 @@ export function Cockpit() {
         .sort((a, b) => b.tasks.length - a.tasks.length)
     : [];
 
+  // Filtro de time (Fase seguinte à 2.8): estreita os grupos já calculados por pessoa —
+  // não é uma visão paralela, só um recorte do mesmo roll-up.
+  const filteredGroups = teamFilter
+    ? groups.filter((g) => getTeamMemberUserIds(teamFilter).includes(g.member?.user_id))
+    : groups;
+
   return (
     <div className="flex-1 min-w-0 overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
       <h1 className="text-2xl font-semibold text-text-main hidden md:block mb-1">Cockpit</h1>
@@ -156,14 +173,28 @@ export function Cockpit() {
         </div>
       ) : (
         <>
+          {teams.length > 0 && (
+            <div className="mb-4">
+              <select
+                value={teamFilter}
+                onChange={(e) => setTeamFilter(e.target.value)}
+                className="text-[13px] bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+              >
+                <option value="">Todos os times</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <DeadlineExtensionRequests />
-          {groups.length === 0 ? (
+          {filteredGroups.length === 0 ? (
             <div className="text-center py-16 space-y-3">
               <span className="text-4xl block">🧭</span>
               <p className="text-[15px] font-medium text-text-main">Sua equipe não tem tarefas corporativas em aberto</p>
             </div>
           ) : (
-            groups.map((g) => (
+            filteredGroups.map((g) => (
               <PersonGroup key={g.member?.id ?? "orphan"} member={g.member} tasks={g.tasks} getMemberByUserId={getMemberByUserId} />
             ))
           )}
