@@ -926,6 +926,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const { expandedTaskId, setExpandedTaskId, showToast, dismissToast } = useUiStore();
   const { user } = useAuthStore();
   const orgMembers = useOrgStore((s) => s.members);
+  const demandTypes = useOrgStore((s) => s.demandTypes);
 
   // Fase 2.3: tarefa que um gestor delegou a MIM (sou o executor) — aparece
   // nas minhas listas como trabalho meu, com badge de quem delegou.
@@ -984,6 +985,9 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const taskProject = task.project_id ? projects.find((p) => p.id === task.project_id) : null;
   const taskArea = task.area_id ? areas.find((a) => a.id === task.area_id) : null;
   const contextLabel = taskProject ?? taskArea ?? null;
+  const taskDemandType = task.org_id && task.demand_type_id
+    ? demandTypes.find((d) => d.id === task.demand_type_id) ?? null
+    : null;
   const collapsedTags = taskTags[task.id] ?? [];
   const settings = useSettingsStore();
   const taskCollaborator = task.delegated_to
@@ -1255,7 +1259,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
     contextLabel || collapsedTags.length > 0 || task.priority || task.meeting_url ||
-    task.delegated_to;
+    task.delegated_to || taskDemandType;
 
   const handleTouchStart = () => {
     if (anySelected) return;
@@ -1778,6 +1782,18 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                       }}
                     >
                       {taskProject ? "◆" : "▣"} {contextLabel.name}
+                    </span>
+                  )}
+                  {taskDemandType && (
+                    <span
+                      className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full flex items-center gap-1"
+                      style={{
+                        color: taskDemandType.color ?? "#8E8E93",
+                        backgroundColor: (taskDemandType.color ?? "#8E8E93") + "22",
+                      }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: taskDemandType.color ?? "#8E8E93" }} />
+                      {taskDemandType.label}
                     </span>
                   )}
                   {collapsedTags.length > 0 && (
