@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { TimedTaskList } from "../components/tasks/TimedTaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
 import { FollowUpPanel } from "../components/tasks/FollowUpPanel";
+import { DayPlanner } from "../components/tasks/DayPlanner";
 import { useTaskStore } from "../store/taskStore";
 import { useUiStore } from "../store/uiStore";
 
@@ -109,6 +110,7 @@ export function Today() {
   const { getToday, getCompletedToday } = useTaskStore();
   const { urgentFilter, toggleUrgentFilter } = useUiStore();
   const [selectedTask, setSelectedTask] = useState(null);
+  const [showPlanner, setShowPlanner] = useState(false);
 
   const todayDate = localDateStr();
   const allTasks = getToday();
@@ -131,6 +133,12 @@ export function Today() {
         <div className="hidden md:flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-semibold text-text-main">Hoje</h1>
           <span className="text-sm text-text-secondary font-normal">— {greeting}</span>
+          <button
+            onClick={() => setShowPlanner(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-bg text-text-secondary hover:text-text-main transition-colors"
+          >
+            🗓️ Planejar meu dia
+          </button>
           <button
             onClick={toggleUrgentFilter}
             title={urgentFilter ? "Ver todas as tarefas" : "Filtrar só urgentes"}
@@ -177,6 +185,7 @@ export function Today() {
           onClose={() => setSelectedTask(null)}
         />
       )}
+      {showPlanner && <DayPlanner onClose={() => setShowPlanner(false)} />}
     </div>
   );
 }
