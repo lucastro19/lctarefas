@@ -92,6 +92,67 @@ export function parseNaturalDate(text) {
   return { dateStr, timeStr, cleanTitle };
 }
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripAccents(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+const PRIORITY_WORDS = { alta: "high", media: "medium", baixa: "low" };
+
+// Atalhos reconhecidos no título do QuickEntry — mesmo espírito do parseNaturalDate acima, mas
+// pra prioridade/tag/delegado em vez de data: "!alta", "#tag" (só se já existir), "@Nome Pessoa"
+// (só se já existir como colaborador). Sem match, o texto original fica intacto — não some
+// palavra nenhuma do título só porque parece um atalho.
+export function parseShorthand(text, { tags = [], collaborators = [] } = {}) {
+  let cleanTitle = text ?? "";
+  let priority = null;
+  let tagId = null, tagName = null;
+  let collaboratorId = null, collaboratorName = null;
+
+  const remove = (re) => {
+    cleanTitle = cleanTitle.replace(re, (m, pre) => (pre ? " " : "")).replace(/\s+/g, " ").trim();
+  };
+
+  // !alta / !media / !média / !baixa
+  const pMatch = cleanTitle.match(/(^|\s)!(\S+)(?=\s|$)/);
+  if (pMatch) {
+    const word = stripAccents(pMatch[2].toLowerCase());
+    if (PRIORITY_WORDS[word]) {
+      priority = PRIORITY_WORDS[word];
+      remove(new RegExp(`(^|\\s)!${escapeRegex(pMatch[2])}(?=\\s|$)`));
+    }
+  }
+
+  // #tag — só a primeira que bate com uma tag já cadastrada
+  for (const m of cleanTitle.matchAll(/(^|\s)#(\S+)(?=\s|$)/g)) {
+    const word = stripAccents(m[2].toLowerCase());
+    const found = tags.find((t) => stripAccents(t.name.toLowerCase()) === word);
+    if (found) {
+      tagId = found.id;
+      tagName = found.name;
+      remove(new RegExp(`(^|\\s)#${escapeRegex(m[2])}(?=\\s|$)`));
+      break;
+    }
+  }
+
+  // @Nome Pessoa — testa da mais longa pra mais curta, pra "@Lucas" não casar antes de "@Lucas Ruan"
+  const byLongestName = [...collaborators].filter((c) => c.name).sort((a, b) => b.name.length - a.name.length);
+  for (const c of byLongestName) {
+    const re = new RegExp(`(^|\\s)@${escapeRegex(c.name)}(?=\\s|$)`, "i");
+    if (re.test(cleanTitle)) {
+      collaboratorId = c.id;
+      collaboratorName = c.name;
+      remove(re);
+      break;
+    }
+  }
+
+  return { priority, tagId, tagName, collaboratorId, collaboratorName, cleanTitle };
+}
+
 const localDateStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
