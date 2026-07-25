@@ -456,9 +456,9 @@ export function TaskDetail({ task, onClose }) {
               />
             </div>
 
-            {/* Data e hora */}
+            {/* Quando */}
             <div>
-              <SectionLabel>Data e hora</SectionLabel>
+              <SectionLabel>Quando</SectionLabel>
               <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
 
                 {/* Data */}
@@ -523,43 +523,6 @@ export function TaskDetail({ task, onClose }) {
                   )}
                 </div>
 
-                {/* Urgente */}
-                <div className="flex items-center gap-3 px-4 py-2">
-                  <span className="text-[15px] w-5 text-center leading-none">🔔</span>
-                  <span className={["flex-1 text-[16px]", isUrgent ? "text-[#FF3B30] font-medium" : "text-text-main"].join(" ")}>Urgente</span>
-                  <Toggle on={isUrgent} red onChange={async v => { setIsUrgent(v); await updateTask(task.id, { is_urgent: v }); }} />
-                </div>
-
-                {/* Tipo de demanda (Fase 2.6) — só em tarefa organizacional */}
-                {task.org_id && (
-                  <div className="flex items-center gap-3 px-4 py-2">
-                    <span className="text-[15px] w-5 text-center leading-none">🏷️</span>
-                    <span className="flex-1 text-[14px] text-text-main">Tipo de demanda</span>
-                    <select
-                      value={task.demand_type_id ?? ""}
-                      onChange={async (e) => {
-                        const demandTypeId = e.target.value || null;
-                        const dt = demandTypes.find((d) => d.id === demandTypeId);
-                        const patch = { demand_type_id: demandTypeId };
-                        // Pré-calcula o prazo pelo padrão do tipo, só se ainda não houver um definido
-                        if (dt?.default_deadline_hours && !deadline) {
-                          const d = new Date(Date.now() + dt.default_deadline_hours * 3600000);
-                          const newDeadline = localDateStr(d);
-                          setDeadline(newDeadline);
-                          patch.deadline = newDeadline;
-                        }
-                        await updateTask(task.id, patch);
-                      }}
-                      className="text-[13px] bg-bg border border-border/60 rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main max-w-[160px]"
-                    >
-                      <option value="">Nenhum</option>
-                      {demandTypes.filter((d) => !d.archived_at).map((dt) => (
-                        <option key={dt.id} value={dt.id}>{dt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
                 {/* Prazo */}
                 <div>
                   <div className="flex items-center gap-3 px-4 py-2">
@@ -601,6 +564,134 @@ export function TaskDetail({ task, onClose }) {
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* Duração */}
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">⏱</span>
+                  <span className="flex-1 text-[14px] text-text-main">Duração</span>
+                  {!customDuration ? (
+                    <select
+                      value={durationMinutes}
+                      onChange={e => {
+                        if (e.target.value === "custom") { setCustomDuration(true); return; }
+                        const v = e.target.value ? Number(e.target.value) : null;
+                        setDurationMinutes(v ?? "");
+                      }}
+                      className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
+                    >
+                      <option value="">Sem duração</option>
+                      {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                      <option value="custom">Personalizado…</option>
+                    </select>
+                  ) : (
+                    <div className="flex gap-1 items-center">
+                      <input type="number" min={0} max={23} placeholder="0" id="dur-h"
+                        defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
+                        className="w-10 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center" />
+                      <span className="text-xs text-text-secondary">h</span>
+                      <input type="number" min={0} max={59} placeholder="30" id="dur-m"
+                        defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
+                        className="w-12 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center"
+                        onBlur={() => {
+                          const h = Number(document.getElementById("dur-h").value) || 0;
+                          const m = Number(document.getElementById("dur-m").value) || 0;
+                          const total = h * 60 + m;
+                          setDurationMinutes(total || "");
+                          setCustomDuration(false);
+                        }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Repetição */}
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">🔁</span>
+                  <span className="flex-1 text-[14px] text-text-main">Repetição</span>
+                  <select
+                    value={recurrence?.startsWith("custom:") ? "custom" : (recurrence ?? "")}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === "custom_open") { openCustomModal(); return; }
+                      setRecurrence(val);
+                      updateTask(task.id, { recurrence: val || null });
+                    }}
+                    className="text-[14px] text-text-secondary bg-transparent outline-none text-right max-w-[140px]"
+                  >
+                    <option value="">Nunca</option>
+                    <option value="daily">Diariamente</option>
+                    <option value="weekdays">Dias úteis</option>
+                    <option value="weekly">Semanalmente</option>
+                    <option value="biweekly">Quinzenal</option>
+                    <option value="monthly">Mensalmente</option>
+                    <option value="annually">Anualmente</option>
+                    {recurrence?.startsWith("custom:") && (
+                      <option value="custom">{getCustomLabel(recurrence)}</option>
+                    )}
+                    <option value="custom_open">Personalizada…</option>
+                  </select>
+                </div>
+
+                {/* Lembrete — só se horário definido */}
+                {scheduledTime && (
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🔕</span>
+                    <span className="flex-1 text-[14px] text-text-main">Lembrete</span>
+                    <select
+                      value={reminderMinutes ?? ""}
+                      onChange={e => {
+                        const v = e.target.value === "" ? null : Number(e.target.value);
+                        setReminderMinutes(v);
+                      }}
+                      className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
+                    >
+                      <option value="">Sem lembrete</option>
+                      <option value="5">5 min antes</option>
+                      <option value="15">15 min antes</option>
+                      <option value="30">30 min antes</option>
+                      <option value="60">1h antes</option>
+                      <option value="120">2h antes</option>
+                      <option value="1440">1 dia antes</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Algum dia */}
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">🌙</span>
+                  <span className="flex-1 text-[14px] text-text-main">Algum dia</span>
+                  <Toggle on={someday} onChange={async v => { setSomeday(v); await updateTask(task.id, { someday: v }); }} />
+                </div>
+
+              </div>
+            </div>
+
+            {/* Importância */}
+            <div>
+              <SectionLabel>Importância</SectionLabel>
+              <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
+
+                {/* Urgente */}
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">🔔</span>
+                  <span className={["flex-1 text-[16px]", isUrgent ? "text-[#FF3B30] font-medium" : "text-text-main"].join(" ")}>Urgente <span className="text-[11px] font-normal text-text-secondary">— aja agora</span></span>
+                  <Toggle on={isUrgent} red onChange={async v => { setIsUrgent(v); await updateTask(task.id, { is_urgent: v }); }} />
+                </div>
+
+                {/* Prioridade */}
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">⚑</span>
+                  <span className="flex-1 text-[14px] text-text-main">Prioridade <span className="text-[11px] font-normal text-text-secondary">— quanto importa</span></span>
+                  <select
+                    defaultValue={task.priority ?? ""}
+                    onChange={e => updateTask(task.id, { priority: e.target.value || null })}
+                    className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
+                  >
+                    <option value="">Nenhuma</option>
+                    <option value="high">🔴 Alta</option>
+                    <option value="medium">🟡 Média</option>
+                    <option value="low">🟢 Baixa</option>
+                  </select>
                 </div>
 
               </div>
@@ -764,101 +855,6 @@ export function TaskDetail({ task, onClose }) {
               </div>
             </div>
 
-            {/* Duração + Repetição + Lembrete */}
-            <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
-
-              {/* Duração */}
-              <div className="flex items-center gap-3 px-4 py-2">
-                <span className="text-[15px] w-5 text-center leading-none">⏱</span>
-                <span className="flex-1 text-[14px] text-text-main">Duração</span>
-                {!customDuration ? (
-                  <select
-                    value={durationMinutes}
-                    onChange={e => {
-                      if (e.target.value === "custom") { setCustomDuration(true); return; }
-                      const v = e.target.value ? Number(e.target.value) : null;
-                      setDurationMinutes(v ?? "");
-                    }}
-                    className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
-                  >
-                    <option value="">Sem duração</option>
-                    {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                    <option value="custom">Personalizado…</option>
-                  </select>
-                ) : (
-                  <div className="flex gap-1 items-center">
-                    <input type="number" min={0} max={23} placeholder="0" id="dur-h"
-                      defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
-                      className="w-10 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center" />
-                    <span className="text-xs text-text-secondary">h</span>
-                    <input type="number" min={0} max={59} placeholder="30" id="dur-m"
-                      defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
-                      className="w-12 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center"
-                      onBlur={() => {
-                        const h = Number(document.getElementById("dur-h").value) || 0;
-                        const m = Number(document.getElementById("dur-m").value) || 0;
-                        const total = h * 60 + m;
-                        setDurationMinutes(total || "");
-                        setCustomDuration(false);
-                      }} />
-                  </div>
-                )}
-              </div>
-
-              {/* Repetição */}
-              <div className="flex items-center gap-3 px-4 py-2">
-                <span className="text-[15px] w-5 text-center leading-none">🔁</span>
-                <span className="flex-1 text-[14px] text-text-main">Repetição</span>
-                <select
-                  value={recurrence?.startsWith("custom:") ? "custom" : (recurrence ?? "")}
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val === "custom_open") { openCustomModal(); return; }
-                    setRecurrence(val);
-                    updateTask(task.id, { recurrence: val || null });
-                  }}
-                  className="text-[14px] text-text-secondary bg-transparent outline-none text-right max-w-[140px]"
-                >
-                  <option value="">Nunca</option>
-                  <option value="daily">Diariamente</option>
-                  <option value="weekdays">Dias úteis</option>
-                  <option value="weekly">Semanalmente</option>
-                  <option value="biweekly">Quinzenal</option>
-                  <option value="monthly">Mensalmente</option>
-                  <option value="annually">Anualmente</option>
-                  {recurrence?.startsWith("custom:") && (
-                    <option value="custom">{getCustomLabel(recurrence)}</option>
-                  )}
-                  <option value="custom_open">Personalizada…</option>
-                </select>
-              </div>
-
-              {/* Lembrete — só se horário definido */}
-              {scheduledTime && (
-                <div className="flex items-center gap-3 px-4 py-2">
-                  <span className="text-[15px] w-5 text-center leading-none">🔕</span>
-                  <span className="flex-1 text-[14px] text-text-main">Lembrete</span>
-                  <select
-                    value={reminderMinutes ?? ""}
-                    onChange={e => {
-                      const v = e.target.value === "" ? null : Number(e.target.value);
-                      setReminderMinutes(v);
-                    }}
-                    className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
-                  >
-                    <option value="">Sem lembrete</option>
-                    <option value="5">5 min antes</option>
-                    <option value="15">15 min antes</option>
-                    <option value="30">30 min antes</option>
-                    <option value="60">1h antes</option>
-                    <option value="120">2h antes</option>
-                    <option value="1440">1 dia antes</option>
-                  </select>
-                </div>
-              )}
-
-            </div>
-
             {/* Organização */}
             <div>
               <SectionLabel>Organização</SectionLabel>
@@ -918,6 +914,36 @@ export function TaskDetail({ task, onClose }) {
                     </div>
                   )}
                 </div>
+
+                {/* Tipo de demanda (Fase 2.6) — só em tarefa organizacional */}
+                {task.org_id && (
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🏷️</span>
+                    <span className="flex-1 text-[14px] text-text-main">Tipo de demanda</span>
+                    <select
+                      value={task.demand_type_id ?? ""}
+                      onChange={async (e) => {
+                        const demandTypeId = e.target.value || null;
+                        const dt = demandTypes.find((d) => d.id === demandTypeId);
+                        const patch = { demand_type_id: demandTypeId };
+                        // Pré-calcula o prazo pelo padrão do tipo, só se ainda não houver um definido
+                        if (dt?.default_deadline_hours && !deadline) {
+                          const d = new Date(Date.now() + dt.default_deadline_hours * 3600000);
+                          const newDeadline = localDateStr(d);
+                          setDeadline(newDeadline);
+                          patch.deadline = newDeadline;
+                        }
+                        await updateTask(task.id, patch);
+                      }}
+                      className="text-[13px] bg-bg border border-border/60 rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main max-w-[160px]"
+                    >
+                      <option value="">Nenhum</option>
+                      {demandTypes.filter((d) => !d.archived_at).map((dt) => (
+                        <option key={dt.id} value={dt.id}>{dt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Tags */}
                 <div>
@@ -1064,27 +1090,8 @@ export function TaskDetail({ task, onClose }) {
               </div>
             </div>
 
-            {/* Algum dia + Prioridade + Ações */}
+            {/* Ações */}
             <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
-              <div className="flex items-center gap-3 px-4 py-2">
-                <span className="text-[15px] w-5 text-center leading-none">🌙</span>
-                <span className="flex-1 text-[14px] text-text-main">Algum dia</span>
-                <Toggle on={someday} onChange={async v => { setSomeday(v); await updateTask(task.id, { someday: v }); }} />
-              </div>
-              <div className="flex items-center gap-3 px-4 py-2">
-                <span className="text-[15px] w-5 text-center leading-none">⚑</span>
-                <span className="flex-1 text-[14px] text-text-main">Prioridade</span>
-                <select
-                  defaultValue={task.priority ?? ""}
-                  onChange={e => updateTask(task.id, { priority: e.target.value || null })}
-                  className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
-                >
-                  <option value="">Nenhuma</option>
-                  <option value="high">🔴 Alta</option>
-                  <option value="medium">🟡 Média</option>
-                  <option value="low">🟢 Baixa</option>
-                </select>
-              </div>
               <button
                 onClick={handleDelete}
                 className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-[#FF3B30]/5 transition-colors"

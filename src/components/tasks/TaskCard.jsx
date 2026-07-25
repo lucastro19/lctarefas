@@ -1260,7 +1260,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   };
 
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
-    task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
+    task.deadline || (task.scheduled_time && task.duration_minutes) || subtaskTotal > 0 || isUrgent ||
     contextLabel || collapsedTags.length > 0 || task.priority || task.meeting_url ||
     task.delegated_to || taskDemandType || task.org_id;
 
@@ -1715,7 +1715,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                       </span>
                     );
                   })()}
-                  {task.duration_minutes && (
+                  {task.scheduled_time && task.duration_minutes && (
                     <span className="text-xs text-text-secondary">{durationLabel(task.duration_minutes)}</span>
                   )}
                   {task.meeting_url && !task.completed_at && (
