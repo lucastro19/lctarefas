@@ -4,16 +4,23 @@ import { useAreaStore } from "../store/areaStore";
 import { useTaskStore } from "../store/taskStore";
 import { TaskList } from "../components/tasks/TaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
+import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
+import { BoardView } from "../components/tasks/BoardView";
+import { TimelineView } from "../components/tasks/TimelineView";
+import { useViewMode } from "../hooks/useViewMode";
 
 export function AreaPage() {
   const { id } = useParams();
-  const { areas, projects, getProjectsByArea } = useAreaStore();
+  const { areas, getProjectsByArea } = useAreaStore();
   const { getByArea, getByProject, getCompletedByArea, getCompletedByProject, tasks: allTasks } = useTaskStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [activeProjectId, setActiveProjectId] = useState(null);
 
   const area = areas.find((a) => a.id === id);
   const areaProjects = getProjectsByArea(id);
+
+  const viewKey = `lc_view_${activeProjectId ? `project_${activeProjectId}` : `area_${id}`}`;
+  const [viewMode, setViewMode] = useViewMode(viewKey);
 
   if (!area) return <div className="p-8 text-text-secondary text-sm">Área não encontrada.</div>;
 
@@ -27,9 +34,12 @@ export function AreaPage() {
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
       <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
         {/* Area header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: area.color }} />
-          <h1 className="text-2xl font-semibold text-text-main">{area.name}</h1>
+        <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: area.color }} />
+            <h1 className="text-2xl font-semibold text-text-main">{area.name}</h1>
+          </div>
+          <ViewSwitcher mode={viewMode} onChange={setViewMode} />
         </div>
 
         {/* Project tabs */}
@@ -73,13 +83,19 @@ export function AreaPage() {
           </div>
         )}
 
-        <TaskList
-          tasks={tasks}
-          completedTasks={completed}
-          defaultFields={defaultFields}
-          onTaskClick={setSelectedTask}
-          emptyMessage="Nenhuma tarefa nesta área."
-        />
+        {viewMode === "board" ? (
+          <BoardView tasks={tasks} onTaskClick={setSelectedTask} />
+        ) : viewMode === "timeline" ? (
+          <TimelineView tasks={tasks} onTaskClick={setSelectedTask} />
+        ) : (
+          <TaskList
+            tasks={tasks}
+            completedTasks={completed}
+            defaultFields={defaultFields}
+            onTaskClick={setSelectedTask}
+            emptyMessage="Nenhuma tarefa nesta área."
+          />
+        )}
       </div>
 
       {selectedTask && (

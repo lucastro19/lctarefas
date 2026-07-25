@@ -4,6 +4,10 @@ import { useOrgStore } from "../store/orgStore";
 import { useTaskStore } from "../store/taskStore";
 import { TaskList } from "../components/tasks/TaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
+import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
+import { BoardView } from "../components/tasks/BoardView";
+import { TimelineView } from "../components/tasks/TimelineView";
+import { useViewMode } from "../hooks/useViewMode";
 
 function fmtShortDate(iso) {
   if (!iso) return "";
@@ -43,6 +47,7 @@ export function SpacePage() {
   const { getBySpace, getCompletedBySpace } = useTaskStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [colleagueTasks, setColleagueTasks] = useState([]);
+  const [viewMode, setViewMode] = useViewMode(`lc_view_space_${id}`);
 
   const space = spaces.find((s) => s.id === id);
 
@@ -52,27 +57,39 @@ export function SpacePage() {
 
   if (!space) return <div className="p-8 text-text-secondary text-sm">Espaço não encontrado.</div>;
 
+  // Board/Linha do tempo aqui só operam sobre myTasks (o conjunto editável) — mesma cautela do
+  // Cockpit: tarefa de colega não vira card clicável fora da Lista, porque RLS bloquearia
+  // qualquer update mesmo que a UI parecesse permitir (ver TeamTaskRow do Cockpit).
   const myTasks = getBySpace(id);
   const myCompleted = getCompletedBySpace(id);
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
       <div className="flex-1 min-w-0 overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
-          <h1 className="text-2xl font-semibold text-text-main truncate">{space.name}</h1>
+        <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
+            <h1 className="text-2xl font-semibold text-text-main truncate">{space.name}</h1>
+          </div>
+          <ViewSwitcher mode={viewMode} onChange={setViewMode} />
         </div>
         <p className="text-sm text-text-secondary mb-6">
           {space.is_open ? "Espaço aberto — toda a organização vê o que está aqui." : "Espaço fechado — só quem tem acesso."}
         </p>
 
-        <TaskList
-          tasks={myTasks}
-          completedTasks={myCompleted}
-          defaultFields={{ space_id: id }}
-          onTaskClick={setSelectedTask}
-          emptyMessage="Nenhuma tarefa sua neste espaço ainda."
-        />
+        {viewMode === "board" ? (
+          <BoardView tasks={myTasks} onTaskClick={setSelectedTask} />
+        ) : viewMode === "timeline" ? (
+          <TimelineView tasks={myTasks} onTaskClick={setSelectedTask} />
+        ) : (
+          <TaskList
+            tasks={myTasks}
+            completedTasks={myCompleted}
+            defaultFields={{ space_id: id }}
+            onTaskClick={setSelectedTask}
+            emptyMessage="Nenhuma tarefa sua neste espaço ainda."
+          />
+        )}
 
         {colleagueTasks.length > 0 && (
           <section className="mt-8">

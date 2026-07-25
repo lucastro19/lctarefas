@@ -4,12 +4,17 @@ import { useAreaStore } from "../store/areaStore";
 import { useTaskStore } from "../store/taskStore";
 import { TaskList } from "../components/tasks/TaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
+import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
+import { BoardView } from "../components/tasks/BoardView";
+import { TimelineView } from "../components/tasks/TimelineView";
+import { useViewMode } from "../hooks/useViewMode";
 
 export function ProjectPage() {
   const { id } = useParams();
   const { projects, areas } = useAreaStore();
   const { getByProject, getCompletedByProject } = useTaskStore();
   const [selectedTask, setSelectedTask] = useState(null);
+  const [viewMode, setViewMode] = useViewMode(`lc_view_project_${id}`);
 
   const project = projects.find((p) => p.id === id);
   const area = areas.find((a) => a.id === project?.area_id);
@@ -25,44 +30,53 @@ export function ProjectPage() {
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
       <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
         {/* Header */}
-        <div className="mb-6">
-          {area && (
-            <p className="text-xs text-text-secondary mb-1 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: area.color }} />
-              {area.name}
-            </p>
-          )}
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: project.color }} />
-            <h1 className="text-2xl font-semibold text-text-main">{project.name}</h1>
-          </div>
-
-          {total > 0 && (
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-success rounded-full transition-all"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <span className="text-xs text-text-secondary">{progress}%</span>
+        <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            {area && (
+              <p className="text-xs text-text-secondary mb-1 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: area.color }} />
+                {area.name}
+              </p>
+            )}
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: project.color }} />
+              <h1 className="text-2xl font-semibold text-text-main">{project.name}</h1>
             </div>
-          )}
 
-          {project.deadline && (
-            <p className="text-xs text-text-secondary mt-2">
-              🚨 Prazo: {new Date(project.deadline + "T12:00:00").toLocaleDateString("pt-BR")}
-            </p>
-          )}
+            {total > 0 && (
+              <div className="mt-3 flex items-center gap-3 max-w-xs">
+                <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-success rounded-full transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <span className="text-xs text-text-secondary">{progress}%</span>
+              </div>
+            )}
+
+            {project.deadline && (
+              <p className="text-xs text-text-secondary mt-2">
+                🚨 Prazo: {new Date(project.deadline + "T12:00:00").toLocaleDateString("pt-BR")}
+              </p>
+            )}
+          </div>
+          <ViewSwitcher mode={viewMode} onChange={setViewMode} />
         </div>
 
-        <TaskList
-          tasks={tasks}
-          completedTasks={completed}
-          defaultFields={{ project_id: id, area_id: project.area_id }}
-          onTaskClick={setSelectedTask}
-          emptyMessage="Nenhuma tarefa neste projeto."
-        />
+        {viewMode === "board" ? (
+          <BoardView tasks={tasks} onTaskClick={setSelectedTask} />
+        ) : viewMode === "timeline" ? (
+          <TimelineView tasks={tasks} onTaskClick={setSelectedTask} />
+        ) : (
+          <TaskList
+            tasks={tasks}
+            completedTasks={completed}
+            defaultFields={{ project_id: id, area_id: project.area_id }}
+            onTaskClick={setSelectedTask}
+            emptyMessage="Nenhuma tarefa neste projeto."
+          />
+        )}
       </div>
 
       {selectedTask && (
