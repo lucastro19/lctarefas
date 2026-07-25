@@ -2,6 +2,19 @@ import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "./authStore";
 
+// org_members.user_id -> profiles não é FK direta (via auth.users), então buscamos os perfis à
+// parte e anexamos. Liberado pela policy profile_select_orgmate. Muta a lista in-place.
+async function attachProfiles(members) {
+  const ids = members.map((m) => m.user_id);
+  if (!ids.length) return;
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, avatar_url")
+    .in("id", ids);
+  const byId = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
+  members.forEach((m) => { m.profile = byId[m.user_id] ?? null; });
+}
+
 export const ROLE_LABELS = {
   estrategico: "Estratégico",
   supervisor: "Supervisor",
@@ -83,22 +96,30 @@ export const useOrgStore = create((set, get) => ({
       .from("org_members")
       .select("*")
       .eq("org_id", org.id)
+      .is("archived_at", null)
       .order("created_at");
     if (error) { console.error("fetchMembers error:", error); return; }
 
     const members = data ?? [];
-    // org_members.user_id -> profiles não é FK direta (via auth.users), então
-    // buscamos os perfis à parte e anexamos. Liberado pela policy profile_select_orgmate.
-    const ids = members.map((m) => m.user_id);
-    if (ids.length) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, avatar_url")
-        .in("id", ids);
-      const byId = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
-      members.forEach((m) => { m.profile = byId[m.user_id] ?? null; });
-    }
+    await attachProfiles(members);
     set({ members });
+  },
+
+  // Membros desativados (Fase 1c) — só pra tela "Membros inativos", não entram
+  // em nenhuma lista/roll-up ativo (RLS de is_org_member/is_manager_of já os exclui).
+  fetchArchivedMembers: async () => {
+    const org = get().organization;
+    if (!org) return [];
+    const { data, error } = await supabase
+      .from("org_members")
+      .select("*")
+      .eq("org_id", org.id)
+      .not("archived_at", "is", null)
+      .order("archived_at", { ascending: false });
+    if (error) { console.error("fetchArchivedMembers error:", error); return []; }
+    const archived = data ?? [];
+    await attachProfiles(archived);
+    return archived;
   },
 
   fetchInvites: async () => {
@@ -207,11 +228,20 @@ export const useOrgStore = create((set, get) => ({
     if (error) { console.error("updateMemberManager error:", error); get().fetchMembers(); }
   },
 
-  removeMember: async (memberId) => {
+  // Desativa em vez de excluir (Fase 1c) — reversível, preserva histórico de tarefas/delegação
+  // atribuídas a essa pessoa. RLS (is_org_member/is_manager_of) já trata desativado como fora da org.
+  archiveMember: async (memberId) => {
     set((s) => ({ members: s.members.filter((m) => m.id !== memberId) }));
-    const { error } = await supabase.from("org_members").delete().eq("id", memberId);
-    if (error) { console.error("removeMember error:", error); get().fetchMembers(); }
-    // Times podem ter perdido membros/líder (FK on delete): ressincroniza
+    const { error } = await supabase.from("org_members")
+      .update({ archived_at: new Date().toISOString() }).eq("id", memberId);
+    if (error) { console.error("archiveMember error:", error); get().fetchMembers(); }
+    get().fetchTeams();
+  },
+
+  unarchiveMember: async (memberId) => {
+    const { error } = await supabase.from("org_members").update({ archived_at: null }).eq("id", memberId);
+    if (error) { console.error("unarchiveMember error:", error); return; }
+    get().fetchMembers();
     get().fetchTeams();
   },
 
@@ -223,9 +253,23 @@ export const useOrgStore = create((set, get) => ({
       .from("teams")
       .select("*, team_members(org_member_id)")
       .eq("org_id", org.id)
+      .is("archived_at", null)
       .order("created_at");
     if (error) { console.error("fetchTeams error:", error); return; }
     set({ teams: data ?? [] });
+  },
+
+  fetchArchivedTeams: async () => {
+    const org = get().organization;
+    if (!org) return [];
+    const { data, error } = await supabase
+      .from("teams")
+      .select("*, team_members(org_member_id)")
+      .eq("org_id", org.id)
+      .not("archived_at", "is", null)
+      .order("archived_at", { ascending: false });
+    if (error) { console.error("fetchArchivedTeams error:", error); return []; }
+    return data ?? [];
   },
 
   createTeam: async (name) => {
@@ -255,10 +299,19 @@ export const useOrgStore = create((set, get) => ({
     if (error) { console.error("setTeamLead error:", error); get().fetchTeams(); }
   },
 
-  deleteTeam: async (id) => {
+  // Desativa em vez de excluir (Fase 1c) — reversível, preserva o vínculo histórico caso o time
+  // já tenha sido referenciado em tarefas concluídas.
+  archiveTeam: async (id) => {
     set((s) => ({ teams: s.teams.filter((t) => t.id !== id) }));
-    const { error } = await supabase.from("teams").delete().eq("id", id);
-    if (error) { console.error("deleteTeam error:", error); get().fetchTeams(); }
+    const { error } = await supabase.from("teams")
+      .update({ archived_at: new Date().toISOString() }).eq("id", id);
+    if (error) { console.error("archiveTeam error:", error); get().fetchTeams(); }
+  },
+
+  unarchiveTeam: async (id) => {
+    const { error } = await supabase.from("teams").update({ archived_at: null }).eq("id", id);
+    if (error) { console.error("unarchiveTeam error:", error); return; }
+    get().fetchTeams();
   },
 
   addTeamMember: async (teamId, orgMemberId) => {

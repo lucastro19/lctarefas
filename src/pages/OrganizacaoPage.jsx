@@ -128,9 +128,10 @@ function MembersTab({ isOwner }) {
   const { user } = useAuthStore();
   const {
     members, invites, inviteMember, revokeInvite, inviteLink, fetchInvites,
-    updateMemberRole, updateMemberManager, removeMember,
+    updateMemberRole, updateMemberManager, archiveMember, unarchiveMember, fetchArchivedMembers,
   } = useOrgStore();
-  const { collaborators } = useCollaboratorStore();
+  const { collaborators, archiveCollaborator, unarchiveCollaborator, fetchArchivedCollaborators } = useCollaboratorStore();
+  const [archivedCollaborators, setArchivedCollaborators] = useState([]);
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("membro");
@@ -142,8 +143,11 @@ function MembersTab({ isOwner }) {
   const [showNewLocal, setShowNewLocal] = useState(false);
   const [editingLocal, setEditingLocal] = useState(null);
   const [prefillFor, setPrefillFor] = useState(null); // membro sem contato local, "adotando" um
+  const [archivedMembers, setArchivedMembers] = useState([]);
 
   useEffect(() => { if (isOwner) fetchInvites(); }, [isOwner]);
+  useEffect(() => { if (isOwner) fetchArchivedMembers().then(setArchivedMembers); }, [isOwner, members]);
+  useEffect(() => { fetchArchivedCollaborators().then(setArchivedCollaborators); }, [collaborators]);
 
   const hasLocalContact = (m) => collaborators.some((c) => c.linked_user_id === m.user_id);
   const localOnly = collaborators.filter((c) => !c.linked_user_id);
@@ -227,10 +231,10 @@ function MembersTab({ isOwner }) {
                         ))}
                     </select>
                     <button
-                      onClick={() => { if (confirm(`Remover ${memberName(m)} da organização?`)) removeMember(m.id); }}
+                      onClick={() => { if (confirm(`Desativar ${memberName(m)}? Ela perde acesso à organização, mas o histórico de tarefas é preservado — dá pra reativar depois.`)) archiveMember(m.id); }}
                       className="text-xs text-danger hover:underline shrink-0"
                     >
-                      Remover
+                      Desativar
                     </button>
                   </div>
                 ) : (
@@ -249,6 +253,30 @@ function MembersTab({ isOwner }) {
             );
           })}
         </div>
+        {isOwner && archivedMembers.length > 0 && (
+          <details className="text-sm">
+            <summary className="text-xs font-bold uppercase tracking-widest text-text-secondary cursor-pointer">
+              Membros inativos ({archivedMembers.length})
+            </summary>
+            <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden mt-2">
+              {archivedMembers.map((m) => (
+                <div key={m.id} className="flex items-center gap-3 px-4 py-3">
+                  <Avatar name={memberName(m)} url={m.profile?.avatar_url} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text-secondary truncate line-through">{memberName(m)}</p>
+                    {m.profile?.email && <p className="text-xs text-text-secondary truncate">{m.profile.email}</p>}
+                  </div>
+                  <button
+                    onClick={() => unarchiveMember(m.id)}
+                    className="text-xs font-medium text-primary hover:underline shrink-0"
+                  >
+                    Reativar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
 
       {/* Colaboradores locais — contatos sem conta, usados pra delegar (Fase 1) */}
@@ -264,20 +292,43 @@ function MembersTab({ isOwner }) {
         ) : (
           <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
             {localOnly.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setEditingLocal(c)}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg transition-colors"
-              >
-                <Avatar name={c.name} url={c.avatar_url} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-text-main truncate">{c.name}</p>
-                  {c.email && <p className="text-xs text-text-secondary truncate">{c.email}</p>}
-                </div>
-                <span className="text-xs text-text-secondary shrink-0">Editar</span>
-              </button>
+              <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-bg transition-colors">
+                <button onClick={() => setEditingLocal(c)} className="flex-1 flex items-center gap-3 text-left min-w-0">
+                  <Avatar name={c.name} url={c.avatar_url} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text-main truncate">{c.name}</p>
+                    {c.email && <p className="text-xs text-text-secondary truncate">{c.email}</p>}
+                  </div>
+                </button>
+                <button onClick={() => setEditingLocal(c)} className="text-xs text-text-secondary hover:text-primary shrink-0">Editar</button>
+                <button onClick={() => archiveCollaborator(c.id)} className="text-xs text-text-secondary hover:text-danger shrink-0">Arquivar</button>
+              </div>
             ))}
           </div>
+        )}
+        {archivedCollaborators.length > 0 && (
+          <details className="text-sm">
+            <summary className="text-xs font-bold uppercase tracking-widest text-text-secondary cursor-pointer">
+              Colaboradores arquivados ({archivedCollaborators.length})
+            </summary>
+            <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden mt-2">
+              {archivedCollaborators.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 px-4 py-3">
+                  <Avatar name={c.name} url={c.avatar_url} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text-secondary truncate line-through">{c.name}</p>
+                    {c.email && <p className="text-xs text-text-secondary truncate">{c.email}</p>}
+                  </div>
+                  <button
+                    onClick={() => unarchiveCollaborator(c.id).then(() => fetchArchivedCollaborators().then(setArchivedCollaborators))}
+                    className="text-xs font-medium text-primary hover:underline shrink-0"
+                  >
+                    Reativar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
         )}
       </section>
 
@@ -397,7 +448,7 @@ function MembersTab({ isOwner }) {
 
 // ─── Aba: Times ───
 function TeamCard({ team, members }) {
-  const { renameTeam, setTeamLead, deleteTeam, addTeamMember, removeTeamMember } = useOrgStore();
+  const { renameTeam, setTeamLead, archiveTeam, addTeamMember, removeTeamMember } = useOrgStore();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(team.name);
   const [addId, setAddId] = useState("");
@@ -423,8 +474,9 @@ function TeamCard({ team, members }) {
         )}
         <button onClick={() => setEditing((v) => !v)} className="text-[11px] text-text-secondary hover:text-primary">✎</button>
         <button
-          onClick={() => { if (confirm(`Excluir o time "${team.name}"?`)) deleteTeam(team.id); }}
+          onClick={() => { if (confirm(`Desativar o time "${team.name}"? Dá pra reativar depois.`)) archiveTeam(team.id); }}
           className="text-[11px] text-text-secondary hover:text-danger"
+          title="Desativar time"
         >
           🗑
         </button>
@@ -482,8 +534,11 @@ function TeamCard({ team, members }) {
 }
 
 function TeamsTab() {
-  const { teams, members, createTeam } = useOrgStore();
+  const { teams, members, createTeam, fetchArchivedTeams, unarchiveTeam } = useOrgStore();
   const [newName, setNewName] = useState("");
+  const [archivedTeams, setArchivedTeams] = useState([]);
+
+  useEffect(() => { fetchArchivedTeams().then(setArchivedTeams); }, [teams]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -516,6 +571,24 @@ function TeamsTab() {
         <div className="grid gap-3 sm:grid-cols-2">
           {teams.map((t) => <TeamCard key={t.id} team={t} members={members} />)}
         </div>
+      )}
+
+      {archivedTeams.length > 0 && (
+        <details className="text-sm">
+          <summary className="text-xs font-bold uppercase tracking-widest text-text-secondary cursor-pointer">
+            Times inativos ({archivedTeams.length})
+          </summary>
+          <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden mt-2">
+            {archivedTeams.map((t) => (
+              <div key={t.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="flex-1 text-sm text-text-secondary truncate line-through">{t.name}</span>
+                <button onClick={() => unarchiveTeam(t.id)} className="text-xs font-medium text-primary hover:underline shrink-0">
+                  Reativar
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );
