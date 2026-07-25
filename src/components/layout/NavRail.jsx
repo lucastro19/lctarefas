@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import { useUiStore } from "../../store/uiStore";
 import { useNotificationStore } from "../../store/notificationStore";
+import { hasUnseenRelease } from "../../data/releaseNotes";
 import { SettingsModal } from "../settings/SettingsModal";
 
 const RAIL_ITEM = "w-[38px] h-[38px] rounded-lg flex items-center justify-center text-[16px] text-white/60 hover:text-white hover:bg-white/10 transition-colors mb-0.5 shrink-0";
@@ -77,6 +78,7 @@ export function NavRail() {
   const { focusMode, toggleFocusMode } = useUiStore();
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
+  const [unseenRelease, setUnseenRelease] = useState(() => hasUnseenRelease());
 
   return (
     <aside className="hidden md:flex w-16 bg-[#111112] flex-col items-center py-3.5 shrink-0 h-full">
@@ -109,7 +111,12 @@ export function NavRail() {
       </button>
       <NavLink to="/calendar" title="Calendário" className={RAIL_ITEM}>📅</NavLink>
       <NavLink to="/booking-settings" title="Agendamento" className={RAIL_ITEM}>🗓️</NavLink>
-      <button onClick={() => setShowSettings(true)} title="Configurações" className={RAIL_ITEM}>⚙️</button>
+      <button onClick={() => setShowSettings(true)} title="Configurações · novidades disponíveis" className={[RAIL_ITEM, "relative"].join(" ")}>
+        ⚙️
+        {unseenRelease && (
+          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary border border-[#111112]" />
+        )}
+      </button>
       <button onClick={signOut} title="Sair" className={[RAIL_ITEM, "mb-2"].join(" ")}>🚪</button>
 
       {user?.user_metadata?.avatar_url ? (
@@ -120,7 +127,9 @@ export function NavRail() {
         </div>
       )}
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal onClose={() => { setShowSettings(false); setUnseenRelease(hasUnseenRelease()); }} />
+      )}
     </aside>
   );
 }

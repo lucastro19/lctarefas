@@ -6,6 +6,8 @@ import { useAuthStore } from "../../store/authStore";
 import { useTaskStore } from "../../store/taskStore";
 import { usePlanLimits } from "../../hooks/usePlanLimits";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getSubscriptionStatus } from "../../lib/pushNotifications";
+import { CURRENT_VERSION } from "../../data/releaseNotes";
+import { WhatsNewModal } from "./WhatsNewModal";
 
 const TAG_COLORS = ["#8E8E93", "#4F8EF7", "#34C759", "#FF9500", "#FF3B30", "#AF52DE", "#FF2D55", "#5AC8FA"];
 
@@ -42,6 +44,7 @@ export function SettingsModal({ onClose }) {
   } = useSettingsStore();
   const { tasks } = useTaskStore();
   const { tags, createTag, updateTag, deleteTag, fetchTags } = useTagStore();
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [editingTagId, setEditingTagId] = useState(null);
   const [editingTagName, setEditingTagName] = useState("");
   const [editingTagColor, setEditingTagColor] = useState("#8E8E93");
@@ -556,8 +559,20 @@ export function SettingsModal({ onClose }) {
               Ao reordenar tarefas em <strong className="text-text-secondary">Hoje</strong>, os horários são recalculados automaticamente somando as durações.
             </p>
           </div>
+
+          <div className="border-t border-border pt-4 flex items-center justify-between">
+            <span className="text-[11px] text-text-secondary">LCTarefas v{CURRENT_VERSION}</span>
+            <button
+              onClick={() => setShowWhatsNew(true)}
+              className="text-[11px] font-medium text-primary hover:underline"
+            >
+              🎉 Novidades
+            </button>
+          </div>
         </div>
       </div>
+
+      {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
     </div>
   );
 }
