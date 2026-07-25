@@ -5,9 +5,93 @@ import { useOrgStore } from "../../store/orgStore";
 import { useAuthStore } from "../../store/authStore";
 import { useUiStore } from "../../store/uiStore";
 import { openWhatsApp, nudgeMessage } from "../../utils/nudge";
+import { supabase } from "../../lib/supabase";
+import { memberDisplayName } from "./shared";
 import {
   CollaboratorAvatar, WhatsAppButton, STATUS_META, STATUS_ORDER, agingDays, fmtShortDate, inDays,
 } from "./shared";
+
+// Comentários (Fase 4.12) — aditivo ao "combinado" (delegation_note) que já existe: aquele é a
+// definição de pronto (1 campo, editado por cima), isso é uma conversa (histórico, vários
+// autores). Visibilidade já vem de quem pode ver a tarefa (RLS de task_comments referencia
+// tasks diretamente, ver migração).
+function CommentThread({ taskId }) {
+  const { user } = useAuthStore();
+  const { members } = useOrgStore();
+  const { collaborators } = useCollaboratorStore();
+  const [comments, setComments] = useState([]);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("task_comments")
+      .select("*")
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: true })
+      .then(({ data, error }) => {
+        if (error) { console.error("fetchComments:", error.message); return; }
+        setComments(data ?? []);
+      });
+  }, [taskId]);
+
+  const authorName = (authorId) => {
+    if (authorId === user?.id) return "Você";
+    const member = members.find((m) => m.user_id === authorId);
+    return member ? memberDisplayName(member, collaborators) : "Alguém";
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!body.trim() || sending || !user?.id) return;
+    setSending(true);
+    const { data, error } = await supabase
+      .from("task_comments")
+      .insert([{ task_id: taskId, author_user_id: user.id, body: body.trim() }])
+      .select()
+      .single();
+    setSending(false);
+    if (error) { console.error("postComment:", error.message); return; }
+    setComments((prev) => [...prev, data]);
+    setBody("");
+  };
+
+  return (
+    <div className="px-4 py-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-1.5">
+        Comentários
+      </p>
+      {comments.length > 0 && (
+        <div className="space-y-2 mb-2">
+          {comments.map((c) => (
+            <div key={c.id} className="text-[12.5px]">
+              <span className="font-medium text-text-main">{authorName(c.author_user_id)}</span>{" "}
+              <span className="text-text-secondary text-[10.5px]">
+                {new Date(c.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>
+              <p className="text-text-main mt-0.5">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <form onSubmit={submit} className="flex items-center gap-2">
+        <input
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Escrever um comentário…"
+          className="flex-1 text-[13px] bg-bg border border-border/60 rounded-xl px-3 py-1.5 outline-none focus:border-primary text-text-main"
+        />
+        <button
+          type="submit"
+          disabled={!body.trim() || sending}
+          className="text-[12px] font-semibold text-primary disabled:opacity-40 shrink-0"
+        >
+          Enviar
+        </button>
+      </form>
+    </div>
+  );
+}
 
 // Fase 2.7: se o colaborador escolhido é vinculado e tem um gestor direto
 // diferente de quem está delegando, é uma delegação "pulando nível" — pode
@@ -246,6 +330,8 @@ export function DelegationSection({ taskId, fallbackTask }) {
                 className="mt-1.5 w-full text-[13px] bg-bg border border-border/60 rounded-xl px-3 py-2 outline-none focus:border-primary text-text-main resize-none"
               />
             </div>
+
+            <CommentThread taskId={task.id} />
 
             {/* Histórico da cadeia (Fase 2.7) — só quando já houve redelegação */}
             {chain.length > 1 && (
