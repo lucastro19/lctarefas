@@ -3,6 +3,7 @@ import { TimedTaskList } from "../components/tasks/TimedTaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
 import { FollowUpPanel } from "../components/tasks/FollowUpPanel";
 import { DayPlanner } from "../components/tasks/DayPlanner";
+import { TimeSlotPlanner } from "../components/tasks/TimeSlotPlanner";
 import { useTaskStore } from "../store/taskStore";
 import { useUiStore } from "../store/uiStore";
 
@@ -111,6 +112,7 @@ export function Today() {
   const { urgentFilter, toggleUrgentFilter } = useUiStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [showPlanner, setShowPlanner] = useState(false);
+  const [showSlots, setShowSlots] = useState(false);
 
   const todayDate = localDateStr();
   const allTasks = getToday();
@@ -138,6 +140,12 @@ export function Today() {
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-bg text-text-secondary hover:text-text-main transition-colors"
           >
             🗓️ Planejar meu dia
+          </button>
+          <button
+            onClick={() => setShowSlots(true)}
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-bg text-text-secondary hover:text-text-main transition-colors"
+          >
+            🕐 Organizar horários
           </button>
           <button
             onClick={toggleUrgentFilter}
@@ -186,6 +194,7 @@ export function Today() {
         />
       )}
       {showPlanner && <DayPlanner onClose={() => setShowPlanner(false)} />}
+      {showSlots && <TimeSlotPlanner onClose={() => setShowSlots(false)} />}
     </div>
   );
 }
