@@ -66,7 +66,8 @@ export function SpacePage() {
   const {
     filtered, people, types, personFilter, setPersonFilter, typeFilter, setTypeFilter,
     lateOnly, setLateOnly, sortBy, setSortBy, groupBy, setGroupBy,
-  } = useTaskFilters(myTasks);
+    isMineActive, toggleMine, savedViews, saveCurrentView, applyView, deleteView,
+  } = useTaskFilters(myTasks, `space_${id}`);
 
   if (!space) return <div className="p-8 text-text-secondary text-sm">Espaço não encontrado.</div>;
 
@@ -92,6 +93,8 @@ export function SpacePage() {
           sortBy={sortBy} setSortBy={setSortBy}
           groupBy={groupBy} setGroupBy={setGroupBy}
           showGroupBy={viewMode === "board"}
+          isMineActive={isMineActive} toggleMine={toggleMine}
+          savedViews={savedViews} saveCurrentView={saveCurrentView} applyView={applyView} deleteView={deleteView}
         />
 
         {viewMode === "board" ? (

@@ -26,7 +26,8 @@ export function ProjectPage() {
   const {
     filtered, people, types, personFilter, setPersonFilter, typeFilter, setTypeFilter,
     lateOnly, setLateOnly, sortBy, setSortBy, groupBy, setGroupBy,
-  } = useTaskFilters(tasks);
+    isMineActive, toggleMine, savedViews, saveCurrentView, applyView, deleteView,
+  } = useTaskFilters(tasks, `project_${id}`);
 
   if (!project) return <div className="p-8 text-text-secondary text-sm">Projeto não encontrado.</div>;
 
@@ -79,6 +80,8 @@ export function ProjectPage() {
           sortBy={sortBy} setSortBy={setSortBy}
           groupBy={groupBy} setGroupBy={setGroupBy}
           showGroupBy={viewMode === "board"}
+          isMineActive={isMineActive} toggleMine={toggleMine}
+          savedViews={savedViews} saveCurrentView={saveCurrentView} applyView={applyView} deleteView={deleteView}
         />
 
         {viewMode === "board" ? (

@@ -33,7 +33,8 @@ export function AreaPage() {
   const {
     filtered, people, types, personFilter, setPersonFilter, typeFilter, setTypeFilter,
     lateOnly, setLateOnly, sortBy, setSortBy, groupBy, setGroupBy,
-  } = useTaskFilters(tasks);
+    isMineActive, toggleMine, savedViews, saveCurrentView, applyView, deleteView,
+  } = useTaskFilters(tasks, activeProjectId ? `project_${activeProjectId}` : `area_${id}`);
 
   if (!area) return <div className="p-8 text-text-secondary text-sm">Área não encontrada.</div>;
 
@@ -98,6 +99,8 @@ export function AreaPage() {
           sortBy={sortBy} setSortBy={setSortBy}
           groupBy={groupBy} setGroupBy={setGroupBy}
           showGroupBy={viewMode === "board"}
+          isMineActive={isMineActive} toggleMine={toggleMine}
+          savedViews={savedViews} saveCurrentView={saveCurrentView} applyView={applyView} deleteView={deleteView}
         />
 
         {viewMode === "board" ? (
