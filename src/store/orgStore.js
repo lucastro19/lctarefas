@@ -32,6 +32,7 @@ export const useOrgStore = create((set, get) => ({
   invites: [],          // convites da org (para o dono ver pendentes)
   teams: [],            // times da org (com team_members embutidos)
   demandTypes: [],      // tipos de demanda da org
+  spaces: [],           // espaços compartilhados da org (Fase 2 — contêiner real, não área com flag)
   teamTasks: [],        // roll-up hierárquico p/ o Cockpit (Fase 2.5) — tarefas da equipe, não as minhas
   loading: false,
   loaded: false,        // já tentou buscar ao menos uma vez
@@ -61,6 +62,7 @@ export const useOrgStore = create((set, get) => ({
       get().fetchMembers();
       get().fetchTeams();
       get().fetchDemandTypes();
+      get().fetchSpaces();
       // Só o dono consegue listar convites (RLS); tudo bem falhar silencioso.
       if (organization.owner_id === user.id) get().fetchInvites();
     }
@@ -380,6 +382,99 @@ export const useOrgStore = create((set, get) => ({
     set((s) => ({ demandTypes: s.demandTypes.map((d) => (d.id === id ? { ...d, archived_at: null } : d)) }));
     const { error } = await supabase.from("demand_types").update({ archived_at: null }).eq("id", id);
     if (error) { console.error("unarchiveDemandType error:", error); get().fetchDemandTypes(); }
+  },
+
+  // ─── Espaços (Fase 2) — contêiner compartilhado real, com membros/permissões
+  // próprias. Aberto (is_open=true): qualquer membro ativo da org enxerga tudo
+  // dentro dele, sem gerenciar lista. Fechado: só quem está em space_members
+  // (+ o dono, sempre). RLS (is_space_member) já garante isso — aqui é só CRUD. ───
+  fetchSpaces: async () => {
+    const org = get().organization;
+    if (!org) return;
+    const { data, error } = await supabase
+      .from("spaces")
+      .select("*, space_members(org_member_id)")
+      .eq("org_id", org.id)
+      .is("archived_at", null)
+      .order("created_at");
+    if (error) { console.error("fetchSpaces error:", error); return; }
+    set({ spaces: data ?? [] });
+  },
+
+  fetchArchivedSpaces: async () => {
+    const org = get().organization;
+    if (!org) return [];
+    const { data, error } = await supabase
+      .from("spaces")
+      .select("*, space_members(org_member_id)")
+      .eq("org_id", org.id)
+      .not("archived_at", "is", null)
+      .order("archived_at", { ascending: false });
+    if (error) { console.error("fetchArchivedSpaces error:", error); return []; }
+    return data ?? [];
+  },
+
+  createSpace: async ({ name, color, isOpen = true }) => {
+    const org = get().organization;
+    if (!org || !name?.trim()) return null;
+    const { data, error } = await supabase
+      .from("spaces")
+      .insert([{ org_id: org.id, name: name.trim(), color: color ?? DEMAND_COLORS[0], is_open: isOpen }])
+      .select("*, space_members(org_member_id)")
+      .single();
+    if (error) { console.error("createSpace error:", error); return null; }
+    set((s) => ({ spaces: [...s.spaces, data] }));
+    return data;
+  },
+
+  renameSpace: async (id, name) => {
+    if (!name?.trim()) return;
+    set((s) => ({ spaces: s.spaces.map((sp) => (sp.id === id ? { ...sp, name: name.trim() } : sp)) }));
+    const { error } = await supabase.from("spaces").update({ name: name.trim() }).eq("id", id);
+    if (error) { console.error("renameSpace error:", error); get().fetchSpaces(); }
+  },
+
+  setSpaceColor: async (id, color) => {
+    set((s) => ({ spaces: s.spaces.map((sp) => (sp.id === id ? { ...sp, color } : sp)) }));
+    const { error } = await supabase.from("spaces").update({ color }).eq("id", id);
+    if (error) { console.error("setSpaceColor error:", error); get().fetchSpaces(); }
+  },
+
+  setSpaceOpen: async (id, isOpen) => {
+    set((s) => ({ spaces: s.spaces.map((sp) => (sp.id === id ? { ...sp, is_open: isOpen } : sp)) }));
+    const { error } = await supabase.from("spaces").update({ is_open: isOpen }).eq("id", id);
+    if (error) { console.error("setSpaceOpen error:", error); get().fetchSpaces(); }
+  },
+
+  archiveSpace: async (id) => {
+    set((s) => ({ spaces: s.spaces.filter((sp) => sp.id !== id) }));
+    const { error } = await supabase.from("spaces")
+      .update({ archived_at: new Date().toISOString() }).eq("id", id);
+    if (error) { console.error("archiveSpace error:", error); get().fetchSpaces(); }
+  },
+
+  unarchiveSpace: async (id) => {
+    const { error } = await supabase.from("spaces").update({ archived_at: null }).eq("id", id);
+    if (error) { console.error("unarchiveSpace error:", error); return; }
+    get().fetchSpaces();
+  },
+
+  addSpaceMember: async (spaceId, orgMemberId) => {
+    const { error } = await supabase
+      .from("space_members")
+      .insert([{ space_id: spaceId, org_member_id: orgMemberId }]);
+    if (error) { console.error("addSpaceMember error:", error); }
+    get().fetchSpaces();
+  },
+
+  removeSpaceMember: async (spaceId, orgMemberId) => {
+    const { error } = await supabase
+      .from("space_members")
+      .delete()
+      .eq("space_id", spaceId)
+      .eq("org_member_id", orgMemberId);
+    if (error) { console.error("removeSpaceMember error:", error); }
+    get().fetchSpaces();
   },
 
   // ─── Configurações da org (gamificação/alertas — §09/§10, inerte por ora) ───

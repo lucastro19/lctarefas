@@ -840,8 +840,179 @@ function SettingsTab() {
 }
 
 // ─── Com organização: cabeçalho + abas ───
+// ─── Aba: Espaços (Fase 2) — contêiner compartilhado real da organização ───
+function SpaceCard({ space, members }) {
+  const { renameSpace, setSpaceColor, setSpaceOpen, archiveSpace, addSpaceMember, removeSpaceMember } = useOrgStore();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(space.name);
+  const [addId, setAddId] = useState("");
+
+  const memberIds = new Set((space.space_members ?? []).map((sm) => sm.org_member_id));
+  const spaceMembers = members.filter((m) => memberIds.has(m.id));
+  const available = members.filter((m) => !memberIds.has(m.id));
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        {editing ? (
+          <input
+            value={name}
+            autoFocus
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => { if (name.trim() && name !== space.name) renameSpace(space.id, name); setEditing(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(space.name); setEditing(false); } }}
+            className="flex-1 text-sm font-semibold bg-bg border border-primary rounded-lg px-2 py-1 outline-none text-text-main"
+          />
+        ) : (
+          <h4 className="flex-1 text-sm font-semibold text-text-main truncate flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
+            {space.name}
+          </h4>
+        )}
+        <button onClick={() => setEditing((v) => !v)} className="text-[11px] text-text-secondary hover:text-primary">✎</button>
+        <button
+          onClick={() => { if (confirm(`Desativar o espaço "${space.name}"? Dá pra reativar depois.`)) archiveSpace(space.id); }}
+          className="text-[11px] text-text-secondary hover:text-danger"
+          title="Desativar espaço"
+        >
+          🗑
+        </button>
+      </div>
+
+      <div className="flex gap-1.5">
+        {DEMAND_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setSpaceColor(space.id, c)}
+            className={["w-4 h-4 rounded-full transition-transform", space.color === c ? "ring-2 ring-offset-1 ring-offset-card ring-text-main scale-110" : ""].join(" ")}
+            style={{ backgroundColor: c }}
+          />
+        ))}
+      </div>
+
+      <label className="flex items-center justify-between gap-2 text-xs text-text-secondary">
+        <span>{space.is_open ? "Aberto — toda a organização vê" : "Fechado — só os membros abaixo"}</span>
+        <button
+          type="button"
+          onClick={() => setSpaceOpen(space.id, !space.is_open)}
+          className={[
+            "text-[11px] font-medium px-2.5 py-1 rounded-full shrink-0 transition-colors",
+            space.is_open ? "bg-primary/10 text-primary" : "bg-border/60 text-text-secondary",
+          ].join(" ")}
+        >
+          {space.is_open ? "Aberto" : "Fechado"}
+        </button>
+      </label>
+
+      {!space.is_open && (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {spaceMembers.length === 0 && <span className="text-[11px] text-text-secondary">Ninguém tem acesso ainda (além de você).</span>}
+            {spaceMembers.map((m) => (
+              <span key={m.id} className="flex items-center gap-1 text-[11px] bg-bg border border-border rounded-full pl-2 pr-1 py-0.5">
+                {memberName(m)}
+                <button onClick={() => removeSpaceMember(space.id, m.id)} className="text-text-secondary hover:text-danger px-0.5">×</button>
+              </span>
+            ))}
+          </div>
+          {available.length > 0 && (
+            <div className="flex gap-2">
+              <select
+                value={addId}
+                onChange={(e) => setAddId(e.target.value)}
+                className="flex-1 text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+              >
+                <option value="">Dar acesso a…</option>
+                {available.map((m) => (
+                  <option key={m.id} value={m.id}>{memberName(m)}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => { if (addId) { addSpaceMember(space.id, addId); setAddId(""); } }}
+                disabled={!addId}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-white disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+              >
+                Adicionar
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function SpacesTab() {
+  const { spaces, members, createSpace, fetchArchivedSpaces, unarchiveSpace } = useOrgStore();
+  const [newName, setNewName] = useState("");
+  const [archivedSpaces, setArchivedSpaces] = useState([]);
+
+  useEffect(() => { fetchArchivedSpaces().then(setArchivedSpaces); }, [spaces]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    await createSpace({ name: newName });
+    setNewName("");
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-text-secondary">
+        Um espaço é onde o trabalho da organização vive de verdade — diferente da sua área
+        pessoal, todo mundo com acesso vê as tarefas dentro dele. Novo espaço nasce aberto
+        (toda a organização vê); feche pra restringir a membros específicos.
+      </p>
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="Nome do novo espaço (ex.: Suporte)"
+          className="flex-1 text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main"
+        />
+        <button
+          type="submit"
+          disabled={!newName.trim()}
+          className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+        >
+          Criar espaço
+        </button>
+      </form>
+
+      {spaces.length === 0 ? (
+        <p className="text-sm text-text-secondary text-center py-8">Nenhum espaço ainda. Crie o primeiro acima.</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {spaces.map((s) => <SpaceCard key={s.id} space={s} members={members} />)}
+        </div>
+      )}
+
+      {archivedSpaces.length > 0 && (
+        <details className="text-sm">
+          <summary className="text-xs font-bold uppercase tracking-widest text-text-secondary cursor-pointer">
+            Espaços inativos ({archivedSpaces.length})
+          </summary>
+          <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden mt-2">
+            {archivedSpaces.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="flex-1 text-sm text-text-secondary truncate line-through">{s.name}</span>
+                <button onClick={() => unarchiveSpace(s.id)} className="text-xs font-medium text-primary hover:underline shrink-0">
+                  Reativar
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 const OWNER_TABS = [
   { id: "membros",  label: "Membros" },
+  { id: "espacos",  label: "Espaços" },
   { id: "times",    label: "Times" },
   { id: "demandas", label: "Tipos de demanda" },
   { id: "config",   label: "Configurações" },
@@ -888,6 +1059,7 @@ function ManageOrg() {
       )}
 
       {tab === "membros"  && <MembersTab isOwner={isOwner} />}
+      {tab === "espacos"  && isOwner && <SpacesTab />}
       {tab === "times"    && isOwner && <TeamsTab />}
       {tab === "demandas" && isOwner && <DemandTypesTab />}
       {tab === "config"   && isOwner && <SettingsTab />}
