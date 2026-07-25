@@ -7,6 +7,10 @@ import { DelegatedRow } from "../components/delegation/DelegatedRow";
 import { CollaboratorAvatar, agingDays, isFollowUpDue } from "../components/delegation/shared";
 import { CollaboratorModal } from "../components/delegation/CollaboratorModal";
 import { usePlanLimits } from "../hooks/usePlanLimits";
+import { BoardView } from "../components/tasks/BoardView";
+import { TimelineView } from "../components/tasks/TimelineView";
+import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
+import { useViewMode } from "../hooks/useViewMode";
 
 const FILTERS = [
   { key: "todas",    label: "Todas",             test: () => true },
@@ -70,6 +74,7 @@ export function Delegadas() {
   const [filter, setFilter] = useState("todas");
   const [selectedTask, setSelectedTask] = useState(null);
   const [showNew, setShowNew] = useState(false);
+  const [viewMode, setViewMode] = useViewMode("lc_view_delegadas");
 
   const all = getDelegated();
   const active = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
@@ -98,13 +103,16 @@ export function Delegadas() {
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
       <div className="flex-1 min-w-0 overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
-        <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-2xl font-semibold text-text-main hidden md:block">Delegadas</h1>
-          {dueCount > 0 && (
-            <span className="text-xs font-semibold text-danger bg-danger/10 rounded-full px-2 py-1">
-              {dueCount} para cobrar
-            </span>
-          )}
+        <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-text-main hidden md:block">Delegadas</h1>
+            {dueCount > 0 && (
+              <span className="text-xs font-semibold text-danger bg-danger/10 rounded-full px-2 py-1">
+                {dueCount} para cobrar
+              </span>
+            )}
+          </div>
+          <ViewSwitcher mode={viewMode} onChange={setViewMode} />
         </div>
         <p className="text-sm text-text-secondary mb-4">
           O que você delegou e ainda não voltou.
@@ -153,6 +161,10 @@ export function Delegadas() {
               </button>
             )}
           </div>
+        ) : viewMode === "board" ? (
+          <BoardView tasks={filtered} onTaskClick={setSelectedTask} />
+        ) : viewMode === "timeline" ? (
+          <TimelineView tasks={filtered} onTaskClick={setSelectedTask} />
         ) : (
           <>
             {groups.map((g) => (
