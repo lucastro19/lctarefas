@@ -1259,7 +1259,7 @@ export function TaskCard({ task, subtasks = [], onClick }) {
   const hasMetadata = task.scheduled_date || task.scheduled_time || task.recurrence ||
     task.deadline || task.duration_minutes || subtaskTotal > 0 || isUrgent ||
     contextLabel || collapsedTags.length > 0 || task.priority || task.meeting_url ||
-    task.delegated_to || taskDemandType;
+    task.delegated_to || taskDemandType || task.org_id;
 
   const handleTouchStart = () => {
     if (anySelected) return;
@@ -1771,6 +1771,14 @@ export function TaskCard({ task, subtasks = [], onClick }) {
                       title="Cobrança em atraso"
                     >
                       🔔 cobrar · {agingDays(task)}d parada
+                    </span>
+                  )}
+                  {task.org_id && (
+                    <span
+                      className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0"
+                      title="Tarefa da organização — visível no roll-up do gestor"
+                    >
+                      Org
                     </span>
                   )}
                   {contextLabel && (

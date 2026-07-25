@@ -216,6 +216,26 @@ export const useOrgStore = create((set, get) => ({
     set({ teamTasks });
   },
 
+  // Tarefas de COLEGAS dentro de um espaço (Fase 3) — mesma lógica do Cockpit: a RLS
+  // (is_space_member) já garante quem pode ver; aqui só tira as minhas (essas já aparecem via
+  // taskStore.getBySpace, que edita normalmente). Retorna em vez de guardar em estado global —
+  // a SpacePage troca de espaço com frequência, não faz sentido um cache único no store.
+  fetchSpaceTasks: async (spaceId) => {
+    const uid = useAuthStore.getState().user?.id;
+    if (!spaceId || !uid) return [];
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*, projects(deleted_at), areas(deleted_at)")
+      .eq("space_id", spaceId)
+      .is("deleted_at", null)
+      .order("position", { ascending: true });
+    if (error) { console.error("fetchSpaceTasks error:", error); return []; }
+    return (data ?? [])
+      .filter((t) => !t.projects?.deleted_at && !t.areas?.deleted_at)
+      .filter((t) => t.user_id !== uid && t.assignee_id !== uid)
+      .map(({ projects: _p, areas: _a, ...t }) => t);
+  },
+
   // ─── Gestão de membros (só o dono; coberto por org_members_owner_*) ───
   updateMemberRole: async (memberId, role) => {
     set((s) => ({ members: s.members.map((m) => (m.id === memberId ? { ...m, role } : m)) }));

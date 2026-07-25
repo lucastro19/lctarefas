@@ -65,7 +65,7 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
   const { tags } = useTagStore();
   const { getInbox, getToday, getUpcoming, getSomeday, getTrash, getDelegated, getFollowUpsDue, getDelegatedBy } = useTaskStore();
   const { collaborators } = useCollaboratorStore();
-  const { organization } = useOrgStore();
+  const { organization, spaces } = useOrgStore();
   const { user, signOut } = useAuthStore();
   const { closeDrawer, toggleFocusMode } = useUiStore();
   const navigate = useNavigate();
@@ -183,6 +183,28 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
                 <span className="flex-1 truncate">{tag.name}</span>
+              </NavLink>
+            ))}
+            <div className="h-px bg-border mx-2 my-2" />
+          </>
+        )}
+
+        {/* Espaços da organização (Fase 3) — contêiner compartilhado, distinto das áreas pessoais */}
+        {organization && spaces.length > 0 && (
+          <>
+            <p className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-text-secondary/70 px-3 pt-2 pb-1">
+              Espaços
+            </p>
+            {spaces.map((space) => (
+              <NavLink
+                key={space.id}
+                to={`/espaco/${space.id}`}
+                onClick={closeDrawer}
+                className={({ isActive }) => ["sidebar-item", isActive ? "active" : ""].join(" ")}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
+                <span className="flex-1 truncate">{space.name}</span>
+                {!space.is_open && <span className="text-text-secondary/50 text-xs shrink-0" title="Fechado">🔒</span>}
               </NavLink>
             ))}
             <div className="h-px bg-border mx-2 my-2" />

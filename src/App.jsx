@@ -20,6 +20,7 @@ import { Someday } from "./pages/Someday";
 // Páginas secundárias (lazy — carregadas só quando o usuário navegar)
 const Trash          = lazy(() => import("./pages/Trash").then((m) => ({ default: m.Trash })));
 const AreaPage       = lazy(() => import("./pages/AreaPage").then((m) => ({ default: m.AreaPage })));
+const SpacePage      = lazy(() => import("./pages/SpacePage").then((m) => ({ default: m.SpacePage })));
 const ProjectPage    = lazy(() => import("./pages/ProjectPage").then((m) => ({ default: m.ProjectPage })));
 const Archive        = lazy(() => import("./pages/Archive").then((m) => ({ default: m.Archive })));
 const Logbook        = lazy(() => import("./pages/Logbook").then((m) => ({ default: m.Logbook })));
@@ -221,6 +222,7 @@ function AppRoutes() {
             <Route path="/cockpit" element={<Cockpit />} />
             <Route path="/trash" element={<Trash />} />
             <Route path="/area/:id" element={<AreaPage />} />
+            <Route path="/espaco/:id" element={<SpacePage />} />
             <Route path="/project/:id" element={<ProjectPage />} />
             <Route path="/archive" element={<Archive />} />
             <Route path="/logbook" element={<Logbook />} />

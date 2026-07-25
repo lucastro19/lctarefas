@@ -926,6 +926,14 @@ export const useTaskStore = create(
         return get().tasks.filter((t) => t.project_id === projectId && active(t) && !hiddenFromMyLists(t, myId));
       },
 
+      // Fase 3: minhas tarefas dentro de um espaço da organização (mirror de getByArea/
+      // getByProject) — só cobre as MINHAS, já que fetchTasks só carrega dono/assignee; ver as
+      // dos colegas no mesmo espaço é orgStore.fetchSpaceTasks (mesmo caminho do Cockpit).
+      getBySpace: (spaceId) => {
+        const myId = useAuthStore.getState().user?.id;
+        return get().tasks.filter((t) => t.space_id === spaceId && active(t) && !hiddenFromMyLists(t, myId));
+      },
+
       // --- Delegadas ---------------------------------------------------
       // Só as que EU deleguei (o executor não vê a própria tarefa atribuída aqui).
       getDelegated: () => {
@@ -1000,6 +1008,11 @@ export const useTaskStore = create(
       getCompletedByArea: (areaId) =>
         get().tasks
           .filter((t) => t.area_id === areaId && !t.project_id && !!t.completed_at && !t.deleted_at)
+          .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
+
+      getCompletedBySpace: (spaceId) =>
+        get().tasks
+          .filter((t) => t.space_id === spaceId && !!t.completed_at && !t.deleted_at)
           .sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
 
       getAllCompleted: () =>
