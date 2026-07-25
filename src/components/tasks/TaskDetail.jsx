@@ -566,43 +566,45 @@ export function TaskDetail({ task, onClose }) {
                   )}
                 </div>
 
-                {/* Duração */}
-                <div className="flex items-center gap-3 px-4 py-2">
-                  <span className="text-[15px] w-5 text-center leading-none">⏱</span>
-                  <span className="flex-1 text-[14px] text-text-main">Duração</span>
-                  {!customDuration ? (
-                    <select
-                      value={durationMinutes}
-                      onChange={e => {
-                        if (e.target.value === "custom") { setCustomDuration(true); return; }
-                        const v = e.target.value ? Number(e.target.value) : null;
-                        setDurationMinutes(v ?? "");
-                      }}
-                      className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
-                    >
-                      <option value="">Sem duração</option>
-                      {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                      <option value="custom">Personalizado…</option>
-                    </select>
-                  ) : (
-                    <div className="flex gap-1 items-center">
-                      <input type="number" min={0} max={23} placeholder="0" id="dur-h"
-                        defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
-                        className="w-10 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center" />
-                      <span className="text-xs text-text-secondary">h</span>
-                      <input type="number" min={0} max={59} placeholder="30" id="dur-m"
-                        defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
-                        className="w-12 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center"
-                        onBlur={() => {
-                          const h = Number(document.getElementById("dur-h").value) || 0;
-                          const m = Number(document.getElementById("dur-m").value) || 0;
-                          const total = h * 60 + m;
-                          setDurationMinutes(total || "");
-                          setCustomDuration(false);
-                        }} />
-                    </div>
-                  )}
-                </div>
+                {/* Duração — só se horário definido (mesmo gate do badge no TaskCard) */}
+                {scheduledTime && (
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">⏱</span>
+                    <span className="flex-1 text-[14px] text-text-main">Duração</span>
+                    {!customDuration ? (
+                      <select
+                        value={durationMinutes}
+                        onChange={e => {
+                          if (e.target.value === "custom") { setCustomDuration(true); return; }
+                          const v = e.target.value ? Number(e.target.value) : null;
+                          setDurationMinutes(v ?? "");
+                        }}
+                        className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
+                      >
+                        <option value="">Sem duração</option>
+                        {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        <option value="custom">Personalizado…</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-1 items-center">
+                        <input type="number" min={0} max={23} placeholder="0" id="dur-h"
+                          defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
+                          className="w-10 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center" />
+                        <span className="text-xs text-text-secondary">h</span>
+                        <input type="number" min={0} max={59} placeholder="30" id="dur-m"
+                          defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
+                          className="w-12 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center"
+                          onBlur={() => {
+                            const h = Number(document.getElementById("dur-h").value) || 0;
+                            const m = Number(document.getElementById("dur-m").value) || 0;
+                            const total = h * 60 + m;
+                            setDurationMinutes(total || "");
+                            setCustomDuration(false);
+                          }} />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Repetição */}
                 <div className="flex items-center gap-3 px-4 py-2">
