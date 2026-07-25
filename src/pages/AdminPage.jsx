@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { supabase } from "../lib/supabase";
+import { DevIdeasBoard } from "../components/admin/DevIdeasBoard";
 
 const ROLE_LABELS = {
   free:  { label: "Free",  color: "text-text-secondary bg-border/60" },
@@ -46,6 +47,7 @@ export function AdminPage() {
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState(null);
   const [confirmSuspend, setConfirmSuspend] = useState(null);
+  const [tab, setTab] = useState("users");
 
   // Redireciona se não for admin
   useEffect(() => {
@@ -159,15 +161,45 @@ export function AdminPage() {
             ADMIN
           </span>
         </div>
-        <button
-          onClick={loadUsers}
-          className="text-xs text-primary hover:underline"
-          disabled={loading}
-        >
-          {loading ? "Carregando…" : "↺ Atualizar"}
-        </button>
+        {tab === "users" && (
+          <button
+            onClick={loadUsers}
+            className="text-xs text-primary hover:underline"
+            disabled={loading}
+          >
+            {loading ? "Carregando…" : "↺ Atualizar"}
+          </button>
+        )}
       </div>
 
+      {/* Abas */}
+      <div className="bg-card border-b border-border px-6 flex items-center gap-1">
+        {[
+          { id: "users", label: "Usuários" },
+          { id: "ideas", label: "Ideias & Roadmap" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={[
+              "text-sm px-3 py-2.5 border-b-2 transition-colors -mb-px",
+              tab === t.id
+                ? "border-primary text-text-main font-medium"
+                : "border-transparent text-text-secondary hover:text-text-main",
+            ].join(" ")}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "ideas" && (
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <DevIdeasBoard />
+        </div>
+      )}
+
+      {tab === "users" && (
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -305,6 +337,7 @@ export function AdminPage() {
           {filtered.length} de {users.length} usuário{users.length !== 1 ? "s" : ""}
         </p>
       </div>
+      )}
 
       {/* Modal de confirmação de suspensão */}
       {confirmSuspend && (
