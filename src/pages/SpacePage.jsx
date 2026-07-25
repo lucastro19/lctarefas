@@ -7,7 +7,9 @@ import { TaskDetail } from "../components/tasks/TaskDetail";
 import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
 import { BoardView } from "../components/tasks/BoardView";
 import { TimelineView } from "../components/tasks/TimelineView";
+import { FilterSortBar } from "../components/tasks/FilterSortBar";
 import { useViewMode } from "../hooks/useViewMode";
+import { useTaskFilters } from "../hooks/useTaskFilters";
 
 function fmtShortDate(iso) {
   if (!iso) return "";
@@ -55,13 +57,18 @@ export function SpacePage() {
     if (space) fetchSpaceTasks(id).then(setColleagueTasks);
   }, [id, space]);
 
-  if (!space) return <div className="p-8 text-text-secondary text-sm">Espaço não encontrado.</div>;
-
   // Board/Linha do tempo aqui só operam sobre myTasks (o conjunto editável) — mesma cautela do
   // Cockpit: tarefa de colega não vira card clicável fora da Lista, porque RLS bloquearia
   // qualquer update mesmo que a UI parecesse permitir (ver TeamTaskRow do Cockpit).
   const myTasks = getBySpace(id);
   const myCompleted = getCompletedBySpace(id);
+
+  const {
+    filtered, people, types, personFilter, setPersonFilter, typeFilter, setTypeFilter,
+    lateOnly, setLateOnly, sortBy, setSortBy, groupBy, setGroupBy,
+  } = useTaskFilters(myTasks);
+
+  if (!space) return <div className="p-8 text-text-secondary text-sm">Espaço não encontrado.</div>;
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
@@ -77,13 +84,23 @@ export function SpacePage() {
           {space.is_open ? "Espaço aberto — toda a organização vê o que está aqui." : "Espaço fechado — só quem tem acesso."}
         </p>
 
+        <FilterSortBar
+          people={people} types={types}
+          personFilter={personFilter} setPersonFilter={setPersonFilter}
+          typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+          lateOnly={lateOnly} setLateOnly={setLateOnly}
+          sortBy={sortBy} setSortBy={setSortBy}
+          groupBy={groupBy} setGroupBy={setGroupBy}
+          showGroupBy={viewMode === "board"}
+        />
+
         {viewMode === "board" ? (
-          <BoardView tasks={myTasks} onTaskClick={setSelectedTask} />
+          <BoardView tasks={filtered} onTaskClick={setSelectedTask} groupBy={groupBy} personLabel={(pid) => people.find((p) => p.id === pid)?.label ?? "Alguém"} types={types} />
         ) : viewMode === "timeline" ? (
-          <TimelineView tasks={myTasks} onTaskClick={setSelectedTask} />
+          <TimelineView tasks={filtered} onTaskClick={setSelectedTask} />
         ) : (
           <TaskList
-            tasks={myTasks}
+            tasks={filtered}
             completedTasks={myCompleted}
             defaultFields={{ space_id: id }}
             onTaskClick={setSelectedTask}

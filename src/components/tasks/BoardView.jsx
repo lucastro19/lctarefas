@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { STATUS_META, STATUS_ORDER } from "../delegation/shared";
 
-const SIMPLE_COLUMNS = [
+const SIMPLE_STATUS_COLUMNS = [
   { key: "aberta", label: "A fazer" },
   { key: "concluida", label: "Concluída", color: STATUS_META.concluida.color },
 ];
@@ -14,26 +14,43 @@ function boardStatus(task) {
   return task.delegation_status ?? "pendente";
 }
 
-export function BoardView({ tasks, onTaskClick }) {
+// Agrupar por (Fase 4.4): além de Status, o board pode trocar o eixo das colunas pra Pessoa ou
+// Tipo de demanda — mesmos dados já carregados, só reorganizados.
+export function BoardView({ tasks, onTaskClick, groupBy = "status", personLabel, types = [] }) {
   const hasOrgData = tasks.some((t) => t.org_id);
 
   const columns = useMemo(() => {
+    if (groupBy === "person") {
+      const ids = [...new Set(tasks.map((t) => t.assignee_id ?? t.user_id).filter(Boolean))];
+      return ids.map((id) => ({ key: id, label: personLabel ? personLabel(id) : "Alguém" }));
+    }
+    if (groupBy === "type") {
+      if (types.length === 0) return [{ key: "sem-tipo", label: "Sem tipo" }];
+      return [...types.map((t) => ({ key: t.id, label: t.label, color: t.color })), { key: "sem-tipo", label: "Sem tipo" }];
+    }
     if (hasOrgData) {
       return [...STATUS_ORDER, "concluida"].map((key) => ({
         key, label: STATUS_META[key].label, color: STATUS_META[key].color,
       }));
     }
-    return SIMPLE_COLUMNS;
-  }, [hasOrgData]);
+    return SIMPLE_STATUS_COLUMNS;
+  }, [groupBy, tasks, personLabel, types, hasOrgData]);
+
+  const columnKeyFor = (task) => {
+    if (groupBy === "person") return task.assignee_id ?? task.user_id;
+    if (groupBy === "type") return task.demand_type_id ?? "sem-tipo";
+    return hasOrgData ? boardStatus(task) : (task.completed_at ? "concluida" : "aberta");
+  };
 
   const grouped = useMemo(() => {
     const map = Object.fromEntries(columns.map((c) => [c.key, []]));
     tasks.forEach((t) => {
-      const key = hasOrgData ? boardStatus(t) : (t.completed_at ? "concluida" : "aberta");
-      (map[key] ?? map[columns[0].key]).push(t);
+      const key = columnKeyFor(t);
+      (map[key] ?? map[columns[0]?.key]).push(t);
     });
     return map;
-  }, [tasks, columns, hasOrgData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, columns]);
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">

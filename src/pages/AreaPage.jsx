@@ -7,7 +7,9 @@ import { TaskDetail } from "../components/tasks/TaskDetail";
 import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
 import { BoardView } from "../components/tasks/BoardView";
 import { TimelineView } from "../components/tasks/TimelineView";
+import { FilterSortBar } from "../components/tasks/FilterSortBar";
 import { useViewMode } from "../hooks/useViewMode";
+import { useTaskFilters } from "../hooks/useTaskFilters";
 
 export function AreaPage() {
   const { id } = useParams();
@@ -22,13 +24,18 @@ export function AreaPage() {
   const viewKey = `lc_view_${activeProjectId ? `project_${activeProjectId}` : `area_${id}`}`;
   const [viewMode, setViewMode] = useViewMode(viewKey);
 
-  if (!area) return <div className="p-8 text-text-secondary text-sm">Área não encontrada.</div>;
-
   const tasks = activeProjectId ? getByProject(activeProjectId) : getByArea(id);
   const completed = activeProjectId ? getCompletedByProject(activeProjectId) : getCompletedByArea(id);
   const defaultFields = activeProjectId
     ? { area_id: id, project_id: activeProjectId }
     : { area_id: id };
+
+  const {
+    filtered, people, types, personFilter, setPersonFilter, typeFilter, setTypeFilter,
+    lateOnly, setLateOnly, sortBy, setSortBy, groupBy, setGroupBy,
+  } = useTaskFilters(tasks);
+
+  if (!area) return <div className="p-8 text-text-secondary text-sm">Área não encontrada.</div>;
 
   return (
     <div className="flex h-full" onClick={() => setSelectedTask(null)}>
@@ -83,13 +90,23 @@ export function AreaPage() {
           </div>
         )}
 
+        <FilterSortBar
+          people={people} types={types}
+          personFilter={personFilter} setPersonFilter={setPersonFilter}
+          typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+          lateOnly={lateOnly} setLateOnly={setLateOnly}
+          sortBy={sortBy} setSortBy={setSortBy}
+          groupBy={groupBy} setGroupBy={setGroupBy}
+          showGroupBy={viewMode === "board"}
+        />
+
         {viewMode === "board" ? (
-          <BoardView tasks={tasks} onTaskClick={setSelectedTask} />
+          <BoardView tasks={filtered} onTaskClick={setSelectedTask} groupBy={groupBy} personLabel={(id) => people.find((p) => p.id === id)?.label ?? "Alguém"} types={types} />
         ) : viewMode === "timeline" ? (
-          <TimelineView tasks={tasks} onTaskClick={setSelectedTask} />
+          <TimelineView tasks={filtered} onTaskClick={setSelectedTask} />
         ) : (
           <TaskList
-            tasks={tasks}
+            tasks={filtered}
             completedTasks={completed}
             defaultFields={defaultFields}
             onTaskClick={setSelectedTask}

@@ -7,7 +7,9 @@ import { TaskDetail } from "../components/tasks/TaskDetail";
 import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
 import { BoardView } from "../components/tasks/BoardView";
 import { TimelineView } from "../components/tasks/TimelineView";
+import { FilterSortBar } from "../components/tasks/FilterSortBar";
 import { useViewMode } from "../hooks/useViewMode";
+import { useTaskFilters } from "../hooks/useTaskFilters";
 
 export function ProjectPage() {
   const { id } = useParams();
@@ -20,6 +22,11 @@ export function ProjectPage() {
   const area = areas.find((a) => a.id === project?.area_id);
   const tasks = getByProject(id);
   const completed = getCompletedByProject(id);
+
+  const {
+    filtered, people, types, personFilter, setPersonFilter, typeFilter, setTypeFilter,
+    lateOnly, setLateOnly, sortBy, setSortBy, groupBy, setGroupBy,
+  } = useTaskFilters(tasks);
 
   if (!project) return <div className="p-8 text-text-secondary text-sm">Projeto não encontrado.</div>;
 
@@ -64,13 +71,23 @@ export function ProjectPage() {
           <ViewSwitcher mode={viewMode} onChange={setViewMode} />
         </div>
 
+        <FilterSortBar
+          people={people} types={types}
+          personFilter={personFilter} setPersonFilter={setPersonFilter}
+          typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+          lateOnly={lateOnly} setLateOnly={setLateOnly}
+          sortBy={sortBy} setSortBy={setSortBy}
+          groupBy={groupBy} setGroupBy={setGroupBy}
+          showGroupBy={viewMode === "board"}
+        />
+
         {viewMode === "board" ? (
-          <BoardView tasks={tasks} onTaskClick={setSelectedTask} />
+          <BoardView tasks={filtered} onTaskClick={setSelectedTask} groupBy={groupBy} personLabel={(pid) => people.find((p) => p.id === pid)?.label ?? "Alguém"} types={types} />
         ) : viewMode === "timeline" ? (
-          <TimelineView tasks={tasks} onTaskClick={setSelectedTask} />
+          <TimelineView tasks={filtered} onTaskClick={setSelectedTask} />
         ) : (
           <TaskList
-            tasks={tasks}
+            tasks={filtered}
             completedTasks={completed}
             defaultFields={{ project_id: id, area_id: project.area_id }}
             onTaskClick={setSelectedTask}
