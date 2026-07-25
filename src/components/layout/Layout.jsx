@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { Sidebar } from "./Sidebar";
+import { NavRail } from "./NavRail";
 import { MobileTabBar } from "./MobileTabBar";
 import { MobileHeader } from "./MobileHeader";
 import { MobileDrawer } from "./MobileDrawer";
@@ -33,7 +34,7 @@ export function Layout({ children }) {
   const isDraggingRef = useRef(false);
   const { tasks, updateTask, reorderTasks } = useTaskStore();
   const { calcTimes } = useSettingsStore();
-  const { pendingTask, clearPendingTask, focusMode, toggleFocusMode, showToast, openDelegateFlow } = useUiStore();
+  const { pendingTask, clearPendingTask, focusMode, showToast, openDelegateFlow } = useUiStore();
 
   // Rastreia Y em capture phase (antes de qualquer stopPropagation do dnd-kit)
   useEffect(() => {
@@ -191,27 +192,12 @@ export function Layout({ children }) {
       <div className="flex flex-col h-screen overflow-hidden bg-bg">
         {!pendingTask && <MobileHeader />}
         <div className="flex flex-1 overflow-hidden">
+        <NavRail />
         {!focusMode && <Sidebar />}
         <main
           ref={mainRef}
           className="flex-1 overflow-y-auto relative pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0"
         >
-          {/* Botão para revelar a sidebar quando ela está oculta */}
-          {focusMode && (
-            <button
-              onClick={toggleFocusMode}
-              title="Mostrar barra lateral"
-              className="hidden md:flex absolute top-4 left-4 z-10 w-8 h-8 items-center justify-center rounded-lg text-text-secondary hover:text-text-main hover:bg-card border border-border transition-all shadow-sm"
-            >
-              <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
-                <rect x="0.6" y="0.6" width="16.8" height="12.8" rx="2.4" stroke="currentColor" strokeWidth="1.2"/>
-                <line x1="6" y1="0.6" x2="6" y2="13.4" stroke="currentColor" strokeWidth="1.2"/>
-                <line x1="2" y1="4.5" x2="4.5" y2="4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                <line x1="2" y1="7" x2="4.5" y2="7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                <line x1="2" y1="9.5" x2="4.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-              </svg>
-            </button>
-          )}
           <div key={location.pathname} className="page-enter h-full">{children}</div>
         </main>
         {pendingTask && (

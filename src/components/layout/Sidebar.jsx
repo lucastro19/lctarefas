@@ -4,15 +4,51 @@ import { useDroppable } from "@dnd-kit/core";
 import { useTaskStore } from "../../store/taskStore";
 import { useAreaStore } from "../../store/areaStore";
 import { useAuthStore } from "../../store/authStore";
-import { Badge } from "../ui/Badge";
 import { SettingsModal } from "../settings/SettingsModal";
 import { useTagStore } from "../../store/tagStore";
 import { useUiStore } from "../../store/uiStore";
 import { usePlanLimits } from "../../hooks/usePlanLimits";
 import { useCollaboratorStore } from "../../store/collaboratorStore";
 import { useOrgStore } from "../../store/orgStore";
+import { useNavPins } from "../../hooks/useNavPins";
 import { CollaboratorModal } from "../delegation/CollaboratorModal";
 import { CollaboratorAvatar, isFollowUpDue } from "../delegation/shared";
+
+function norm(s) {
+  return (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+function Accordion({ label, count, open, onToggle, children }) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] md:text-xs font-bold uppercase tracking-widest text-text-secondary/70"
+      >
+        <span className={["transition-transform inline-block text-[9px]", open ? "rotate-90" : ""].join(" ")}>▸</span>
+        <span className="flex-1 text-left">{label}</span>
+        {count > 0 && <span className="text-[10px] font-bold tabular-nums">{count}</span>}
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+}
+
+function PinButton({ pinned, onClick, className = "" }) {
+  return (
+    <button
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
+      title={pinned ? "Desafixar" : "Fixar"}
+      className={[
+        "shrink-0 text-xs transition-opacity",
+        pinned ? "opacity-100 text-warning" : "opacity-0 group-hover:opacity-60 hover:!opacity-100 text-text-secondary",
+        className,
+      ].join(" ")}
+    >
+      {pinned ? "★" : "☆"}
+    </button>
+  );
+}
 
 const NAV_ITEMS = [
   { to: "/inbox", icon: "📥", label: "Inbox", dropId: "inbox" },
@@ -61,15 +97,18 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
   const [newAreaName, setNewAreaName] = useState("");
   const [addingArea, setAddingArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [search, setSearch] = useState("");
+  const [openSections, setOpenSections] = useState({ tags: false, spaces: false, areas: true, team: false });
   const { areas, createArea, createProject, getProjectsByArea } = useAreaStore();
   const { tags } = useTagStore();
   const { getInbox, getToday, getUpcoming, getSomeday, getTrash, getDelegated, getFollowUpsDue, getDelegatedBy } = useTaskStore();
   const { collaborators } = useCollaboratorStore();
   const { organization, spaces } = useOrgStore();
   const { user, signOut } = useAuthStore();
-  const { closeDrawer, toggleFocusMode } = useUiStore();
+  const { closeDrawer } = useUiStore();
   const navigate = useNavigate();
-  const { canAddArea, canAddProject, isPro } = usePlanLimits();
+  const { canAddArea } = usePlanLimits();
+  const { pins, isPinned, togglePin } = useNavPins();
 
   const handleAddArea = async (e) => {
     e.preventDefault();
@@ -79,37 +118,23 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
     setAddingArea(false);
   };
 
+  const toggleSection = (key) => setOpenSections((s) => ({ ...s, [key]: !s[key] }));
+
+  // Busca filtra Tags/Espaços/Áreas/Equipe por nome — enquanto digita, as seções mostram o
+  // resultado independente de estarem recolhidas ou não (ver `isOpen` de cada Accordion abaixo).
+  const q = norm(search);
+  const searching = q.length > 0;
+  const filteredTags = tags.filter((t) => !searching || norm(t.name).includes(q));
+  const filteredSpaces = spaces.filter((s) => !searching || norm(s.name).includes(q));
+  const filteredAreas = areas.filter((a) =>
+    !searching || norm(a.name).includes(q) || getProjectsByArea(a.id).some((p) => norm(p.name).includes(q))
+  );
+  const filteredCollaborators = collaborators.filter((c) => !searching || norm(c.name).includes(q));
+
   return (
     <aside className={className}>
-      {/* Cabeçalho: marca + usuário */}
+      {/* Cabeçalho: usuário (marca + toggle agora vivem no NavRail) */}
       <div className="border-b border-border shrink-0">
-        {/* Linha da marca */}
-        <div className="px-4 pt-5 pb-3 flex items-center gap-3">
-          <img src="/lc-logo.png" alt="LC" className="w-9 h-9 shrink-0 object-contain" />
-          <div className="leading-none">
-            <span className="font-bold text-base text-[#2563EB]">LC</span>
-            <span className="font-semibold text-base text-text-main">Tarefas</span>
-          </div>
-          <div className="flex-1" />
-          <button
-            onClick={toggleFocusMode}
-            title="Ocultar barra lateral"
-            className="hidden md:flex w-8 h-8 items-center justify-center rounded-lg text-text-secondary hover:text-text-main hover:bg-bg transition-colors shrink-0"
-          >
-            {/* sidebar toggle icon (macOS style) */}
-            <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
-              <rect x="0.6" y="0.6" width="16.8" height="12.8" rx="2.4" stroke="currentColor" strokeWidth="1.2"/>
-              <line x1="6" y1="0.6" x2="6" y2="13.4" stroke="currentColor" strokeWidth="1.2"/>
-              <line x1="2" y1="4.5" x2="4.5" y2="4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-              <line x1="2" y1="7" x2="4.5" y2="7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-              <line x1="2" y1="9.5" x2="4.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* Divisor */}
-        <div className="mx-4 border-t border-border" />
-
         {/* Linha do usuário */}
         <div className="px-4 py-3 flex items-center gap-3">
           {user?.user_metadata?.avatar_url ? (
@@ -168,23 +193,59 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
         {/* Separator */}
         <div className="h-px bg-border mx-2 my-2" />
 
-        {/* Tags */}
-        {tags.length > 0 && (
+        {/* Busca — filtra Tags/Espaços/Áreas/Equipe abaixo, ignorando o recolhido/aberto */}
+        <div className="px-2 pb-1">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar área, tag, pessoa…"
+            className="w-full text-[13px] bg-card border border-border rounded-lg px-2.5 py-1.5 outline-none focus:border-primary text-text-main placeholder:text-text-secondary/50"
+          />
+        </div>
+
+        {/* Fixados (Fase 4.2) — guardado por usuário, sem tabela nova */}
+        {pins.length > 0 && (
           <>
             <p className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-text-secondary/70 px-3 pt-2 pb-1">
-              Tags
+              📌 Fixados
             </p>
-            {tags.map((tag) => (
+            {pins.map((p) => (
               <NavLink
-                key={tag.id}
-                to={`/tag/${tag.id}`}
+                key={`${p.type}-${p.id}`}
+                to={p.to}
                 onClick={closeDrawer}
                 className={({ isActive }) => ["sidebar-item", isActive ? "active" : ""].join(" ")}
               >
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
-                <span className="flex-1 truncate">{tag.name}</span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color ?? "#8E8E93" }} />
+                <span className="flex-1 truncate">{p.label}</span>
               </NavLink>
             ))}
+            <div className="h-px bg-border mx-2 my-2" />
+          </>
+        )}
+
+        {/* Tags */}
+        {tags.length > 0 && (
+          <>
+            <Accordion label="Tags" count={filteredTags.length} open={openSections.tags || searching} onToggle={() => toggleSection("tags")}>
+              {filteredTags.map((tag) => (
+                <div key={tag.id} className="relative flex items-center group">
+                  <NavLink
+                    to={`/tag/${tag.id}`}
+                    onClick={closeDrawer}
+                    className={({ isActive }) => ["sidebar-item flex-1 min-w-0", isActive ? "active" : ""].join(" ")}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                    <span className="flex-1 truncate">{tag.name}</span>
+                  </NavLink>
+                  <PinButton
+                    pinned={isPinned("tag", tag.id)}
+                    onClick={() => togglePin("tag", tag.id, { label: tag.name, color: tag.color, to: `/tag/${tag.id}` })}
+                    className="mr-2"
+                  />
+                </div>
+              ))}
+            </Accordion>
             <div className="h-px bg-border mx-2 my-2" />
           </>
         )}
@@ -192,93 +253,98 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
         {/* Espaços da organização (Fase 3) — contêiner compartilhado, distinto das áreas pessoais */}
         {organization && spaces.length > 0 && (
           <>
-            <p className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-text-secondary/70 px-3 pt-2 pb-1">
-              Espaços
-            </p>
-            {spaces.map((space) => (
-              <NavLink
-                key={space.id}
-                to={`/espaco/${space.id}`}
-                onClick={closeDrawer}
-                className={({ isActive }) => ["sidebar-item", isActive ? "active" : ""].join(" ")}
-              >
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
-                <span className="flex-1 truncate">{space.name}</span>
-                {!space.is_open && <span className="text-text-secondary/50 text-xs shrink-0" title="Fechado">🔒</span>}
-              </NavLink>
-            ))}
+            <Accordion label="Espaços" count={filteredSpaces.length} open={openSections.spaces || searching} onToggle={() => toggleSection("spaces")}>
+              {filteredSpaces.map((space) => (
+                <div key={space.id} className="relative flex items-center group">
+                  <NavLink
+                    to={`/espaco/${space.id}`}
+                    onClick={closeDrawer}
+                    className={({ isActive }) => ["sidebar-item flex-1 min-w-0", isActive ? "active" : ""].join(" ")}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
+                    <span className="flex-1 truncate">{space.name}</span>
+                    {!space.is_open && <span className="text-text-secondary/50 text-xs shrink-0" title="Fechado">🔒</span>}
+                  </NavLink>
+                  <PinButton
+                    pinned={isPinned("space", space.id)}
+                    onClick={() => togglePin("space", space.id, { label: space.name, color: space.color, to: `/espaco/${space.id}` })}
+                    className="mr-2"
+                  />
+                </div>
+              ))}
+            </Accordion>
             <div className="h-px bg-border mx-2 my-2" />
           </>
         )}
 
         {/* Areas & Projects */}
-        <p className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-text-secondary/70 px-3 pt-2 pb-1">
-          Áreas
-        </p>
-
-        {areas.map((area) => (
-          <AreaGroup
-            key={area.id}
-            area={area}
-            projects={getProjectsByArea(area.id)}
-            onAddProject={createProject}
-            navigate={navigate}
-          />
-        ))}
-
-        {/* Add Area */}
-        {addingArea ? (
-          <form onSubmit={handleAddArea} className="px-3 py-1">
-            <input
-              autoFocus
-              value={newAreaName}
-              onChange={(e) => setNewAreaName(e.target.value)}
-              onBlur={() => { if (!newAreaName.trim()) setAddingArea(false); }}
-              placeholder="Nome da área"
-              className="w-full text-sm bg-card border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+        <Accordion label="Áreas" count={filteredAreas.length} open={openSections.areas || searching} onToggle={() => toggleSection("areas")}>
+          {filteredAreas.map((area) => (
+            <AreaGroup
+              key={area.id}
+              area={area}
+              projects={getProjectsByArea(area.id)}
+              onAddProject={createProject}
+              navigate={navigate}
+              isPinned={isPinned}
+              togglePin={togglePin}
             />
-          </form>
-        ) : canAddArea ? (
-          <button
-            onClick={() => setAddingArea(true)}
-            className="sidebar-item w-full text-text-secondary hover:text-primary"
-          >
-            <span className="text-base w-5 text-center">+</span>
-            <span>Nova área</span>
-          </button>
-        ) : (
-          <div className="px-3 py-1.5">
-            <p className="text-[10px] text-warning">
-              Limite de áreas atingido.{" "}
-              <button onClick={() => setShowSettings(true)} className="underline hover:text-primary transition-colors">
-                Ver Pro
-              </button>
-            </p>
-          </div>
-        )}
+          ))}
+
+          {/* Add Area */}
+          {addingArea ? (
+            <form onSubmit={handleAddArea} className="px-3 py-1">
+              <input
+                autoFocus
+                value={newAreaName}
+                onChange={(e) => setNewAreaName(e.target.value)}
+                onBlur={() => { if (!newAreaName.trim()) setAddingArea(false); }}
+                placeholder="Nome da área"
+                className="w-full text-sm bg-card border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+              />
+            </form>
+          ) : canAddArea ? (
+            <button
+              onClick={() => setAddingArea(true)}
+              className="sidebar-item w-full text-text-secondary hover:text-primary"
+            >
+              <span className="text-base w-5 text-center">+</span>
+              <span>Nova área</span>
+            </button>
+          ) : (
+            <div className="px-3 py-1.5">
+              <p className="text-[10px] text-warning">
+                Limite de áreas atingido.{" "}
+                <button onClick={() => setShowSettings(true)} className="underline hover:text-primary transition-colors">
+                  Ver Pro
+                </button>
+              </p>
+            </div>
+          )}
+        </Accordion>
 
         {/* Equipe — arraste uma tarefa até a pessoa para delegar */}
         <div className="h-px bg-border mx-2 my-2" />
-        <p className="text-[11px] md:text-xs font-bold uppercase tracking-widest text-text-secondary/70 px-3 pt-2 pb-1">
-          Equipe
-        </p>
+        <Accordion label="Equipe" count={filteredCollaborators.length} open={openSections.team || searching} onToggle={() => toggleSection("team")}>
+          {filteredCollaborators.map((c) => (
+            <CollaboratorItem
+              key={c.id}
+              collaborator={c}
+              pending={getDelegatedBy(c.id)}
+              onNavigate={closeDrawer}
+              isPinned={isPinned}
+              togglePin={togglePin}
+            />
+          ))}
 
-        {collaborators.map((c) => (
-          <CollaboratorItem
-            key={c.id}
-            collaborator={c}
-            pending={getDelegatedBy(c.id)}
-            onNavigate={closeDrawer}
-          />
-        ))}
-
-        <button
-          onClick={() => { navigate("/organizacao"); closeDrawer(); }}
-          className="sidebar-item w-full text-text-secondary hover:text-primary"
-        >
-          <span className="text-base w-5 text-center">👥</span>
-          <span>Gerenciar equipe</span>
-        </button>
+          <button
+            onClick={() => { navigate("/organizacao"); closeDrawer(); }}
+            className="sidebar-item w-full text-text-secondary hover:text-primary"
+          >
+            <span className="text-base w-5 text-center">👥</span>
+            <span>Gerenciar equipe</span>
+          </button>
+        </Accordion>
       </nav>
 
       {/* Atalhos rápidos */}
@@ -323,7 +389,7 @@ export function Sidebar({ className = "hidden md:flex w-56 bg-sidebar border-r b
   );
 }
 
-function CollaboratorItem({ collaborator, pending, onNavigate }) {
+function CollaboratorItem({ collaborator, pending, onNavigate, isPinned, togglePin }) {
   const [showMenu, setShowMenu] = useState(false);
   const [editing, setEditing] = useState(false);
   const { archiveCollaborator, deleteCollaborator } = useCollaboratorStore();
@@ -367,6 +433,12 @@ function CollaboratorItem({ collaborator, pending, onNavigate }) {
         <ContextMenu
           onClose={() => setShowMenu(false)}
           items={[
+            {
+              label: isPinned("collaborator", collaborator.id) ? "★ Desafixar" : "☆ Fixar",
+              action: () => togglePin("collaborator", collaborator.id, {
+                label: collaborator.name, color: collaborator.color, to: `/colaborador/${collaborator.id}`,
+              }),
+            },
             { label: "Editar", action: () => setEditing(true) },
             { label: "Ver pendências", action: () => navigate(`/colaborador/${collaborator.id}`) },
             { label: "Arquivar", action: () => { archiveCollaborator(collaborator.id); navigate("/delegadas"); } },
@@ -409,7 +481,7 @@ function ContextMenu({ items, onClose }) {
   );
 }
 
-function AreaGroup({ area, projects, onAddProject, navigate }) {
+function AreaGroup({ area, projects, onAddProject, navigate, isPinned, togglePin }) {
   const [open, setOpen] = useState(true);
   const [addingProject, setAddingProject] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -483,6 +555,10 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
         <ContextMenu
           onClose={() => setShowMenu(false)}
           items={[
+            {
+              label: isPinned("area", area.id) ? "★ Desafixar" : "☆ Fixar",
+              action: () => togglePin("area", area.id, { label: area.name, color: area.color, to: `/area/${area.id}` }),
+            },
             { label: "Renomear", action: () => { setRenameDraft(area.name); setRenaming(true); } },
             { label: "Novo projeto", action: () => setAddingProject(true) },
             ...(organization ? [{
@@ -498,7 +574,7 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
       {open && (
         <div className="ml-4 space-y-0.5">
           {projects.map((p) => (
-            <ProjectItem key={p.id} project={p} navigate={navigate} />
+            <ProjectItem key={p.id} project={p} navigate={navigate} isPinned={isPinned} togglePin={togglePin} />
           ))}
 
           {addingProject ? (
@@ -526,7 +602,7 @@ function AreaGroup({ area, projects, onAddProject, navigate }) {
   );
 }
 
-function ProjectItem({ project, navigate }) {
+function ProjectItem({ project, navigate, isPinned, togglePin }) {
   const [showMenu, setShowMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState(project.name);
@@ -591,6 +667,10 @@ function ProjectItem({ project, navigate }) {
         <ContextMenu
           onClose={() => setShowMenu(false)}
           items={[
+            {
+              label: isPinned("project", project.id) ? "★ Desafixar" : "☆ Fixar",
+              action: () => togglePin("project", project.id, { label: project.name, color: project.color, to: `/project/${project.id}` }),
+            },
             { label: "Renomear", action: () => { setRenameDraft(project.name); setRenaming(true); } },
             ...(organization ? [{
               label: linkedToOrg ? "Desvincular da organização" : "Vincular à organização",
