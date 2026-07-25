@@ -6,6 +6,7 @@ import { useUiStore } from "./uiStore";
 import { useAuthStore } from "./authStore";
 import { useAreaStore } from "./areaStore";
 import { cancelNotification } from "../services/notifications";
+import { useNotificationStore } from "./notificationStore";
 
 const localDate = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -488,6 +489,7 @@ export const useTaskStore = create(
         if (data.completed_at) {
           // Elo raiz aceito — fechou de vez.
           cancelNotification(id);
+          useNotificationStore.getState().notify(data.user_id, "delegation_accepted", `"${data.title}" foi concluída`, data.id);
           useUiStore.getState().showToast({
             message: "Tarefa concluída",
             action: "Desfazer",
@@ -594,6 +596,15 @@ export const useTaskStore = create(
               : t
           ),
         }));
+        const relatedTask = get().tasks.find((t) => t.id === data.task_id);
+        useNotificationStore.getState().notify(
+          data.requested_by,
+          "deadline_resolved",
+          approve
+            ? `Prorrogação aprovada: "${relatedTask?.title ?? "tarefa"}"`
+            : `Prorrogação recusada: "${relatedTask?.title ?? "tarefa"}"`,
+          data.task_id
+        );
         return data;
       },
 
