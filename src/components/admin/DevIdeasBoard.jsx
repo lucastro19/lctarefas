@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { useDevIdeasStore } from "../../store/devIdeasStore";
 import { WhatsNewModal } from "../settings/WhatsNewModal";
 
-const QA_ROTEIRO_URL = "https://claude.ai/code/artifact/ab971b6e-1b2c-4388-bd8a-804c0d54fffa";
-
 const STATUS_META = {
   ideia:        { label: "Ideia",        icon: "💡", color: "#8E8E93" },
   pesquisando:  { label: "Pesquisando",  icon: "🔍", color: "#4F8EF7" },
@@ -120,7 +118,7 @@ function IdeaCard({ idea, onUpdate, onDelete }) {
 
 // Aba admin-only "Ideias & Roadmap" — backlog de ideias fora da memória de conversa, pra eu
 // (Lucas) não esquecer nada e a Claude poder consultar/atualizar research_notes entre sessões.
-export function DevIdeasBoard() {
+export function DevIdeasBoard({ onOpenQaRoteiro }) {
   const { ideas, fetchIdeas, addIdea, updateIdea, deleteIdea } = useDevIdeasStore();
   const [quickTitle, setQuickTitle] = useState("");
   const [showWhatsNew, setShowWhatsNew] = useState(false);
@@ -137,14 +135,12 @@ export function DevIdeasBoard() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <a
-          href={QA_ROTEIRO_URL}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          onClick={onOpenQaRoteiro}
           className="bg-card border border-border rounded-xl px-4 py-3 text-sm font-medium text-text-main hover:border-primary transition-colors flex items-center justify-between"
         >
           📋 Roteiro de QA <span className="text-text-secondary">→</span>
-        </a>
+        </button>
         <button
           onClick={() => setShowWhatsNew(true)}
           className="bg-card border border-border rounded-xl px-4 py-3 text-sm font-medium text-text-main hover:border-primary transition-colors flex items-center justify-between"

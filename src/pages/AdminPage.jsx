@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { supabase } from "../lib/supabase";
 import { DevIdeasBoard } from "../components/admin/DevIdeasBoard";
+import { QaRoteiro } from "../components/admin/QaRoteiro";
 
 const ROLE_LABELS = {
   free:  { label: "Free",  color: "text-text-secondary bg-border/60" },
@@ -177,6 +178,7 @@ export function AdminPage() {
         {[
           { id: "users", label: "Usuários" },
           { id: "ideas", label: "Ideias & Roadmap" },
+          { id: "qa", label: "Roteiro de QA" },
         ].map((t) => (
           <button
             key={t.id}
@@ -195,7 +197,13 @@ export function AdminPage() {
 
       {tab === "ideas" && (
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <DevIdeasBoard />
+          <DevIdeasBoard onOpenQaRoteiro={() => setTab("qa")} />
+        </div>
+      )}
+
+      {tab === "qa" && (
+        <div className="max-w-5xl mx-auto px-4 py-6">
+          <QaRoteiro />
         </div>
       )}
 
