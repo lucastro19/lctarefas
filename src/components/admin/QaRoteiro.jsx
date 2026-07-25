@@ -35,8 +35,6 @@ function StepRow({ versionId, group, section, step, stepIndex }) {
     }
   };
 
-  const canMarkFixed = note.done && note.notes.trim().length > 0 && !note.fixed;
-
   return (
     <li className="pt-3 first:pt-0">
       <label className="flex items-start gap-2.5">
@@ -94,29 +92,27 @@ function StepRow({ versionId, group, section, step, stepIndex }) {
                 desfazer
               </button>
             </div>
-          ) : canMarkFixed ? (
-            showFixedForm ? (
-              <div className="mt-2 flex items-center gap-1.5">
-                <input
-                  value={fixedComment}
-                  onChange={(e) => setFixedComment(e.target.value)}
-                  placeholder="O que foi feito…"
-                  autoFocus
-                  className="flex-1 bg-bg border border-border rounded-lg px-2 py-1 text-[11px] text-text-main outline-none focus:border-primary"
-                />
-                <button
-                  onClick={() => { markFixed(versionId, section.id, stepIndex, meta, fixedComment); setShowFixedForm(false); setFixedComment(""); }}
-                  className="text-[10.5px] font-medium text-white bg-success px-2.5 py-1 rounded-lg"
-                >
-                  Salvar
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setShowFixedForm(true)} className="mt-2 text-[10.5px] text-primary hover:underline">
-                🔧 marcar como corrigido
+          ) : showFixedForm ? (
+            <div className="mt-2 flex items-center gap-1.5">
+              <input
+                value={fixedComment}
+                onChange={(e) => setFixedComment(e.target.value)}
+                placeholder="O que foi feito…"
+                autoFocus
+                className="flex-1 bg-bg border border-border rounded-lg px-2 py-1 text-[11px] text-text-main outline-none focus:border-primary"
+              />
+              <button
+                onClick={() => { markFixed(versionId, section.id, stepIndex, meta, fixedComment); setShowFixedForm(false); setFixedComment(""); }}
+                className="text-[10.5px] font-medium text-white bg-success px-2.5 py-1 rounded-lg"
+              >
+                Salvar
               </button>
-            )
-          ) : null}
+            </div>
+          ) : (
+            <button onClick={() => setShowFixedForm(true)} className="mt-2 text-[10.5px] text-primary hover:underline">
+              🔧 marcar como corrigido
+            </button>
+          )}
         </div>
       </label>
     </li>
