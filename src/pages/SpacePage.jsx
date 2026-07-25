@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useOrgStore } from "../store/orgStore";
 import { useTaskStore } from "../store/taskStore";
+import { useAuthStore } from "../store/authStore";
 import { TaskList } from "../components/tasks/TaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
 import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
@@ -10,6 +11,7 @@ import { TimelineView } from "../components/tasks/TimelineView";
 import { FilterSortBar } from "../components/tasks/FilterSortBar";
 import { useViewMode } from "../hooks/useViewMode";
 import { useTaskFilters } from "../hooks/useTaskFilters";
+import { recordRecentVisit } from "../utils/recentVisits";
 
 function fmtShortDate(iso) {
   if (!iso) return "";
@@ -47,6 +49,7 @@ export function SpacePage() {
   const { id } = useParams();
   const { spaces, getMemberByUserId, demandTypes, fetchSpaceTasks } = useOrgStore();
   const { getBySpace, getCompletedBySpace } = useTaskStore();
+  const { user } = useAuthStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [colleagueTasks, setColleagueTasks] = useState([]);
   const [viewMode, setViewMode] = useViewMode(`lc_view_space_${id}`);
@@ -56,6 +59,10 @@ export function SpacePage() {
   useEffect(() => {
     if (space) fetchSpaceTasks(id).then(setColleagueTasks);
   }, [id, space]);
+
+  useEffect(() => {
+    if (space) recordRecentVisit(user?.id, { type: "space", id, label: space.name, icon: "🔷", to: `/espaco/${id}` });
+  }, [space, id, user?.id]);
 
   // Board/Linha do tempo aqui só operam sobre myTasks (o conjunto editável) — mesma cautela do
   // Cockpit: tarefa de colega não vira card clicável fora da Lista, porque RLS bloquearia

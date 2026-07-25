@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useAreaStore } from "../store/areaStore";
 import { useTaskStore } from "../store/taskStore";
+import { useAuthStore } from "../store/authStore";
 import { TaskList } from "../components/tasks/TaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
 import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
@@ -10,16 +11,22 @@ import { TimelineView } from "../components/tasks/TimelineView";
 import { FilterSortBar } from "../components/tasks/FilterSortBar";
 import { useViewMode } from "../hooks/useViewMode";
 import { useTaskFilters } from "../hooks/useTaskFilters";
+import { recordRecentVisit } from "../utils/recentVisits";
 
 export function AreaPage() {
   const { id } = useParams();
   const { areas, getProjectsByArea } = useAreaStore();
   const { getByArea, getByProject, getCompletedByArea, getCompletedByProject, tasks: allTasks } = useTaskStore();
+  const { user } = useAuthStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [activeProjectId, setActiveProjectId] = useState(null);
 
   const area = areas.find((a) => a.id === id);
   const areaProjects = getProjectsByArea(id);
+
+  useEffect(() => {
+    if (area) recordRecentVisit(user?.id, { type: "area", id, label: area.name, icon: "📁", to: `/area/${id}` });
+  }, [area, id, user?.id]);
 
   const viewKey = `lc_view_${activeProjectId ? `project_${activeProjectId}` : `area_${id}`}`;
   const [viewMode, setViewMode] = useViewMode(viewKey);

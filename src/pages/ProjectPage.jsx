@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useAreaStore } from "../store/areaStore";
 import { useTaskStore } from "../store/taskStore";
+import { useAuthStore } from "../store/authStore";
 import { TaskList } from "../components/tasks/TaskList";
 import { TaskDetail } from "../components/tasks/TaskDetail";
 import { ViewSwitcher } from "../components/tasks/ViewSwitcher";
@@ -10,11 +11,13 @@ import { TimelineView } from "../components/tasks/TimelineView";
 import { FilterSortBar } from "../components/tasks/FilterSortBar";
 import { useViewMode } from "../hooks/useViewMode";
 import { useTaskFilters } from "../hooks/useTaskFilters";
+import { recordRecentVisit } from "../utils/recentVisits";
 
 export function ProjectPage() {
   const { id } = useParams();
   const { projects, areas } = useAreaStore();
   const { getByProject, getCompletedByProject } = useTaskStore();
+  const { user } = useAuthStore();
   const [selectedTask, setSelectedTask] = useState(null);
   const [viewMode, setViewMode] = useViewMode(`lc_view_project_${id}`);
 
@@ -22,6 +25,10 @@ export function ProjectPage() {
   const area = areas.find((a) => a.id === project?.area_id);
   const tasks = getByProject(id);
   const completed = getCompletedByProject(id);
+
+  useEffect(() => {
+    if (project) recordRecentVisit(user?.id, { type: "project", id, label: project.name, icon: "📁", to: `/project/${id}` });
+  }, [project, id, user?.id]);
 
   const {
     filtered, people, types, personFilter, setPersonFilter, typeFilter, setTypeFilter,
