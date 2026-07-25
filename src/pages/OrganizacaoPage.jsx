@@ -522,21 +522,71 @@ function TeamsTab() {
 }
 
 // ─── Aba: Tipos de demanda ───
+// Prazo padrão é gravado sempre em HORAS (coluna default_deadline_hours), mas exibido em dias por
+// padrão (mais intuitivo), caindo pra horas quando o valor não é múltiplo exato de 24.
+function hoursToDisplay(h) {
+  if (h == null || h === "") return { amount: "", unit: "dias" };
+  if (h % 24 === 0) return { amount: String(h / 24), unit: "dias" };
+  return { amount: String(h), unit: "horas" };
+}
+function displayToHours(amount, unit) {
+  if (amount === "" || amount == null) return null;
+  const n = Number(amount);
+  if (Number.isNaN(n)) return null;
+  return unit === "dias" ? n * 24 : n;
+}
+
+function DeadlineInput({ amount, unit, onAmount, onUnit, disabled, size = "sm" }) {
+  const wide = size === "lg";
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <input
+        type="number"
+        min={1}
+        value={amount}
+        disabled={disabled}
+        onChange={(e) => onAmount(e.target.value)}
+        placeholder="prazo"
+        title="Prazo padrão"
+        className={[wide ? "w-16 text-sm py-2.5" : "w-14 text-xs py-1", "bg-bg border border-border rounded-lg px-2 outline-none focus:border-primary text-text-main text-center"].join(" ")}
+      />
+      <select
+        value={unit}
+        disabled={disabled}
+        onChange={(e) => onUnit(e.target.value)}
+        title="Unidade do prazo"
+        className={[wide ? "text-sm py-2.5" : "text-xs py-1", "bg-bg border border-border rounded-lg px-1.5 outline-none focus:border-primary text-text-secondary"].join(" ")}
+      >
+        <option value="dias">dias</option>
+        <option value="horas">horas</option>
+      </select>
+    </div>
+  );
+}
+
 function DemandTypeRow({ dt }) {
   const { updateDemandType, archiveDemandType, unarchiveDemandType } = useOrgStore();
   const [label, setLabel] = useState(dt.label);
-  const [deadlineHours, setDeadlineHours] = useState(dt.default_deadline_hours ?? "");
+  const initial = hoursToDisplay(dt.default_deadline_hours);
+  const [amount, setAmount] = useState(initial.amount);
+  const [unit, setUnit] = useState(initial.unit);
   const isArchived = !!dt.archived_at;
+
+  const commitDeadline = (nextAmount, nextUnit) => {
+    const hours = displayToHours(nextAmount, nextUnit);
+    if (hours !== (dt.default_deadline_hours ?? null)) updateDemandType(dt.id, { default_deadline_hours: hours });
+  };
 
   return (
     <div className="flex items-center gap-2 px-3 py-2.5">
-      <div className="flex gap-1 shrink-0">
+      <div className="flex gap-1.5 shrink-0">
         {DEMAND_COLORS.map((c) => (
           <button
             key={c}
+            type="button"
             onClick={() => !isArchived && updateDemandType(dt.id, { color: c })}
             disabled={isArchived}
-            className={["w-4 h-4 rounded-full border-2 transition-transform", dt.color === c ? "border-white scale-125" : "border-transparent", isArchived ? "opacity-40" : ""].join(" ")}
+            className={["w-4 h-4 rounded-full transition-transform", dt.color === c ? "ring-2 ring-offset-1 ring-offset-card ring-text-main scale-110" : "", isArchived ? "opacity-40" : ""].join(" ")}
             style={{ backgroundColor: c }}
           />
         ))}
@@ -548,19 +598,12 @@ function DemandTypeRow({ dt }) {
         onBlur={() => { if (label.trim() && label !== dt.label) updateDemandType(dt.id, { label: label.trim() }); }}
         className={["flex-1 text-sm bg-transparent outline-none text-text-main min-w-0", isArchived ? "line-through text-text-secondary" : ""].join(" ")}
       />
-      <input
-        type="number"
-        min={1}
-        value={dt.default_deadline_hours ?? ""}
+      <DeadlineInput
+        amount={amount}
+        unit={unit}
         disabled={isArchived}
-        onChange={(e) => setDeadlineHours(e.target.value)}
-        onBlur={() => {
-          const n = deadlineHours === "" ? null : Number(deadlineHours);
-          if (n !== (dt.default_deadline_hours ?? null)) updateDemandType(dt.id, { default_deadline_hours: n });
-        }}
-        placeholder="prazo (h)"
-        title="Prazo padrão em horas"
-        className="w-20 shrink-0 text-xs bg-bg border border-border/60 rounded-lg px-2 py-1 outline-none focus:border-primary text-text-main text-center"
+        onAmount={(v) => { setAmount(v); commitDeadline(v, unit); }}
+        onUnit={(u) => { setUnit(u); commitDeadline(amount, u); }}
       />
       {isArchived ? (
         <button onClick={() => unarchiveDemandType(dt.id)} className="text-[11px] text-primary hover:underline shrink-0">Reativar</button>
@@ -575,7 +618,8 @@ function DemandTypesTab() {
   const { demandTypes, createDemandType } = useOrgStore();
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(DEMAND_COLORS[0]);
-  const [deadlineHours, setDeadlineHours] = useState("");
+  const [amount, setAmount] = useState("");
+  const [unit, setUnit] = useState("dias");
 
   const active = demandTypes.filter((d) => !d.archived_at);
   const archived = demandTypes.filter((d) => d.archived_at);
@@ -585,11 +629,12 @@ function DemandTypesTab() {
     if (!label.trim()) return;
     await createDemandType({
       label, color,
-      default_deadline_hours: deadlineHours === "" ? null : Number(deadlineHours),
+      default_deadline_hours: displayToHours(amount, unit),
     });
     setLabel("");
     setColor(DEMAND_COLORS[0]);
-    setDeadlineHours("");
+    setAmount("");
+    setUnit("dias");
   };
 
   return (
@@ -599,33 +644,25 @@ function DemandTypesTab() {
       </p>
 
       <form onSubmit={submit} className="bg-card border border-border rounded-2xl p-4 space-y-3">
-        <div className="flex gap-1 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
           {DEMAND_COLORS.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setColor(c)}
-              className={["w-5 h-5 rounded-full border-2 transition-transform", color === c ? "border-white scale-125" : "border-transparent"].join(" ")}
+              className={["w-5 h-5 rounded-full transition-transform", color === c ? "ring-2 ring-offset-2 ring-offset-card ring-text-main scale-110" : ""].join(" ")}
               style={{ backgroundColor: c }}
             />
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Nome do tipo de demanda"
-            className="flex-1 text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main"
+            className="flex-1 min-w-[160px] text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main"
           />
-          <input
-            type="number"
-            min={1}
-            value={deadlineHours}
-            onChange={(e) => setDeadlineHours(e.target.value)}
-            placeholder="Prazo (h)"
-            title="Prazo padrão em horas"
-            className="w-24 text-sm bg-bg border border-border rounded-xl px-3 py-2.5 outline-none focus:border-primary text-text-main text-center"
-          />
+          <DeadlineInput amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} size="lg" />
           <button
             type="submit"
             disabled={!label.trim()}
