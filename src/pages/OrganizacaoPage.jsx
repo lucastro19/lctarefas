@@ -5,6 +5,7 @@ import { useOrgStore, ROLE_LABELS, DEMAND_COLORS } from "../store/orgStore";
 import { useCollaboratorStore } from "../store/collaboratorStore";
 import { usePlanLimits } from "../hooks/usePlanLimits";
 import { CollaboratorModal } from "../components/delegation/CollaboratorModal";
+import { memberDisplayName } from "../components/delegation/shared";
 
 function Avatar({ name, url }) {
   if (url) return <img src={url} alt={name} className="w-9 h-9 rounded-full object-cover shrink-0" />;
@@ -143,7 +144,12 @@ function MembersTab({ isOwner }) {
   const [showNewLocal, setShowNewLocal] = useState(false);
   const [editingLocal, setEditingLocal] = useState(null);
   const [prefillFor, setPrefillFor] = useState(null); // membro sem contato local, "adotando" um
+  const [editingMemberContact, setEditingMemberContact] = useState(null); // membro COM contato local
   const [archivedMembers, setArchivedMembers] = useState([]);
+
+  // Nome/telefone editáveis de um membro sem tocar na conta Google: usa o contato local (próprio
+  // do viewer) vinculado a ele, se existir — ver memberDisplayName em delegation/shared.jsx.
+  const displayName = (m) => memberDisplayName(m, collaborators);
 
   useEffect(() => { if (isOwner) fetchInvites(); }, [isOwner]);
   useEffect(() => { if (isOwner) fetchArchivedMembers().then(setArchivedMembers); }, [isOwner, members]);
@@ -195,10 +201,10 @@ function MembersTab({ isOwner }) {
             const canManage = isOwner && !isSelf;
             return (
               <div key={m.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <Avatar name={memberName(m)} url={m.profile?.avatar_url} />
+                <Avatar name={displayName(m)} url={m.profile?.avatar_url} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-main truncate">
-                    {memberName(m)}
+                    {displayName(m)}
                     {isSelf && (
                       <span className="ml-2 text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">VOCÊ</span>
                     )}
@@ -240,7 +246,15 @@ function MembersTab({ isOwner }) {
                 ) : (
                   <RoleBadge role={m.role} />
                 )}
-                {!hasLocalContact(m) && (
+                {hasLocalContact(m) ? (
+                  <button
+                    onClick={() => setEditingMemberContact(collaborators.find((c) => c.linked_user_id === m.user_id))}
+                    title="Edita nome de exibição, telefone etc. do seu contato local vinculado a esta pessoa — não mexe na conta Google dela"
+                    className="text-[10px] font-medium text-text-secondary hover:text-primary shrink-0"
+                  >
+                    Editar
+                  </button>
+                ) : (
                   <button
                     onClick={() => setPrefillFor(m)}
                     title="Ninguém em Colaboradores locais está vinculado a esta pessoa — sem contato local, ela não aparece pra delegar tarefas"
@@ -261,9 +275,9 @@ function MembersTab({ isOwner }) {
             <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden mt-2">
               {archivedMembers.map((m) => (
                 <div key={m.id} className="flex items-center gap-3 px-4 py-3">
-                  <Avatar name={memberName(m)} url={m.profile?.avatar_url} />
+                  <Avatar name={displayName(m)} url={m.profile?.avatar_url} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-text-secondary truncate line-through">{memberName(m)}</p>
+                    <p className="text-sm text-text-secondary truncate line-through">{displayName(m)}</p>
                     {m.profile?.email && <p className="text-xs text-text-secondary truncate">{m.profile.email}</p>}
                   </div>
                   <button
@@ -436,6 +450,9 @@ function MembersTab({ isOwner }) {
 
       {showNewLocal && <CollaboratorModal onClose={() => setShowNewLocal(false)} />}
       {editingLocal && <CollaboratorModal collaborator={editingLocal} onClose={() => setEditingLocal(null)} />}
+      {editingMemberContact && (
+        <CollaboratorModal collaborator={editingMemberContact} onClose={() => setEditingMemberContact(null)} />
+      )}
       {prefillFor && (
         <CollaboratorModal
           prefill={{ name: memberName(prefillFor), email: prefillFor.profile?.email ?? "", linkedUserId: prefillFor.user_id }}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useOrgStore, ROLE_LABELS } from "../store/orgStore";
 import { useTaskStore } from "../store/taskStore";
-import { CollaboratorAvatar, StatusPill, AgingLabel, FollowUpLabel, NudgeCountLabel, agingDays, isFollowUpDue } from "../components/delegation/shared";
+import { useCollaboratorStore } from "../store/collaboratorStore";
+import { CollaboratorAvatar, StatusPill, AgingLabel, FollowUpLabel, NudgeCountLabel, agingDays, isFollowUpDue, memberDisplayName } from "../components/delegation/shared";
 
 function fmtShortDate(iso) {
   if (!iso) return "";
@@ -68,6 +69,7 @@ function DeadlineExtensionRequests() {
 function TeamTaskRow({ task, delegator }) {
   const status = task.delegation_status ?? "pendente";
   const demandTypes = useOrgStore((s) => s.demandTypes);
+  const { collaborators } = useCollaboratorStore();
   const demandType = task.demand_type_id ? demandTypes.find((d) => d.id === task.demand_type_id) : null;
   return (
     <div className="flex items-center gap-2 px-3 py-2.5 rounded-card bg-card border border-border min-w-0">
@@ -88,7 +90,7 @@ function TeamTaskRow({ task, delegator }) {
           )}
           {delegator && (
             <span className="text-[10px] text-text-secondary shrink-0" title="Quem delegou">
-              via {delegator.profile?.full_name ?? "?"}
+              via {memberDisplayName(delegator, collaborators) ?? "?"}
             </span>
           )}
         </div>
@@ -99,7 +101,8 @@ function TeamTaskRow({ task, delegator }) {
 
 function PersonGroup({ member, tasks, getMemberByUserId }) {
   const overdue = tasks.filter(isFollowUpDue).length;
-  const avatar = { name: member?.profile?.full_name ?? "Sem membro", avatar_url: member?.profile?.avatar_url };
+  const { collaborators } = useCollaboratorStore();
+  const avatar = { name: memberDisplayName(member, collaborators) ?? "Sem membro", avatar_url: member?.profile?.avatar_url };
 
   return (
     <section className="mb-5">

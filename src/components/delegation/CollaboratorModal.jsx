@@ -51,10 +51,15 @@ export function CollaboratorModal({ collaborator = null, prefill = null, onClose
 
   useEffect(() => { if (isOwner) fetchInvites(); }, [isOwner]);
 
+  // Fase-capture: TaskDetail (e outros painéis) também escutam Escape no document em fase de
+  // bolha. Se este modal abrir por cima de um TaskDetail já aberto (ex.: menu "···" de um
+  // colaborador na Sidebar, visível em qualquer tela), o listener do TaskDetail — registrado
+  // antes — disparava primeiro e fechava os dois de uma vez. Capturar e interromper aqui garante
+  // que só o modal do topo reage a um Escape.
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
   // prefill.linkedUserId vem do botão "+ Criar contato" (membro sem contato local): a pessoa já

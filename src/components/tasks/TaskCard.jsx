@@ -11,7 +11,7 @@ import { useUiStore } from "../../store/uiStore";
 import { durationLabel, DURATION_PRESETS, useSettingsStore } from "../../store/settingsStore";
 import { useAreaStore } from "../../store/areaStore";
 import { useCollaboratorStore } from "../../store/collaboratorStore";
-import { CollaboratorAvatar, STATUS_META, agingDays, isFollowUpDue } from "../delegation/shared";
+import { CollaboratorAvatar, STATUS_META, agingDays, isFollowUpDue, memberDisplayName } from "../delegation/shared";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 import { useTemplateStore } from "../../store/templateStore";
 import { TimeSlotPickerModal } from "./TimeSlotPickerModal";
@@ -935,7 +935,10 @@ export function TaskCard({ task, subtasks = [], onClick }) {
     // Fase 2.7: current_delegator_id é o delegador do ELO ATIVO, não sempre
     // o dono original (task.user_id) — importa quando a tarefa já foi
     // redelegada mais de uma vez.
-    ? (orgMembers.find((m) => m.user_id === (task.current_delegator_id ?? task.user_id))?.profile?.full_name?.split(" ")[0] ?? null)
+    ? (memberDisplayName(
+        orgMembers.find((m) => m.user_id === (task.current_delegator_id ?? task.user_id)),
+        collaborators
+      )?.split(" ")[0] ?? null)
     : null;
 
   const [completing, setCompleting] = useState(false);

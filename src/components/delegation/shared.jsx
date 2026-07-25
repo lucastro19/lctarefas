@@ -38,6 +38,16 @@ export function fmtShortDate(iso) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
+// Nome de exibição de um org_member: prioriza o contato local do PRÓPRIO viewer vinculado a
+// essa pessoa (linked_user_id) sobre o nome vindo do Google — permite um apelido/nome curto
+// sem tocar em profiles (dado de conta). Como `collaborators` já vem só do viewer (RLS por
+// user_id), o apelido é pessoal: cada gestor pode ver esse membro com um nome diferente.
+export function memberDisplayName(member, collaborators = []) {
+  if (!member) return null;
+  const linked = collaborators.find((c) => c.linked_user_id === member.user_id);
+  return linked?.name ?? member.profile?.full_name ?? member.profile?.email ?? "Usuário";
+}
+
 export function CollaboratorAvatar({ collaborator, size = 28, className = "" }) {
   const color = collaborator?.color ?? "#8E8E93";
   const initials = (collaborator?.name ?? "?")
