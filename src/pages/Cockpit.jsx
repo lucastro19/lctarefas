@@ -99,6 +99,47 @@ function TeamTaskRow({ task, delegator }) {
   );
 }
 
+// Fase 4.6 — carga de trabalho: barra por pessoa, cor pesa a proporção de atrasadas (não só
+// volume bruto), já que 5 tarefas em dia preocupam menos que 3 todas vencidas.
+function WorkloadBars({ groups }) {
+  const { collaborators } = useCollaboratorStore();
+  if (groups.length === 0) return null;
+  const maxCount = Math.max(...groups.map((g) => g.tasks.length), 1);
+
+  return (
+    <section className="mb-6">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary px-1 pb-1.5">
+        Carga de trabalho
+      </p>
+      <div className="space-y-2 bg-card border border-border rounded-card p-3">
+        {groups.map((g) => {
+          const overdue = g.tasks.filter(isFollowUpDue).length;
+          const ratio = g.tasks.length > 0 ? overdue / g.tasks.length : 0;
+          const color = ratio >= 0.4 ? "#FF3B30" : ratio >= 0.15 ? "#FF9500" : "#34C759";
+          const label = ratio >= 0.4 ? "Sobrecarregado" : ratio >= 0.15 ? "Atenção" : "OK";
+          const width = Math.max(8, Math.round((g.tasks.length / maxCount) * 100));
+          return (
+            <div key={g.member?.id ?? "orphan"} className="flex items-center gap-2.5">
+              <span className="w-28 shrink-0 text-[12px] text-text-main truncate">
+                {memberDisplayName(g.member, collaborators) ?? "Sem membro"}
+              </span>
+              <div className="flex-1 h-4 bg-bg rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full flex items-center transition-all"
+                  style={{ width: `${width}%`, backgroundColor: color }}
+                >
+                  <span className="text-[9px] font-bold text-white pl-2">{g.tasks.length}</span>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold shrink-0 w-24 text-right" style={{ color }}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function PersonGroup({ member, tasks, getMemberByUserId }) {
   const overdue = tasks.filter(isFollowUpDue).length;
   const { collaborators } = useCollaboratorStore();
@@ -191,6 +232,7 @@ export function Cockpit() {
             </div>
           )}
           <DeadlineExtensionRequests />
+          <WorkloadBars groups={filteredGroups} />
           {filteredGroups.length === 0 ? (
             <div className="text-center py-16 space-y-3">
               <span className="text-4xl block">🧭</span>
