@@ -495,7 +495,7 @@ function TeamCard({ team, members }) {
           className="text-[11px] text-text-secondary hover:text-danger"
           title="Desativar time"
         >
-          🗑
+          ⏸
         </button>
       </div>
 
@@ -892,7 +892,7 @@ function SpaceCard({ space, members }) {
           className="text-[11px] text-text-secondary hover:text-danger"
           title="Desativar espaço"
         >
-          🗑
+          ⏸
         </button>
       </div>
 
