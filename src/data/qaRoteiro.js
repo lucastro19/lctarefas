@@ -13,7 +13,10 @@ export const QA_VERSIONS = [
         { id: "cad-tarefas", title: "Tarefas", why: "Cobre todos os campos, incluindo o painel reorganizado em 4 blocos.", steps: [
           { a: "Crie uma tarefa pela Inbox só com título.", e: "Aparece na Inbox, sem outro campo preenchido." },
           { a: "Abra o painel de detalhe e confira a ordem dos blocos.", e: "Nessa ordem: Quando, Importância, Organização, Delegação/Reunião." },
-          { a: "No bloco Quando, preencha Data, Horário, Duração, Prazo, Repetição e Lembrete.", e: "Cada campo salva sozinho ao sair dele." },
+          { a: "No bloco Quando, marque um Prazo.", e: "Aparece um card de urgência no topo (cor muda conforme a proximidade: vermelho/laranja/amarelo) com atalhos Hoje/Amanhã/Fim de semana/Em 1 semana." },
+          { a: "Clique em 'Início' (vem recolhido) e escolha uma data pelos atalhos Hoje/Amanhã/Prox. seg.", e: "Expande ao clicar; ao recolher de novo, o resumo mostra 'Início: {data}'." },
+          { a: "Clique em 'Agendar horário/repetição' e preencha Horário e Duração.", e: "Duração só aparece depois que Horário está definido; ao recolher, o resumo mostra horário e duração numa linha só." },
+          { a: "Numa tarefa organizacional com prazo, tente adiar a data usando os chips de atalho (não o campo manual).", e: "Pede aprovação igual quando editado manualmente — chip não pula a regra." },
           { a: "No bloco Importância, marque Urgente e escolha Prioridade Alta.", e: "Badge correspondente aparece no card da lista." },
           { a: "No bloco Organização, mova a tarefa pra uma Área e adicione uma Tag.", e: "Contexto e tag aparecem como badges separadas no card." },
           { a: "Adicione 2 itens no Checklist e marque 1 como concluído.", e: "Contador mostra 1/2 no cabeçalho do checklist." }
@@ -203,6 +206,23 @@ export const QA_VERSIONS = [
           { a: "Numa tarefa delegada, escreva um comentário.", e: "Aparece na thread com seu nome e horário." },
           { a: "Peça pra outra pessoa envolvida comentar também.", e: "Comentário dela aparece na próxima abertura do painel." },
           { a: "Confirme que uma tarefa pessoal (sem organização) não mostra comentários.", e: "Seção só aparece em tarefa delegada." }
+        ]}
+      ]},
+      { id: "admin", label: "Painel Admin", sections: [
+        { id: "admin-ideias", title: "Ideias & Roadmap", why: "Backlog interno pra não esquecer ideias futuras — só admin vê.", steps: [
+          { a: "Abra Configurações → Painel administrativo → aba Ideias & Roadmap.", e: "Mostra captura rápida no topo e colunas por status (Ideia/Pesquisando/Planejado/Em andamento/Feito/Descartado)." },
+          { a: "Digite um título e aperte Enter na captura rápida.", e: "Ideia nova aparece na coluna 'Ideia'." },
+          { a: "Mude o status de uma ideia pelo seletor do card.", e: "Card muda de coluna imediatamente." },
+          { a: "Preencha o campo de timing e expanda as notas de pesquisa.", e: "Texto salva ao sair do campo, sem botão de salvar." },
+          { a: "Marque uma ideia como 'Feito'.", e: "Campo pra anotar a versão que entregou só aparece nesse status." },
+          { a: "Exclua uma ideia de teste.", e: "Pede confirmação antes de excluir." }
+        ]},
+        { id: "admin-qa", title: "Roteiro de QA", why: "Substituiu o artifact externo — progresso, notas e imagens ficam no banco.", steps: [
+          { a: "Abra a aba Roteiro de QA.", e: "Mostra abas de versão, barra de progresso geral e navegação lateral por grupo." },
+          { a: "Marque um item como concluído e escreva uma nota.", e: "Progresso da barra atualiza; nota persiste ao trocar de aba e voltar." },
+          { a: "Cole uma imagem (print) dentro do campo de nota.", e: "Miniatura aparece logo abaixo, clicável pra abrir em tamanho real." },
+          { a: "Clique em 'marcar como corrigido' num item sem nota nenhuma.", e: "Botão aparece normalmente (não exige nota) e pede um comentário curto antes de salvar." },
+          { a: "Recarregue a página (F5) com o item corrigido.", e: "Selo verde 'corrigido em' continua aparecendo, com o comentário salvo." }
         ]}
       ]}
     ]
