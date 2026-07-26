@@ -8,7 +8,14 @@ import { DURATION_PRESETS, durationLabel } from "../../store/settingsStore";
 import { RecurrenceDeleteModal } from "../ui/RecurrenceDeleteModal";
 import { DelegationSection } from "../delegation/DelegationSection";
 import { createMeetingEvent, deleteMeetingEvent } from "../../lib/googleCalendar";
-import { localDateStr, deadlineUrgency } from "../../utils/dateUtils";
+
+function localDateStr(d = new Date()) {
+  return (
+    d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
 
 function addDays(n) {
   const d = new Date();
@@ -23,19 +30,6 @@ function nextMonday() {
   d.setDate(d.getDate() + daysUntilMonday);
   return localDateStr(d);
 }
-
-function nextSaturday() {
-  const d = new Date();
-  const day = d.getDay();
-  const daysUntilSaturday = (6 - day + 7) % 7 || 7;
-  d.setDate(d.getDate() + daysUntilSaturday);
-  return localDateStr(d);
-}
-
-const RECURRENCE_SHORT_LABELS = {
-  daily: "Diariamente", weekdays: "Dias úteis", weekly: "Semanalmente",
-  biweekly: "Quinzenal", monthly: "Mensalmente", annually: "Anualmente",
-};
 
 function fmtDate(iso) {
   if (!iso) return "";
@@ -145,13 +139,6 @@ export function TaskDetail({ task, onClose }) {
   const [saving, setSaving] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
 
-  // Quando (Modelo 2, 26/07/2026): Início e Agendamento começam recolhidos, a menos que já
-  // tenham valor — Prazo sobe pro topo do bloco e ganha destaque (ver commitDeadline abaixo).
-  const [showInicio, setShowInicio] = useState(() => !!task.scheduled_date);
-  const [showAgendamento, setShowAgendamento] = useState(
-    () => !!task.scheduled_time || !!(task.recurrence && task.recurrence !== "") || task.reminder_minutes != null
-  );
-
   // Meeting
   const [meetingUrl, setMeetingUrl] = useState(task.meeting_url ?? null);
   const [meetingEventId, setMeetingEventId] = useState(task.meeting_event_id ?? null);
@@ -170,18 +157,6 @@ export function TaskDetail({ task, onClose }) {
 
   const taskSubtasks = subtasks[task.id] ?? [];
   const taskTagList = taskTags[task.id] ?? [];
-
-  // Resumo do bloco "Agendamento" (Horário/Duração/Repetição/Lembrete) quando recolhido
-  const agendamentoParts = [];
-  if (scheduledTime) {
-    agendamentoParts.push(scheduledTime.slice(0, 5) + (durationMinutes ? ` · ${durationLabel(durationMinutes)}` : ""));
-  }
-  if (recurrence && recurrence !== "") {
-    agendamentoParts.push(recurrence.startsWith("custom:") ? getCustomLabel(recurrence) : (RECURRENCE_SHORT_LABELS[recurrence] ?? recurrence));
-  }
-  if (reminderMinutes != null) agendamentoParts.push("🔕 lembrete");
-  const agendamentoSummary = agendamentoParts.join(" · ");
-  const deadlineUrg = deadlineUrgency(deadline);
 
   useEffect(() => {
     fetchSubtasks(task.id);
@@ -251,19 +226,6 @@ export function TaskDetail({ task, onClose }) {
       ...extra,
     });
     setSaving(false);
-  };
-
-  // Fase 2.8: em tarefa organizacional, só ADIAR (nunca antecipar) passa por aprovação — quem
-  // delegou o elo ativo, ou o gestor direto de quem criou. Sem prazo anterior não conta como
-  // adiamento. Recebe o valor explícito (não lê do state) pra funcionar tanto no blur do input
-  // quanto no clique dos chips de atalho, onde o state ainda não teria assentado.
-  const commitDeadline = async (newValue) => {
-    if (task.org_id && task.deadline && newValue > task.deadline) {
-      const result = await requestDeadlineExtension(task.id, newValue);
-      if (!result || result.pending_deadline_extension_id) setDeadline(task.deadline ?? "");
-    } else {
-      save({ deadline: newValue || null });
-    }
   };
 
   const handleAddSubtask = async (e) => {
@@ -494,75 +456,25 @@ export function TaskDetail({ task, onClose }) {
               />
             </div>
 
-            {/* Quando — Modelo 2 (26/07/2026): Prazo em destaque, Início/Agendamento
-                recolhíveis. Pesquisa de mercado (Asana/Trello/Microsoft Planner) mostrou que
-                times convergem pra "2 datas, prazo em destaque" — o resto é detalhe secundário. */}
+            {/* Quando */}
             <div>
               <SectionLabel>Quando</SectionLabel>
-
-              {/* Prazo */}
-              <div className="rounded-2xl overflow-hidden bg-card mb-2">
-                <div className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="text-[15px] w-5 text-center leading-none">🚨</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] text-text-main leading-tight">Prazo</p>
-                    {deadline && (
-                      <p className="text-[12.5px] font-semibold leading-tight mt-0.5" style={{ color: deadlineUrg?.color ?? "#FF3B30" }}>
-                        {deadlineUrg?.label ?? fmtDate(deadline)}
-                      </p>
-                    )}
-                  </div>
-                  <Toggle on={!!deadline} onChange={v => {
-                    if (!v) { setDeadline(""); save({ deadline: null }); }
-                    else { const d = localDateStr(); setDeadline(d); save({ deadline: d }); }
-                  }} />
-                </div>
-                {deadline && (
-                  <div className="px-4 pb-3 space-y-1.5">
-                    <div className="flex gap-1.5">
-                      {[
-                        { l: "Hoje", d: () => localDateStr() },
-                        { l: "Amanhã", d: () => addDays(1) },
-                        { l: "Fim de semana", d: nextSaturday },
-                        { l: "Em 1 semana", d: () => addDays(7) },
-                      ].map(({ l, d }) => (
-                        <button key={l} onClick={() => { const nd = d(); setDeadline(nd); commitDeadline(nd); }}
-                          className={["flex-1 text-[10.5px] py-1.5 rounded-lg border transition-colors",
-                            deadline === d() ? "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/40 font-medium" : "text-text-secondary border-border",
-                          ].join(" ")}>{l}</button>
-                      ))}
-                    </div>
-                    <input
-                      type="date"
-                      value={deadline}
-                      onChange={e => setDeadline(e.target.value)}
-                      onBlur={() => commitDeadline(deadline)}
-                      className="w-full text-sm bg-bg border border-border/60 rounded-xl px-3 py-2 outline-none focus:border-[#FF3B30]"
-                    />
-                    {task.pending_deadline_extension_id && (
-                      <p className="text-[11px] text-text-secondary">
-                        🕓 Aguardando aprovação para adiar
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
               <div className="rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
 
-                {/* Início — recolhido por padrão, a menos que já tenha data (opcional, só faz
-                    sentido pra quem quer marcar quando vai COMEÇAR a trabalhar, separado do prazo) */}
+                {/* Data */}
                 <div>
-                  <button type="button" onClick={() => setShowInicio(v => !v)}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-left">
+                  <div className="flex items-center gap-3 px-4 py-2">
                     <span className="text-[15px] w-5 text-center leading-none">📅</span>
-                    <span className="flex-1 text-[14px] text-text-main">
-                      {scheduledDate ? `Início: ${fmtDate(scheduledDate)}` : "Início"}
-                    </span>
-                    {!scheduledDate && <span className="text-[11px] text-text-secondary/60 mr-1">opcional</span>}
-                    <span className={["text-[10px] text-text-secondary/50 transition-transform", showInicio ? "rotate-90" : ""].join(" ")}>▸</span>
-                  </button>
-                  {showInicio && (
+                    <span className="flex-1 text-[14px] text-text-main">Data</span>
+                    {scheduledDate && (
+                      <span className="text-[12px] text-primary mr-2 truncate max-w-[130px]">{fmtDate(scheduledDate)}</span>
+                    )}
+                    <Toggle on={!!scheduledDate} onChange={v => {
+                      if (v) { setScheduledDate(localDateStr()); }
+                      else { setScheduledDate(""); }
+                    }} />
+                  </div>
+                  {scheduledDate && (
                     <div className="px-4 pb-2 space-y-1.5">
                       <input
                         type="date"
@@ -582,148 +494,169 @@ export function TaskDetail({ task, onClose }) {
                             ].join(" ")}>{l}</button>
                         ))}
                       </div>
-                      {scheduledDate && (
-                        <button onClick={() => setScheduledDate("")} className="text-[11px] text-text-secondary hover:text-danger">
-                          Remover início
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Agendamento — Horário/Duração/Repetição/Lembrete recolhidos num resumo */}
+                {/* Horário */}
                 <div>
-                  <button type="button" onClick={() => setShowAgendamento(v => !v)}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-left">
-                    <span className="text-[15px] w-5 text-center leading-none">🗓️</span>
-                    <span className="flex-1 text-[14px] text-text-main truncate">
-                      {agendamentoSummary || "Agendar horário/repetição"}
-                    </span>
-                    {!agendamentoSummary && <span className="text-[11px] text-text-secondary/60 mr-1">opcional</span>}
-                    <span className={["text-[10px] text-text-secondary/50 transition-transform", showAgendamento ? "rotate-90" : ""].join(" ")}>▸</span>
-                  </button>
-                  {showAgendamento && (
-                    <div className="divide-y divide-border/50">
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🕐</span>
+                    <span className="flex-1 text-[14px] text-text-main">Horário</span>
+                    {scheduledTime && (
+                      <span className="text-[12px] text-primary mr-2">{scheduledTime.slice(0, 5)}</span>
+                    )}
+                    <Toggle on={!!scheduledTime} onChange={v => {
+                      if (v) { setScheduledTime("09:00"); }
+                      else { setScheduledTime(""); }
+                    }} />
+                  </div>
+                  {scheduledTime && (
+                    <div className="px-4 pb-2">
+                      <input
+                        type="time"
+                        value={scheduledTime}
+                        onChange={e => setScheduledTime(e.target.value)}
+                        className="w-full text-sm bg-bg border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
+                      />
+                    </div>
+                  )}
+                </div>
 
-                      {/* Horário */}
-                      <div>
-                        <div className="flex items-center gap-3 px-4 py-2">
-                          <span className="text-[15px] w-5 text-center leading-none">🕐</span>
-                          <span className="flex-1 text-[14px] text-text-main">Horário</span>
-                          {scheduledTime && (
-                            <span className="text-[12px] text-primary mr-2">{scheduledTime.slice(0, 5)}</span>
-                          )}
-                          <Toggle on={!!scheduledTime} onChange={v => {
-                            if (v) { setScheduledTime("09:00"); }
-                            else { setScheduledTime(""); }
-                          }} />
-                        </div>
-                        {scheduledTime && (
-                          <div className="px-4 pb-2">
-                            <input
-                              type="time"
-                              value={scheduledTime}
-                              onChange={e => setScheduledTime(e.target.value)}
-                              className="w-full text-sm bg-bg border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Duração — só se horário definido (mesmo gate do badge no TaskCard) */}
-                      {scheduledTime && (
-                        <div className="flex items-center gap-3 px-4 py-2">
-                          <span className="text-[15px] w-5 text-center leading-none">⏱</span>
-                          <span className="flex-1 text-[14px] text-text-main">Duração</span>
-                          {!customDuration ? (
-                            <select
-                              value={durationMinutes}
-                              onChange={e => {
-                                if (e.target.value === "custom") { setCustomDuration(true); return; }
-                                const v = e.target.value ? Number(e.target.value) : null;
-                                setDurationMinutes(v ?? "");
-                              }}
-                              className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
-                            >
-                              <option value="">Sem duração</option>
-                              {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                              <option value="custom">Personalizado…</option>
-                            </select>
-                          ) : (
-                            <div className="flex gap-1 items-center">
-                              <input type="number" min={0} max={23} placeholder="0" id="dur-h"
-                                defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
-                                className="w-10 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center" />
-                              <span className="text-xs text-text-secondary">h</span>
-                              <input type="number" min={0} max={59} placeholder="30" id="dur-m"
-                                defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
-                                className="w-12 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center"
-                                onBlur={() => {
-                                  const h = Number(document.getElementById("dur-h").value) || 0;
-                                  const m = Number(document.getElementById("dur-m").value) || 0;
-                                  const total = h * 60 + m;
-                                  setDurationMinutes(total || "");
-                                  setCustomDuration(false);
-                                }} />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Repetição */}
-                      <div className="flex items-center gap-3 px-4 py-2">
-                        <span className="text-[15px] w-5 text-center leading-none">🔁</span>
-                        <span className="flex-1 text-[14px] text-text-main">Repetição</span>
-                        <select
-                          value={recurrence?.startsWith("custom:") ? "custom" : (recurrence ?? "")}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === "custom_open") { openCustomModal(); return; }
-                            setRecurrence(val);
-                            updateTask(task.id, { recurrence: val || null });
-                          }}
-                          className="text-[14px] text-text-secondary bg-transparent outline-none text-right max-w-[140px]"
-                        >
-                          <option value="">Nunca</option>
-                          <option value="daily">Diariamente</option>
-                          <option value="weekdays">Dias úteis</option>
-                          <option value="weekly">Semanalmente</option>
-                          <option value="biweekly">Quinzenal</option>
-                          <option value="monthly">Mensalmente</option>
-                          <option value="annually">Anualmente</option>
-                          {recurrence?.startsWith("custom:") && (
-                            <option value="custom">{getCustomLabel(recurrence)}</option>
-                          )}
-                          <option value="custom_open">Personalizada…</option>
-                        </select>
-                      </div>
-
-                      {/* Lembrete — só se horário definido */}
-                      {scheduledTime && (
-                        <div className="flex items-center gap-3 px-4 py-2">
-                          <span className="text-[15px] w-5 text-center leading-none">🔕</span>
-                          <span className="flex-1 text-[14px] text-text-main">Lembrete</span>
-                          <select
-                            value={reminderMinutes ?? ""}
-                            onChange={e => {
-                              const v = e.target.value === "" ? null : Number(e.target.value);
-                              setReminderMinutes(v);
-                            }}
-                            className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
-                          >
-                            <option value="">Sem lembrete</option>
-                            <option value="5">5 min antes</option>
-                            <option value="15">15 min antes</option>
-                            <option value="30">30 min antes</option>
-                            <option value="60">1h antes</option>
-                            <option value="120">2h antes</option>
-                            <option value="1440">1 dia antes</option>
-                          </select>
-                        </div>
+                {/* Prazo */}
+                <div>
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🚨</span>
+                    <span className="flex-1 text-[14px] text-text-main">Prazo</span>
+                    {deadline && (
+                      <span className="text-[13px] text-[#FF3B30] mr-2">{fmtDate(deadline)}</span>
+                    )}
+                    <Toggle on={!!deadline} onChange={v => {
+                      if (!v) { setDeadline(""); save({ deadline: null }); }
+                      else { const d = localDateStr(); setDeadline(d); save({ deadline: d }); }
+                    }} />
+                  </div>
+                  {deadline && (
+                    <div className="px-4 pb-2">
+                      <input
+                        type="date"
+                        value={deadline}
+                        onChange={e => setDeadline(e.target.value)}
+                        onBlur={async () => {
+                          // Fase 2.8: em tarefa organizacional, só ADIAR (nunca antecipar) passa
+                          // por aprovação — quem delegou o elo ativo, ou o gestor direto de quem
+                          // criou. Sem prazo anterior definido não conta como adiamento.
+                          if (task.org_id && task.deadline && deadline > task.deadline) {
+                            const result = await requestDeadlineExtension(task.id, deadline);
+                            if (!result || result.pending_deadline_extension_id) {
+                              setDeadline(task.deadline ?? "");
+                            }
+                          } else {
+                            save();
+                          }
+                        }}
+                        className="w-full text-sm bg-bg border border-border/60 rounded-xl px-3 py-2 outline-none focus:border-[#FF3B30]"
+                      />
+                      {task.pending_deadline_extension_id && (
+                        <p className="text-[11px] text-text-secondary mt-1">
+                          🕓 Aguardando aprovação para adiar
+                        </p>
                       )}
                     </div>
                   )}
                 </div>
+
+                {/* Duração — só se horário definido (mesmo gate do badge no TaskCard) */}
+                {scheduledTime && (
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">⏱</span>
+                    <span className="flex-1 text-[14px] text-text-main">Duração</span>
+                    {!customDuration ? (
+                      <select
+                        value={durationMinutes}
+                        onChange={e => {
+                          if (e.target.value === "custom") { setCustomDuration(true); return; }
+                          const v = e.target.value ? Number(e.target.value) : null;
+                          setDurationMinutes(v ?? "");
+                        }}
+                        className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
+                      >
+                        <option value="">Sem duração</option>
+                        {DURATION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        <option value="custom">Personalizado…</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-1 items-center">
+                        <input type="number" min={0} max={23} placeholder="0" id="dur-h"
+                          defaultValue={durationMinutes ? Math.floor(Number(durationMinutes) / 60) : ""}
+                          className="w-10 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center" />
+                        <span className="text-xs text-text-secondary">h</span>
+                        <input type="number" min={0} max={59} placeholder="30" id="dur-m"
+                          defaultValue={durationMinutes ? Number(durationMinutes) % 60 : ""}
+                          className="w-12 text-xs bg-bg border border-border rounded-lg px-1.5 py-1.5 outline-none text-center"
+                          onBlur={() => {
+                            const h = Number(document.getElementById("dur-h").value) || 0;
+                            const m = Number(document.getElementById("dur-m").value) || 0;
+                            const total = h * 60 + m;
+                            setDurationMinutes(total || "");
+                            setCustomDuration(false);
+                          }} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Repetição */}
+                <div className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-[15px] w-5 text-center leading-none">🔁</span>
+                  <span className="flex-1 text-[14px] text-text-main">Repetição</span>
+                  <select
+                    value={recurrence?.startsWith("custom:") ? "custom" : (recurrence ?? "")}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === "custom_open") { openCustomModal(); return; }
+                      setRecurrence(val);
+                      updateTask(task.id, { recurrence: val || null });
+                    }}
+                    className="text-[14px] text-text-secondary bg-transparent outline-none text-right max-w-[140px]"
+                  >
+                    <option value="">Nunca</option>
+                    <option value="daily">Diariamente</option>
+                    <option value="weekdays">Dias úteis</option>
+                    <option value="weekly">Semanalmente</option>
+                    <option value="biweekly">Quinzenal</option>
+                    <option value="monthly">Mensalmente</option>
+                    <option value="annually">Anualmente</option>
+                    {recurrence?.startsWith("custom:") && (
+                      <option value="custom">{getCustomLabel(recurrence)}</option>
+                    )}
+                    <option value="custom_open">Personalizada…</option>
+                  </select>
+                </div>
+
+                {/* Lembrete — só se horário definido */}
+                {scheduledTime && (
+                  <div className="flex items-center gap-3 px-4 py-2">
+                    <span className="text-[15px] w-5 text-center leading-none">🔕</span>
+                    <span className="flex-1 text-[14px] text-text-main">Lembrete</span>
+                    <select
+                      value={reminderMinutes ?? ""}
+                      onChange={e => {
+                        const v = e.target.value === "" ? null : Number(e.target.value);
+                        setReminderMinutes(v);
+                      }}
+                      className="text-[13px] text-text-secondary bg-transparent outline-none text-right"
+                    >
+                      <option value="">Sem lembrete</option>
+                      <option value="5">5 min antes</option>
+                      <option value="15">15 min antes</option>
+                      <option value="30">30 min antes</option>
+                      <option value="60">1h antes</option>
+                      <option value="120">2h antes</option>
+                      <option value="1440">1 dia antes</option>
+                    </select>
+                  </div>
+                )}
 
                 {/* Algum dia */}
                 <div className="flex items-center gap-3 px-4 py-2">

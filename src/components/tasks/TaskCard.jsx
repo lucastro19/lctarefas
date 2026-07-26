@@ -18,7 +18,19 @@ import { TimeSlotPickerModal } from "./TimeSlotPickerModal";
 import { computeAvailableSlots, getPeriod, nextSlotInPeriod as nextSlotInPeriodFromSettings } from "../../utils/timeSlots";
 import { useAuthStore } from "../../store/authStore";
 import { createMeetingEvent } from "../../lib/googleCalendar";
-import { localDateStr, todayStr, isOverdue, deadlineUrgency } from "../../utils/dateUtils";
+
+// Usa data LOCAL (não UTC) para evitar bug de timezone em fusos negativos (BR = UTC-3)
+function localDateStr(d = new Date()) {
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
+
+const todayStr = () => localDateStr();
 
 function isoToDisplay(iso) {
   if (!iso) return "";
@@ -46,6 +58,22 @@ function formatDate(dateStr) {
   if (dateStr === yest) return "Ontem";
   if (dateStr === tom) return "Amanhã";
   return d.toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+}
+
+function isOverdue(date) {
+  return date && date < todayStr();
+}
+
+function deadlineUrgency(dateStr) {
+  if (!dateStr) return null;
+  const today = localDateStr();
+  if (dateStr < today) return { level: "overdue", label: "Venceu!", color: "#FF3B30", pulse: true };
+  if (dateStr === today) return { level: "today", label: "Vence hoje", color: "#FF3B30", pulse: true };
+  const diff = Math.round((new Date(dateStr + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
+  if (diff === 1) return { level: "tomorrow", label: "Vence amanhã", color: "#FF9500", pulse: false };
+  if (diff <= 3) return { level: "soon", label: `Vence em ${diff} dias`, color: "#FF9500", pulse: false };
+  if (diff <= 7) return { level: "week", label: `Vence em ${diff} dias`, color: "#FFCC00", pulse: false };
+  return null; // mais de 7 dias → mostra só a data normal
 }
 
 const RECURRENCE_LABELS = {
