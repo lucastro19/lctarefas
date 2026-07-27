@@ -858,15 +858,23 @@ function SettingsTab() {
 
 // ─── Com organização: cabeçalho + abas ───
 // ─── Aba: Espaços (Fase 2) — contêiner compartilhado real da organização ───
-function SpaceCard({ space, members }) {
-  const { renameSpace, setSpaceColor, setSpaceOpen, archiveSpace, addSpaceMember, removeSpaceMember } = useOrgStore();
+function SpaceCard({ space, members, teams }) {
+  const {
+    renameSpace, setSpaceColor, setSpaceOpen, archiveSpace,
+    addSpaceMember, removeSpaceMember, linkTeamToSpace, unlinkTeamFromSpace,
+  } = useOrgStore();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(space.name);
   const [addId, setAddId] = useState("");
+  const [addTeamId, setAddTeamId] = useState("");
 
   const memberIds = new Set((space.space_members ?? []).map((sm) => sm.org_member_id));
   const spaceMembers = members.filter((m) => memberIds.has(m.id));
   const available = members.filter((m) => !memberIds.has(m.id));
+
+  const linkedTeamIds = new Set((space.space_teams ?? []).map((st) => st.team_id));
+  const linkedTeams = teams.filter((t) => linkedTeamIds.has(t.id));
+  const availableTeams = teams.filter((t) => !linkedTeamIds.has(t.id));
 
   return (
     <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
@@ -924,6 +932,7 @@ function SpaceCard({ space, members }) {
 
       {!space.is_open && (
         <>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-secondary">Membros individuais</p>
           <div className="flex flex-wrap gap-1.5">
             {spaceMembers.length === 0 && <span className="text-[11px] text-text-secondary">Ninguém tem acesso ainda (além de você).</span>}
             {spaceMembers.map((m) => (
@@ -954,6 +963,38 @@ function SpaceCard({ space, members }) {
               </button>
             </div>
           )}
+
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-secondary pt-1">Times vinculados</p>
+          <div className="flex flex-wrap gap-1.5">
+            {linkedTeams.length === 0 && <span className="text-[11px] text-text-secondary">Nenhum time vinculado ainda.</span>}
+            {linkedTeams.map((t) => (
+              <span key={t.id} className="flex items-center gap-1 text-[11px] bg-bg border border-border rounded-full pl-2 pr-1 py-0.5">
+                👥 {t.name}
+                <button onClick={() => unlinkTeamFromSpace(space.id, t.id)} className="text-text-secondary hover:text-danger px-0.5">×</button>
+              </span>
+            ))}
+          </div>
+          {availableTeams.length > 0 && (
+            <div className="flex gap-2">
+              <select
+                value={addTeamId}
+                onChange={(e) => setAddTeamId(e.target.value)}
+                className="flex-1 text-xs bg-bg border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary text-text-main"
+              >
+                <option value="">Vincular time…</option>
+                {availableTeams.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => { if (addTeamId) { linkTeamToSpace(space.id, addTeamId); setAddTeamId(""); } }}
+                disabled={!addTeamId}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-white disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+              >
+                Vincular
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -961,7 +1002,7 @@ function SpaceCard({ space, members }) {
 }
 
 function SpacesTab() {
-  const { spaces, members, createSpace, fetchArchivedSpaces, unarchiveSpace } = useOrgStore();
+  const { spaces, members, teams, createSpace, fetchArchivedSpaces, unarchiveSpace } = useOrgStore();
   const [newName, setNewName] = useState("");
   const [archivedSpaces, setArchivedSpaces] = useState([]);
 
@@ -1001,7 +1042,7 @@ function SpacesTab() {
         <p className="text-sm text-text-secondary text-center py-8">Nenhum espaço ainda. Crie o primeiro acima.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {spaces.map((s) => <SpaceCard key={s.id} space={s} members={members} />)}
+          {spaces.map((s) => <SpaceCard key={s.id} space={s} members={members} teams={teams} />)}
         </div>
       )}
 

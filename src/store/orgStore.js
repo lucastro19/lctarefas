@@ -413,7 +413,7 @@ export const useOrgStore = create((set, get) => ({
     if (!org) return;
     const { data, error } = await supabase
       .from("spaces")
-      .select("*, space_members(org_member_id)")
+      .select("*, space_members(org_member_id), space_teams(team_id)")
       .eq("org_id", org.id)
       .is("archived_at", null)
       .order("created_at");
@@ -426,7 +426,7 @@ export const useOrgStore = create((set, get) => ({
     if (!org) return [];
     const { data, error } = await supabase
       .from("spaces")
-      .select("*, space_members(org_member_id)")
+      .select("*, space_members(org_member_id), space_teams(team_id)")
       .eq("org_id", org.id)
       .not("archived_at", "is", null)
       .order("archived_at", { ascending: false });
@@ -440,7 +440,7 @@ export const useOrgStore = create((set, get) => ({
     const { data, error } = await supabase
       .from("spaces")
       .insert([{ org_id: org.id, name: name.trim(), color: color ?? DEMAND_COLORS[0], is_open: isOpen }])
-      .select("*, space_members(org_member_id)")
+      .select("*, space_members(org_member_id), space_teams(team_id)")
       .single();
     if (error) { console.error("createSpace error:", error); return null; }
     set((s) => ({ spaces: [...s.spaces, data] }));
@@ -494,6 +494,27 @@ export const useOrgStore = create((set, get) => ({
       .eq("space_id", spaceId)
       .eq("org_member_id", orgMemberId);
     if (error) { console.error("removeSpaceMember error:", error); }
+    get().fetchSpaces();
+  },
+
+  // Vínculo vivo: todo membro ATIVO do time herda acesso ao espaço (is_space_member já
+  // resolve isso via join) — entrar/sair do time depois muda o acesso sozinho, sem precisar
+  // mexer aqui de novo.
+  linkTeamToSpace: async (spaceId, teamId) => {
+    const { error } = await supabase
+      .from("space_teams")
+      .insert([{ space_id: spaceId, team_id: teamId }]);
+    if (error) { console.error("linkTeamToSpace error:", error); }
+    get().fetchSpaces();
+  },
+
+  unlinkTeamFromSpace: async (spaceId, teamId) => {
+    const { error } = await supabase
+      .from("space_teams")
+      .delete()
+      .eq("space_id", spaceId)
+      .eq("team_id", teamId);
+    if (error) { console.error("unlinkTeamFromSpace error:", error); }
     get().fetchSpaces();
   },
 
