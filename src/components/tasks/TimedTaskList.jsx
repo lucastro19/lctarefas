@@ -183,6 +183,7 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
   const [showCompleted, setShowCompleted] = useState(false);
   const [showNoPriority, setShowNoPriority] = useState(false);
   const [showNoTime, setShowNoTime] = useState(false);
+  const [urgentOpen, setUrgentOpen] = useState(true);
 
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.includes(t.id));
 
@@ -316,7 +317,12 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
         {/* ── RESOLVER PRIMEIRO — antes das atrasadas ── */}
         {allUrgentTasks.length > 0 && (
           <div className="mb-2 rounded-xl border border-danger/30 bg-danger/5 overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-danger/20">
+            <button
+              type="button"
+              onClick={() => setUrgentOpen((v) => !v)}
+              className={["w-full flex items-center gap-2 px-3 py-2 text-left", urgentOpen ? "border-b border-danger/20" : ""].join(" ")}
+            >
+              <span className={["text-[9px] text-danger transition-transform shrink-0", urgentOpen ? "rotate-90" : ""].join(" ")}>▸</span>
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-60" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-danger" />
@@ -327,12 +333,14 @@ export function TimedTaskList({ tasks, overdueTasks = [], completedTasks = [], d
               <span className="text-[10px] font-medium text-danger/70 bg-danger/10 px-1.5 py-0.5 rounded-full">
                 {allUrgentTasks.length}
               </span>
-            </div>
-            <div className="px-1.5 py-1 space-y-0.5">
-              {allUrgentTasks.map((task) => (
-                <UrgentRow key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
-              ))}
-            </div>
+            </button>
+            {urgentOpen && (
+              <div className="px-1.5 py-1 space-y-0.5">
+                {allUrgentTasks.map((task) => (
+                  <UrgentRow key={`urgent-${task.id}`} task={task} subtasks={subtasks[task.id] ?? []} onClick={() => onTaskClick?.(task)} />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
