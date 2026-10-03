@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup A6 — 3 opções × 2 telas de formulário · gestor-financeiro</title>
+<!--
+  MOCKUP ESTATICO - DEPTO-DESIGN - ticket t_6e5c9abb
+  Abre por duplo-clique (file://). CSS e JS INLINE, fonte do sistema, SEM rede.
+  Nada aqui e' codigo do app: e' a proposta visual do achado A6 do dossie
+  DOSSIE-DESIGN-carga-cognitiva-desenho-universal-2026-10-03.md.
+
+  3 OPCOES x 2 TELAS = 6 paineis:
+    A = wizard de 3 passos (stepper visivel, 3-4 campos por tela)
+    B = uma tela so, opcionais atras de "> Mais opcoes"
+    C = deixar como esta hoje
+  Fontes: NN/g (divulgacao progressiva) e W3C COGA, Objetivos 4 e 5.
+  Dados fake em pt-BR (Intl.NumberFormat pt-BR/BRL). Valores de token: os mesmos
+  do src/app/globals.css e do mockup anterior (mesma pasta
+  revisao-visual-completa-2026-10/). --border reflete o pos-PR#27 (ver A4 do dossie).
+-->
+<style>
+/* ============================================================ TOKENS (globals.css) */
+:root{
+  color-scheme: light;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.52 0.245 27.325);       /* [REAL] */
+  --destructive-foreground: oklch(0.985 0 0);
+  --brand: oklch(0.4742 0.1127 256.588);
+  --brand-foreground: oklch(0.985 0 0);
+  --success: oklch(0.508 0.118 165.612);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.548 0.163 48.998);
+  --warning-foreground: oklch(0.985 0 0);
+  --border: oklch(0.64 0 0);          /* pos-PR#27 (o worktree local ainda tem 0.922) */
+  --input: oklch(0.64 0 0);
+  --ring: var(--brand);
+  --radius: 0.625rem;
+}
+html[data-tema="escuro"]{
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);                       /* [REAL] */
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);       /* [REAL] */
+  --destructive-foreground: oklch(0.205 0 0);
+  --brand: oklch(0.7000 0.1127 256.588);
+  --brand-foreground: oklch(0.205 0 0);
+  --success: oklch(0.845 0.143 164.978);
+  --success-foreground: oklch(0.205 0 0);
+  --warning: oklch(0.879 0.169 91.605);
+  --warning-foreground: oklch(0.205 0 0);
+  --border: oklch(1 0 0 / 38%);
+  --input: oklch(1 0 0 / 38%);
+}
+[hidden]{display:none !important}   /* guarda: display de autor vence o [hidden] */
+
+/* ============================================================ BASE */
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--background);color:var(--foreground);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:14px;line-height:1.5;
+}
+h1,h2,h3{margin:0;line-height:1.3}
+p{margin:.3em 0}
+a{color:var(--brand)}
+button{font:inherit}
+.num{font-variant-numeric:tabular-nums}
+.skip{position:absolute;left:-9999px;top:0;background:var(--primary);color:var(--primary-foreground);
+  padding:10px;border-radius:6px;z-index:99}
+.skip:focus{left:8px;top:8px}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.sr{position:absolute;left:-9999px}
+
+header.topo{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;padding:10px 16px;flex-wrap:wrap}
+header.topo .marca{font-weight:600;min-width:0;overflow-wrap:anywhere}
+header.topo .esp{flex:1}
+.tog{border:1px solid var(--border);background:var(--background);color:var(--foreground);
+  border-radius:8px;padding:6px 10px;cursor:pointer}
+nav.sec{background:var(--card);border-bottom:1px solid var(--border);padding:8px 16px;
+  display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:49px;z-index:19}
+nav.sec a{text-decoration:none;color:var(--muted-foreground);border:1px solid var(--border);
+  border-radius:999px;padding:4px 10px;font-size:12px}
+nav.sec a:hover{color:var(--foreground)}
+main{max-width:1240px;margin:0 auto;padding:20px 16px 60px}
+section{scroll-margin-top:110px;margin:0 0 34px}
+h1.t{font-size:22px}
+h2.s{font-size:17px;margin:24px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+p.sub{color:var(--muted-foreground);font-size:13px;max-width:92ch}
+
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:12px;align-items:start}
+@media (max-width:980px){.grid3{grid-template-columns:1fr}}
+
+.painel{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:12px;
+  display:flex;flex-direction:column;gap:10px}
+.painel.rec{outline:2px solid var(--success);outline-offset:-3px}
+.painel.nao{outline:2px dashed var(--destructive);outline-offset:-3px}
+.cab{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.cab .tt{font-weight:700;font-size:13px}
+.cab .op{font-size:12px;color:var(--muted-foreground)}
+.selo{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  border-radius:999px;padding:2px 8px;border:1px solid transparent}
+.selo.sim{background:color-mix(in oklch,var(--success) 16%,transparent);color:var(--success);
+  border-color:color-mix(in oklch,var(--success) 40%,transparent)}
+.selo.nao{background:color-mix(in oklch,var(--destructive) 12%,transparent);color:var(--destructive);
+  border-color:color-mix(in oklch,var(--destructive) 40%,transparent)}
+
+.mini{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--background)}
+.mini .tit{font-weight:600;font-size:13px;margin-bottom:2px}
+.mini .dcs{font-size:12px;color:var(--muted-foreground);margin-bottom:8px}
+.campos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:520px){.campos{grid-template-columns:1fr}}
+.campos.um{grid-template-columns:1fr}
+.campo{display:flex;flex-direction:column;gap:3px}
+.campo label{font-size:11px;color:var(--muted-foreground)}
+.campo .ctl{border:1px solid var(--input);border-radius:8px;padding:6px 8px;font-size:13px;
+  background:var(--background);color:var(--foreground)}
+.campo .ctl.ph{color:var(--muted-foreground)}
+.campo .dd{font-size:11px;color:var(--muted-foreground)}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.btn{border:1px solid var(--border);background:var(--background);color:var(--foreground);
+  border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px}
+.btn.pri{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}
+details.mais{border:1px solid var(--border);border-radius:8px;margin-top:8px;background:var(--background)}
+details.mais summary{cursor:pointer;padding:6px 10px;font-size:12px;font-weight:600;list-style:none}
+details.mais summary::-webkit-details-marker{display:none}
+details.mais summary::before{content:"\25B8 "}
+details.mais[open] summary::before{content:"\25BE "}
+details.mais .corpo{padding:0 10px 10px}
+.passos{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.passo{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted-foreground)}
+.passo .n{width:20px;height:20px;border-radius:999px;border:1px solid var(--border);
+  display:grid;place-items:center;font-size:11px}
+.passo.on{color:var(--foreground)}
+.passo.on .n{background:var(--brand);color:oklch(0.985 0 0);border-color:var(--brand)}
+.sep{height:1px;background:var(--border);margin:10px 0}
+
+.meta{border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:5px}
+.lm{display:flex;gap:6px;font-size:12px}
+.lm .k{color:var(--muted-foreground);flex:0 0 auto}
+.lm .v{min-width:0}
+.lm.custo .v{font-weight:600}
+.nota{border-left:3px solid var(--brand);background:var(--muted);padding:8px 10px;border-radius:0 8px 8px 0;font-size:12px}
+.recbox{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:14px}
+.recbox ul{margin:6px 0 0 0;padding-left:18px}
+.recbox li{margin:4px 0}
+.rodape{color:var(--muted-foreground);font-size:12px;border-top:1px solid var(--border);padding-top:10px}
+</style>
+</head>
+<body>
+<a class="skip" href="#conteudo">Pular para o conteúdo</a>
+
+<header class="topo">
+  <span class="marca">Gestor Financeiro — mockup (referência, não é o app)</span>
+  <span class="esp"></span>
+  <button class="tog" id="btema" aria-pressed="false" aria-label="Alternar tema claro/escuro">Tema escuro</button>
+</header>
+
+<nav class="sec" aria-label="Seções do mockup">
+  <a href="#tela1">Tela 1 · /lancamentos/novo</a>
+  <a href="#tela2">Tela 2 · /recorrencias/nova</a>
+  <a href="#resumo">Recomendação + fontes</a>
+</nav>
+
+<main id="conteudo">
+  <h1 class="t">A6 — formulários longos: 3 opções × 2 telas</h1>
+  <p class="sub">Seis painéis, um por <strong>tela × opção</strong>. Cada painel traz o <em>antes</em> como
+  referência e <strong>uma linha de custo declarado</strong>. Enquadramento: <strong>desenho universal</strong>
+  (efeito curb-cut). Fontes: <strong>NN/g</strong> (divulgação progressiva) e <strong>W3C COGA</strong>,
+  Objetivos 4 e 5. Dados fake em pt-BR; abre por duplo-clique, zero rede.</p>
+
+  <!-- ============================ TELA 1 ============================ -->
+  <section id="tela1">
+    <h2 class="s">Tela 1 — /lancamentos/novo (Novo lançamento)</h2>
+    <p class="sub"><strong>Estado hoje (c921431):</strong> <strong>8 campos visíveis</strong> + <strong>3 atrás de
+    “Mais opções — contraparte, centro de custo e categoria”</strong>. Ou seja: a TELA 1 <strong>já aplica</strong>
+    divulgação progressiva (o bloco <code>&lt;details&gt;</code> existe em <code>titulo-form.tsx</code>).</p>
+
+    <div class="grid3">
+
+      <!-- TELA 1 · A -->
+      <article class="painel nao">
+        <div class="cab">
+          <span class="tt">TELA 1 · OPÇÃO A</span>
+          <span class="op">wizard de 3 passos</span>
+          <span class="selo nao">não recomendado</span>
+        </div>
+        <div class="mini">
+          <div class="tit">Novo lançamento</div>
+          <div class="dcs">Passo a passo do mesmo lançamento.</div>
+          <div class="passos">
+            <span class="passo on"><span class="n">1</span> O quê e quanto</span>
+            <span class="passo"><span class="n">2</span> Quando</span>
+            <span class="passo"><span class="n">3</span> Classificação</span>
+          </div>
+          <div class="campos um">
+            <div class="campo"><label>Descrição *</label><div class="ctl ph">Ex.: Cozinha planejada — sinal</div></div>
+            <div class="campo"><label>Tipo *</label><div class="ctl">A pagar</div></div>
+            <div class="campo"><label>Valor total (R$) *</label><div class="ctl ph">0,00</div></div>
+          </div>
+          <div class="acoes">
+            <button class="btn pri" type="button">Continuar</button>
+            <button class="btn" type="button">Cancelar</button>
+          </div>
+        </div>
+        <div class="meta">
+          <div class="lm"><span class="k">Antes (hoje)</span><span class="v">8 campos visíveis + 3 em “Mais opções”.</span></div>
+          <div class="lm custo"><span class="k">Custo declarado</span><span class="v">+2 cliques — em TODA criação (o fluxo mais frequente do app).</span></div>
+        </div>
+      </article>
+
+      <!-- TELA 1 · B -->
+      <article class="painel">
+        <div class="cab">
+          <span class="tt">TELA 1 · OPÇÃO B</span>
+          <span class="op">uma tela + “Mais opções”</span>
+        </div>
+        <div class="mini">
+          <div class="tit">Novo lançamento</div>
+          <div class="dcs">Uma tela; os opcionais atrás de “Mais opções”.</div>
+          <div class="campos">
+            <div class="campo"><label>Descrição *</label><div class="ctl ph">Ex.: Cozinha planejada — sinal</div></div>
+            <div class="campo"><label>Tipo *</label><div class="ctl">A pagar</div></div>
+            <div class="campo"><label>Valor total (R$) *</label><div class="ctl ph">0,00</div></div>
+            <div class="campo"><label>Vencimento *</label><div class="ctl num">03/10/2026</div></div>
+            <div class="campo"><label>Forma de pagamento</label><div class="ctl ph">Ex.: Pix</div></div>
+            <div class="campo"><label>Número de parcelas *</label><div class="ctl num">1</div></div>
+            <div class="campo"><label>Periodicidade *</label><div class="ctl">À vista (única)</div></div>
+            <div class="campo"><label>Conta (baixa)</label><div class="ctl">— Nenhuma —</div></div>
+          </div>
+          <details class="mais">
+            <summary>Mais opções — contraparte, centro de custo e categoria</summary>
+            <div class="corpo">
+              <div class="campos um">
+                <div class="campo"><label>Contraparte</label><div class="ctl">— Sem contraparte —</div></div>
+                <div class="campo"><label>Centro de custo</label><div class="ctl">— Sem centro de custo —</div></div>
+                <div class="campo"><label>Categoria</label><div class="ctl">— Nenhuma —</div></div>
+              </div>
+            </div>
+          </details>
+          <div class="acoes"><button class="btn pri" type="button">Salvar</button><button class="btn" type="button">Cancelar</button></div>
+        </div>
+        <div class="meta">
+          <div class="lm"><span class="k">Antes (hoje)</span><span class="v">8 visíveis + 3 em “Mais opções”.</span></div>
+          <div class="lm custo"><span class="k">Custo declarado</span><span class="v">sem feedback de progresso (não há stepper).</span></div>
+        </div>
+        <div class="nota">Nesta tela, <strong>B coincide com o “hoje”</strong>: o padrão “Mais opções” já é o que a TELA 1 usa.</div>
+      </article>
+
+      <!-- TELA 1 · C -->
+      <article class="painel rec">
+        <div class="cab">
+          <span class="tt">TELA 1 · OPÇÃO C</span>
+          <span class="op">deixar como está hoje</span>
+          <span class="selo sim">recomendado aqui</span>
+        </div>
+        <div class="mini">
+          <div class="tit">Novo lançamento</div>
+          <div class="dcs">Hoje: 8 campos + “Mais opções”. Sem mudança.</div>
+          <div class="campos">
+            <div class="campo"><label>Descrição *</label><div class="ctl ph">Ex.: Cozinha planejada — sinal</div></div>
+            <div class="campo"><label>Tipo *</label><div class="ctl">A pagar</div></div>
+            <div class="campo"><label>Valor total (R$) *</label><div class="ctl ph">0,00</div></div>
+            <div class="campo"><label>Vencimento *</label><div class="ctl num">03/10/2026</div></div>
+            <div class="campo"><label>Forma de pagamento</label><div class="ctl ph">Ex.: Pix</div></div>
+            <div class="campo"><label>Número de parcelas *</label><div class="ctl num">1</div></div>
+            <div class="campo"><label>Periodicidade *</label><div class="ctl">À vista (única)</div></div>
+            <div class="campo"><label>Conta (baixa)</label><div class="ctl">— Nenhuma —</div></div>
+          </div>
+          <details class="mais">
+            <summary>Mais opções — contraparte, centro de custo e categoria</summary>
+            <div class="corpo">
+              <div class="campos um">
+                <div class="campo"><label>Contraparte</label><div class="ctl">— Sem contraparte —</div></div>
+                <div class="campo"><label>Centro de custo</label><div class="ctl">— Sem centro de custo —</div></div>
+                <div class="campo"><label>Categoria</label><div class="ctl">— Nenhuma —</div></div>
+              </div>
+            </div>
+          </details>
+          <div class="acoes"><button class="btn pri" type="button">Salvar</button><button class="btn" type="button">Cancelar</button></div>
+        </div>
+        <div class="meta">
+          <div class="lm"><span class="k">Antes (hoje)</span><span class="v">8 visíveis + 3 em “Mais opções”.</span></div>
+          <div class="lm custo"><span class="k">Custo declarado</span><span class="v">campos de uma vez — mas só 8, e os 3 opcionais já estão atrás do clique.</span></div>
+        </div>
+        <div class="nota"><strong>Recomendação nesta tela: C.</strong> O problema do A6 <em>não existe aqui</em> — a TELA 1 já é
+        divulgativa; um wizard <strong>somaria cliques</strong> no fluxo mais frequente sem reduzir carga.</div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============================ TELA 2 ============================ -->
+  <section id="tela2">
+    <h2 class="s">Tela 2 — /recorrencias/nova (Nova recorrência)</h2>
+    <p class="sub"><strong>Estado hoje (c921431):</strong> <strong>10 campos numa única etapa</strong>, sem indicador de
+    passo — nenhum deles atrás de “Mais opções”. É o formulário que o achado A6 ataca.</p>
+
+    <div class="grid3">
+
+      <!-- TELA 2 · A -->
+      <article class="painel rec">
+        <div class="cab">
+          <span class="tt">TELA 2 · OPÇÃO A</span>
+          <span class="op">wizard de 3 passos</span>
+          <span class="selo sim">recomendado</span>
+        </div>
+        <div class="mini">
+          <div class="tit">Nova recorrência</div>
+          <div class="dcs">Passo a passo com progresso visível.</div>
+          <div class="passos">
+            <span class="passo on"><span class="n">1</span> O quê e quanto</span>
+            <span class="passo"><span class="n">2</span> Quando</span>
+            <span class="passo"><span class="n">3</span> Classificação</span>
+          </div>
+          <div class="campos um">
+            <div class="campo"><label>Descrição *</label><div class="ctl ph">Ex.: Condomínio</div></div>
+            <div class="campo"><label>Direção *</label><div class="ctl">Pagar</div></div>
+            <div class="campo"><label>Valor fixo (R$) *</label><div class="ctl ph">0,00</div></div>
+          </div>
+          <div class="acoes"><button class="btn pri" type="button">Continuar</button><button class="btn" type="button">Cancelar</button></div>
+        </div>
+        <div class="meta">
+          <div class="lm"><span class="k">Antes (hoje)</span><span class="v">10 campos numa etapa, sem stepper.</span></div>
+          <div class="lm custo"><span class="k">Custo declarado</span><span class="v">+2 cliques (2 telas a mais).</span></div>
+        </div>
+        <div class="nota">Ganho: 3 campos por tela (COGA Obj 4) + progresso “onde eu estou” (COGA Obj 5). Custo: cliques a mais.</div>
+      </article>
+
+      <!-- TELA 2 · B -->
+      <article class="painel rec">
+        <div class="cab">
+          <span class="tt">TELA 2 · OPÇÃO B</span>
+          <span class="op">uma tela + “Mais opções”</span>
+          <span class="selo sim">recomendado</span>
+        </div>
+        <div class="mini">
+          <div class="tit">Nova recorrência</div>
+          <div class="dcs">Uma tela; opcionais atrás de “Mais opções”.</div>
+          <div class="campos">
+            <div class="campo"><label>Descrição *</label><div class="ctl ph">Ex.: Condomínio</div></div>
+            <div class="campo"><label>Direção *</label><div class="ctl">Pagar</div></div>
+            <div class="campo"><label>Valor fixo (R$) *</label><div class="ctl ph">0,00</div></div>
+            <div class="campo"><label>Dia do vencimento *</label><div class="ctl num">10</div></div>
+            <div class="campo"><label>Periodicidade *</label><div class="ctl">Mensal</div></div>
+            <div class="campo"><label>Próxima geração *</label><div class="ctl num">10/10/2026</div></div>
+            <div class="campo"><label>Categoria</label><div class="ctl">— Nenhuma —</div></div>
+            <div class="campo"><label>Conta padrão para baixa</label><div class="ctl">— Nenhuma —</div></div>
+          </div>
+          <details class="mais">
+            <summary>Mais opções — contraparte e centro de custo</summary>
+            <div class="corpo">
+              <div class="campos um">
+                <div class="campo"><label>Contraparte (opcional)</label><div class="ctl">— Sem contraparte —</div></div>
+                <div class="campo"><label>Centro de custo (opcional)</label><div class="ctl">— Sem centro de custo —</div></div>
+              </div>
+            </div>
+          </details>
+          <div class="acoes"><button class="btn pri" type="button">Criar recorrência</button><button class="btn" type="button">Cancelar</button></div>
+        </div>
+        <div class="meta">
+          <div class="lm"><span class="k">Antes (hoje)</span><span class="v">10 campos numa etapa, sem stepper.</span></div>
+          <div class="lm custo"><span class="k">Custo declarado</span><span class="v">sem feedback de progresso (não há stepper).</span></div>
+        </div>
+        <div class="nota">Ganho: 8 visíveis em vez de 10, sem somar cliques. Custo: nenhum indicador de “onde estou”.</div>
+      </article>
+
+      <!-- TELA 2 · C -->
+      <article class="painel nao">
+        <div class="cab">
+          <span class="tt">TELA 2 · OPÇÃO C</span>
+          <span class="op">deixar como está hoje</span>
+          <span class="selo nao">não recomendado</span>
+        </div>
+        <div class="mini">
+          <div class="tit">Nova recorrência</div>
+          <div class="dcs">Hoje: 10 campos de uma vez, sem stepper.</div>
+          <div class="campos">
+            <div class="campo"><label>Descrição *</label><div class="ctl ph">Ex.: Condomínio</div></div>
+            <div class="campo"><label>Direção *</label><div class="ctl">Pagar</div></div>
+            <div class="campo"><label>Valor fixo (R$) *</label><div class="ctl ph">0,00</div></div>
+            <div class="campo"><label>Dia do vencimento *</label><div class="ctl num">10</div></div>
+            <div class="campo"><label>Periodicidade *</label><div class="ctl">Mensal</div></div>
+            <div class="campo"><label>Próxima geração *</label><div class="ctl num">10/10/2026</div></div>
+            <div class="campo"><label>Categoria</label><div class="ctl">— Nenhuma —</div></div>
+            <div class="campo"><label>Conta padrão para baixa</label><div class="ctl">— Nenhuma —</div></div>
+            <div class="campo"><label>Contraparte (opcional)</label><div class="ctl">— Sem contraparte —</div></div>
+            <div class="campo"><label>Centro de custo (opcional)</label><div class="ctl">— Sem centro de custo —</div></div>
+          </div>
+          <div class="acoes"><button class="btn pri" type="button">Criar recorrência</button><button class="btn" type="button">Cancelar</button></div>
+        </div>
+        <div class="meta">
+          <div class="lm"><span class="k">Antes (hoje)</span><span class="v">é exatamente o próprio hoje.</span></div>
+          <div class="lm custo"><span class="k">Custo declarado</span><span class="v">campos de uma vez (10) — a carga que o A6 quer reduzir.</span></div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============================ RESUMO ============================ -->
+  <section id="resumo">
+    <h2 class="s">Recomendação por tela + fontes</h2>
+    <div class="recbox">
+      <p><strong>Tela 1 — /lancamentos/novo → OPÇÃO C (deixar como está).</strong></p>
+      <ul>
+        <li>Já aplica divulgação progressiva (8 visíveis + 3 em “Mais opções”, <code>titulo-form.tsx</code>).</li>
+        <li>É o fluxo <strong>mais frequente</strong> do app: um wizard somaria <strong>+2 cliques</strong> sem reduzir carga.</li>
+      </ul>
+      <div class="sep"></div>
+      <p><strong>Tela 2 — /recorrencias/nova → OPÇÃO A ou B.</strong></p>
+      <ul>
+        <li><strong>A (wizard de 3 passos):</strong> menos campos por tela (COGA Obj 4) e progresso visível (COGA Obj 5); custa <strong>+2 cliques</strong>.</li>
+        <li><strong>B (uma tela + “Mais opções”):</strong> 8 visíveis em vez de 10, <strong>sem somar cliques</strong>; não dá feedback de progresso.</li>
+        <li>Escolha entre A (fluxo guiado) e B (padrão que a TELA 1 já usa) é do usuário. <strong>C não é recomendada</strong> aqui: mantém os 10 de uma vez.</li>
+      </ul>
+      <div class="sep"></div>
+      <p><strong>Fontes</strong></p>
+      <ul>
+        <li><strong>NN/g — Progressive Disclosure</strong> (Jakob Nielsen, 03/12/2006): “Initially, show users only a few of the most important options. Offer a larger set of specialized options upon request.”</li>
+        <li><strong>W3C COGA — Objetivo 4</strong> (Assistance and Support): “I need to enter as little information as possible, so the task is more manageable.”</li>
+        <li><strong>W3C COGA — Objetivo 5</strong> (Help Users Focus): “I need to know where I am in a process to avoid disorientation, including what I have done and what my next step will be.”</li>
+      </ul>
+    </div>
+    <p class="rodape">Mockup de referência — DEVLC · DEPTO-DESIGN · 2026-10-03 · ticket t_6e5c9abb.
+    Zero rede; CSS/JS inline; tema persistido no navegador. Este arquivo <strong>não</strong> é código do app.
+    Campos refletem <code>/lancamentos/novo</code> e <code>/recorrencias/nova</code> em <code>c921431</code> (origin/main).</p>
+  </section>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var raiz=document.documentElement;
+  var bt=document.getElementById("btema");
+  function aplicar(tema){
+    raiz.setAttribute("data-tema",tema);
+    var escuro=(tema==="escuro");
+    bt.setAttribute("aria-pressed",escuro?"true":"false");
+    bt.textContent=escuro?"Tema claro":"Tema escuro";
+  }
+  var salvo=null;
+  try{ salvo=window.localStorage.getItem("mockup-a6-tema"); }catch(e){ salvo=null; }
+  /* #tema=escuro|claro permite ao renderizador forcar o tema por linha de comando */
+  var forcado=/tema=escuro/.test(window.location.hash)?"escuro":(/tema=claro/.test(window.location.hash)?"claro":null);
+  aplicar(forcado||(salvo==="escuro"?"escuro":"claro"));
+  bt.addEventListener("click",function(){
+    var novo=(raiz.getAttribute("data-tema")==="escuro")?"claro":"escuro";
+    aplicar(novo);
+    try{ window.localStorage.setItem("mockup-a6-tema",novo); }catch(e){}
+  });
+})();
+</script>
+</body>
+</html>
